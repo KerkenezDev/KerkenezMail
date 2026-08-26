@@ -1,0 +1,23 @@
+## [Visual Studio / .NET .gitignore]
+## Build results
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+publish/
+
+## Visual Studio files
+.vs/
+*.user
+*.userosscache
+*.sln.docstates
+*.suo
+*.userprefs
+
+## User / local runtime configurations
+config.json
+*.local.json
+
+## OS generated files
+.DS_Store
+Thumbs.db
