@@ -16,6 +16,10 @@ publish/
 
 ## User / local runtime configurations
 config.json
+accounts.dat
+*.dat
+*.tmp
+*.enc
 *.local.json
 
 ## OS generated files

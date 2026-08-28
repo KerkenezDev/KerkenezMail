@@ -381,7 +381,7 @@ namespace EmailSummarizer.UI.Tabs
             _cboAccountFilter.Items.Clear();
             _cboAccountFilter.Items.Add("All Accounts");
 
-            foreach (var acc in _configService.Settings.Accounts)
+            foreach (var acc in _configService.GetAccounts())
             {
                 _cboAccountFilter.Items.Add(acc.Name);
             }
@@ -407,7 +407,8 @@ namespace EmailSummarizer.UI.Tabs
             _progressBar.Visible = true;
 
             var settings = _configService.Settings;
-            if (settings.Accounts.Count == 0)
+            var accounts = _configService.GetAccounts();
+            if (accounts.Count == 0)
             {
                 _logger.Report("\r\n" + new string('═', 60));
                 _logger.Report("[!] No email accounts configured. Please add an account in the Accounts tab.");
@@ -444,7 +445,7 @@ namespace EmailSummarizer.UI.Tabs
 
                 // 2. Concurrently fetch all IMAP accounts in parallel tasks, streaming emails to UI as they arrive!
                 var fetchTask = _imapService.FetchAllAccountsParallelAsync(
-                    settings.Accounts,
+                    accounts,
                     settings,
                     _logger,
                     onEmailFetched: emailItem =>

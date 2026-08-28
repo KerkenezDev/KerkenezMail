@@ -1,6 +1,9 @@
 using System;
+using System.Diagnostics;
 using System.Drawing;
 using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 using EmailSummarizer.Models;
 using EmailSummarizer.Services;
@@ -28,6 +31,14 @@ namespace EmailSummarizer.UI.Tabs
         private NumericUpDown _numMaxEmails = null!;
         private CheckBox _chkOnlyUnread = null!;
         private CheckBox _chkMarkAsSeen = null!;
+
+        // System Tray & Notification controls
+        private CheckBox _chkAlwaysKeepOn = null!;
+        private CheckBox _chkEnableTrayNotifs = null!;
+        private NumericUpDown _numTrayInterval = null!;
+        private CheckBox _chkStartWithWindows = null!;
+        private Button _btnRestartDaemon = null!;
+        private Label _lblDaemonStatus = null!;
 
         // Prompt
         private TextBox _txtPrompt = null!;
@@ -271,7 +282,90 @@ namespace EmailSummarizer.UI.Tabs
             pnlEmailCard.Controls.Add(_chkOnlyUnread);
             pnlEmailCard.Controls.Add(_chkMarkAsSeen);
 
-            // ==================== 3. Prompt Template Section ====================
+            // ==================== 3. System Tray Daemon & Notifications ====================
+            var pnlTrayCard = CreateCardPanel(ContentW);
+            var lblSecTray = CreateSectionHeader("🔔  System Tray Daemon & Notifications");
+
+            _chkAlwaysKeepOn = new CheckBox
+            {
+                Text = "Always keep on (Run system tray daemon in background)",
+                AutoSize = true,
+                Checked = true,
+                Margin = new Padding(0, 0, 0, 4),
+                Font = new Font("Segoe UI", 9F)
+            };
+
+            _chkEnableTrayNotifs = new CheckBox
+            {
+                Text = "Enable Windows desktop notifications",
+                AutoSize = true,
+                Checked = true,
+                Margin = new Padding(0, 0, 0, 6),
+                Font = new Font("Segoe UI", 9F)
+            };
+
+            var rowTrayInterval = new FlowLayoutPanel
+            {
+                AutoSize = true,
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = false,
+                Margin = new Padding(0, 0, 0, 6)
+            };
+            var lblInterval = new Label { Text = "Check interval (minutes):", AutoSize = true, Margin = new Padding(0, 4, 8, 0), Font = new Font("Segoe UI", 9F) };
+            _numTrayInterval = new NumericUpDown { Width = 75, Minimum = 1, Maximum = 120, Value = 5, Font = new Font("Segoe UI", 9F) };
+            rowTrayInterval.Controls.Add(lblInterval);
+            rowTrayInterval.Controls.Add(_numTrayInterval);
+
+            _chkStartWithWindows = new CheckBox
+            {
+                Text = "Start system tray daemon on user log-in",
+                AutoSize = true,
+                Checked = false,
+                Margin = new Padding(0, 0, 0, 8),
+                Font = new Font("Segoe UI", 9F)
+            };
+
+            var rowDaemonAction = new FlowLayoutPanel
+            {
+                Width = ContentW - 28,
+                AutoSize = true,
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = false,
+                Margin = new Padding(0, 2, 0, 0)
+            };
+
+            _btnRestartDaemon = new Button
+            {
+                Text = "🔄  Restart / Start Tray Daemon",
+                UseMnemonic = false,
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                Padding = new Padding(12, 5, 12, 5),
+                Margin = new Padding(0, 0, 10, 0),
+                FlatStyle = FlatStyle.System,
+                Cursor = Cursors.Hand
+            };
+            _btnRestartDaemon.Click += OnRestartDaemonClick;
+
+            _lblDaemonStatus = new Label
+            {
+                Text = "",
+                AutoSize = true,
+                Margin = new Padding(0, 6, 0, 0),
+                Font = new Font("Segoe UI", 8.75F)
+            };
+
+            rowDaemonAction.Controls.Add(_btnRestartDaemon);
+            rowDaemonAction.Controls.Add(_lblDaemonStatus);
+
+            pnlTrayCard.Controls.Add(lblSecTray);
+            pnlTrayCard.Controls.Add(_chkAlwaysKeepOn);
+            pnlTrayCard.Controls.Add(_chkEnableTrayNotifs);
+            pnlTrayCard.Controls.Add(rowTrayInterval);
+            pnlTrayCard.Controls.Add(_chkStartWithWindows);
+            pnlTrayCard.Controls.Add(rowDaemonAction);
+
+            // ==================== 4. Prompt Template Section ====================
             var pnlPromptCard = CreateCardPanel(ContentW);
             
             var lblSec3 = CreateSectionHeader("✍️  AI System Prompt Template");
@@ -289,7 +383,7 @@ namespace EmailSummarizer.UI.Tabs
             pnlPromptCard.Controls.Add(lblSec3);
             pnlPromptCard.Controls.Add(_txtPrompt);
 
-            // ==================== 4. Bottom Action Buttons ====================
+            // ==================== 5. Bottom Action Buttons ====================
             var pnlButtons = new FlowLayoutPanel
             {
                 Width = ContentW,
@@ -331,6 +425,7 @@ namespace EmailSummarizer.UI.Tabs
 
             _mainFlow.Controls.Add(pnlLlmCard);
             _mainFlow.Controls.Add(pnlEmailCard);
+            _mainFlow.Controls.Add(pnlTrayCard);
             _mainFlow.Controls.Add(pnlPromptCard);
             _mainFlow.Controls.Add(pnlButtons);
 
@@ -390,6 +485,11 @@ namespace EmailSummarizer.UI.Tabs
             _chkOnlyUnread.Checked = s.OnlyUnread;
             _chkMarkAsSeen.Checked = s.MarkAsSeen;
 
+            _chkAlwaysKeepOn.Checked = s.AlwaysKeepOn;
+            _chkEnableTrayNotifs.Checked = s.EnableTrayNotifications;
+            _numTrayInterval.Value = Math.Max(_numTrayInterval.Minimum, Math.Min(_numTrayInterval.Maximum, s.TrayRefreshIntervalMinutes));
+            _chkStartWithWindows.Checked = s.StartWithWindows || IsStartupWithWindowsEnabled();
+
             _txtPrompt.Text = s.SystemPrompt;
         }
 
@@ -433,7 +533,153 @@ namespace EmailSummarizer.UI.Tabs
             }
         }
 
-        private void OnSaveSettingsClick(object? sender, EventArgs e)
+        private async void OnRestartDaemonClick(object? sender, EventArgs e)
+        {
+            try
+            {
+                _btnRestartDaemon.Enabled = false;
+                _lblDaemonStatus.ForeColor = Color.DarkOrange;
+                _lblDaemonStatus.Text = "Restarting daemon...";
+
+                // Ensure settings are saved first
+                SaveCurrentValuesToConfig();
+
+                // Start or restart daemon process
+                bool success = await EnsureTrayDaemonRunningAsync(restart: true);
+
+                if (success)
+                {
+                    _lblDaemonStatus.ForeColor = Color.DarkGreen;
+                    _lblDaemonStatus.Text = "✓ System tray daemon is active and running.";
+                }
+                else
+                {
+                    _lblDaemonStatus.ForeColor = Color.Red;
+                    _lblDaemonStatus.Text = "✗ Failed to start system tray daemon.";
+                }
+            }
+            catch (Exception ex)
+            {
+                _lblDaemonStatus.ForeColor = Color.Red;
+                _lblDaemonStatus.Text = $"Error: {ex.Message}";
+            }
+            finally
+            {
+                _btnRestartDaemon.Enabled = true;
+            }
+        }
+
+        public static async Task<bool> EnsureTrayDaemonRunningAsync(bool restart = false)
+        {
+            try
+            {
+                string currentExe = Application.ExecutablePath;
+                string procName = Path.GetFileNameWithoutExtension(currentExe);
+                int currentPid = Process.GetCurrentProcess().Id;
+
+                if (restart)
+                {
+                    // 1. Signal graceful exit event to old daemon so it deletes its tray icon
+                    try
+                    {
+                        if (EventWaitHandle.TryOpenExisting(NativeTrayDaemon.ExitEventName, out var exitEvt))
+                        {
+                            exitEvt.Set();
+                            exitEvt.Dispose();
+                        }
+                    }
+                    catch { }
+
+                    // 2. Find and wait for existing daemon processes to exit
+                    var existingDaemons = Process.GetProcessesByName(procName)
+                        .Where(p => p.Id != currentPid && p.MainWindowHandle == IntPtr.Zero)
+                        .ToList();
+
+                    foreach (var p in existingDaemons)
+                    {
+                        try
+                        {
+                            bool exited = await Task.Run(() => p.WaitForExit(1500));
+                            if (!exited)
+                            {
+                                p.Kill();
+                                await Task.Run(() => p.WaitForExit(1000));
+                            }
+                        }
+                        catch { }
+                    }
+
+                    // 3. Small delay to ensure Windows OS finishes cleaning named mutexes
+                    await Task.Delay(250);
+                }
+
+                // Check if already running via mutex (only if not a restart)
+                if (!restart)
+                {
+                    bool alreadyRunning = Mutex.TryOpenExisting(@"Global\EmailSummarizer_TrayDaemon_Mutex", out var existingMutex);
+                    if (alreadyRunning)
+                    {
+                        existingMutex?.Dispose();
+                        return true;
+                    }
+                }
+
+                var proc = Process.Start(new ProcessStartInfo
+                {
+                    FileName = Application.ExecutablePath,
+                    Arguments = "--daemon",
+                    CreateNoWindow = true,
+                    UseShellExecute = false
+                });
+
+                return proc != null;
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[EnsureTrayDaemonRunning] Error: {ex.Message}");
+                return false;
+            }
+        }
+
+        public static bool IsStartupWithWindowsEnabled()
+        {
+            try
+            {
+                using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run", false);
+                var val = key?.GetValue("EmailSummarizerTray") as string;
+                return !string.IsNullOrWhiteSpace(val);
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static void SetStartupWithWindows(bool enable)
+        {
+            try
+            {
+                // CurrentUser (HKCU) guarantees execution ONLY after the specific user completes interactive logon
+                using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run", true);
+                if (key != null)
+                {
+                    if (enable)
+                    {
+                        key.SetValue("EmailSummarizerTray", $"\"{Application.ExecutablePath}\" --daemon");
+                    }
+                    else
+                    {
+                        key.DeleteValue("EmailSummarizerTray", false);
+                    }
+                }
+            }
+            catch
+            {
+                // Fallback
+            }
+        }
+
+        private void SaveCurrentValuesToConfig()
         {
             var s = _configService.Settings;
             s.LlamaModelPath = _txtModelPath.Text.Trim();
@@ -447,17 +693,28 @@ namespace EmailSummarizer.UI.Tabs
             s.OnlyUnread = _chkOnlyUnread.Checked;
             s.MarkAsSeen = _chkMarkAsSeen.Checked;
 
+            s.AlwaysKeepOn = _chkAlwaysKeepOn.Checked;
+            s.EnableTrayNotifications = _chkEnableTrayNotifs.Checked;
+            s.TrayRefreshIntervalMinutes = (int)_numTrayInterval.Value;
+            s.StartWithWindows = _chkStartWithWindows.Checked;
+
             s.SystemPrompt = _txtPrompt.Text;
 
-            if (_configService.SaveConfig())
+            SetStartupWithWindows(s.StartWithWindows);
+            _configService.SaveConfig();
+        }
+
+        private async void OnSaveSettingsClick(object? sender, EventArgs e)
+        {
+            SaveCurrentValuesToConfig();
+
+            if (_chkAlwaysKeepOn.Checked)
             {
-                MessageBox.Show("Settings saved successfully!", "Saved", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                _logger.Report("[✓] Configuration saved to config.json.");
+                await EnsureTrayDaemonRunningAsync(restart: false);
             }
-            else
-            {
-                MessageBox.Show("Failed to save settings.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
+
+            MessageBox.Show("Settings saved successfully!", "Saved", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            _logger.Report("[✓] Configuration saved to config.json.");
         }
 
         private void OnResetDefaultsClick(object? sender, EventArgs e)
@@ -465,7 +722,7 @@ namespace EmailSummarizer.UI.Tabs
             if (MessageBox.Show("Reset all settings to default values?", "Confirm Reset", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
             {
                 var defaults = AppSettings.CreateDefault();
-                defaults.Accounts = _configService.Settings.Accounts;
+                defaults.AccountIds = _configService.Settings.AccountIds;
                 _configService.SaveConfig(defaults);
                 LoadSettings();
             }

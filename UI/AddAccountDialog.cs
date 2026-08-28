@@ -96,7 +96,6 @@ namespace EmailSummarizer.UI
             _cboProvider.Items.AddRange(new object[]
             {
                 "Gmail (imap.gmail.com:993)",
-                "Outlook / Microsoft 365 (outlook.office365.com:993)",
                 "Yahoo Mail (imap.mail.yahoo.com:993)",
                 "iCloud Mail (imap.mail.me.com:993)",
                 "Custom IMAP Server"
@@ -168,7 +167,7 @@ namespace EmailSummarizer.UI
             // 7. SSL Checkbox
             _chkUseSsl = new CheckBox
             {
-                Text = "Use SSL / TLS (Required for Gmail/Outlook)",
+                Text = "Use SSL / TLS (Required for Gmail/Yahoo/iCloud)",
                 Checked = true,
                 AutoSize = true,
                 Margin = new Padding(0, 4, 0, 12)
@@ -270,10 +269,9 @@ namespace EmailSummarizer.UI
 
                 // Match provider
                 if (_account.Host.Contains("gmail")) _cboProvider.SelectedIndex = 0;
-                else if (_account.Host.Contains("office365") || _account.Host.Contains("outlook")) _cboProvider.SelectedIndex = 1;
-                else if (_account.Host.Contains("yahoo")) _cboProvider.SelectedIndex = 2;
-                else if (_account.Host.Contains("mail.me.com")) _cboProvider.SelectedIndex = 3;
-                else _cboProvider.SelectedIndex = 4;
+                else if (_account.Host.Contains("yahoo")) _cboProvider.SelectedIndex = 1;
+                else if (_account.Host.Contains("mail.me.com")) _cboProvider.SelectedIndex = 2;
+                else _cboProvider.SelectedIndex = 3;
             }
             else
             {
@@ -295,21 +293,14 @@ namespace EmailSummarizer.UI
                     _txtHost.Enabled = false;
                     _numPort.Enabled = false;
                     break;
-                case 1: // Outlook
-                    _txtHost.Text = "outlook.office365.com";
-                    _numPort.Value = 993;
-                    _chkUseSsl.Checked = true;
-                    _txtHost.Enabled = false;
-                    _numPort.Enabled = false;
-                    break;
-                case 2: // Yahoo
+                case 1: // Yahoo
                     _txtHost.Text = "imap.mail.yahoo.com";
                     _numPort.Value = 993;
                     _chkUseSsl.Checked = true;
                     _txtHost.Enabled = false;
                     _numPort.Enabled = false;
                     break;
-                case 3: // iCloud
+                case 2: // iCloud
                     _txtHost.Text = "imap.mail.me.com";
                     _numPort.Value = 993;
                     _chkUseSsl.Checked = true;
@@ -332,20 +323,14 @@ namespace EmailSummarizer.UI
                 {
                     _cboProvider.SelectedIndex = 0;
                 }
-                else if (email.EndsWith("@outlook.com", StringComparison.OrdinalIgnoreCase) ||
-                         email.EndsWith("@hotmail.com", StringComparison.OrdinalIgnoreCase) ||
-                         email.EndsWith("@live.com", StringComparison.OrdinalIgnoreCase))
-                {
-                    _cboProvider.SelectedIndex = 1;
-                }
                 else if (email.EndsWith("@yahoo.com", StringComparison.OrdinalIgnoreCase))
                 {
-                    _cboProvider.SelectedIndex = 2;
+                    _cboProvider.SelectedIndex = 1;
                 }
                 else if (email.EndsWith("@icloud.com", StringComparison.OrdinalIgnoreCase) ||
                          email.EndsWith("@me.com", StringComparison.OrdinalIgnoreCase))
                 {
-                    _cboProvider.SelectedIndex = 3;
+                    _cboProvider.SelectedIndex = 2;
                 }
             }
         }

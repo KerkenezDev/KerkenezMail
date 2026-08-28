@@ -194,13 +194,13 @@ namespace EmailSummarizer.UI
             }
 
             _lblStatus.Text = status;
-            int enabledCount = _configService.Settings.Accounts.Count(a => a.IsEnabled);
+            int enabledCount = _configService.GetAccounts().Count(a => a.IsEnabled);
             _lblMetrics.Text = $"Accounts: {enabledCount} | VRAM: {vramStatus}";
         }
 
         private void UpdateMetrics()
         {
-            int enabledCount = _configService.Settings.Accounts.Count(a => a.IsEnabled);
+            int enabledCount = _configService.GetAccounts().Count(a => a.IsEnabled);
             _lblMetrics.Text = $"Accounts: {enabledCount} | VRAM: Model Loaded in VRAM";
         }
 

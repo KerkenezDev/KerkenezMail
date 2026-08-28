@@ -4,7 +4,7 @@ namespace EmailSummarizer.Models
 {
     public class AppSettings
     {
-        public List<EmailAccount> Accounts { get; set; } = new List<EmailAccount>();
+        public List<string> AccountIds { get; set; } = new List<string>();
 
         // llama.cpp & LLM Server Settings
         public string LlamaModelPath { get; set; } = "";
@@ -20,6 +20,12 @@ namespace EmailSummarizer.Models
         public int MaxEmailsPerAccount { get; set; } = 15;
         public bool OnlyUnread { get; set; } = false; // Fetch all inbox emails by default
         public bool MarkAsSeen { get; set; } = false;
+
+        // System Tray Daemon & Notification Options
+        public bool AlwaysKeepOn { get; set; } = true;
+        public bool EnableTrayNotifications { get; set; } = true;
+        public int TrayRefreshIntervalMinutes { get; set; } = 5;
+        public bool StartWithWindows { get; set; } = false;
 
         // System Prompt for AI Summarizer
         public string SystemPrompt { get; set; } = 

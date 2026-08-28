@@ -20,7 +20,19 @@
     <Deterministic>true</Deterministic>
     <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
     <PathMap>$(MSBuildProjectDirectory)=/_</PathMap>
+
+    <!-- GC & Low-Memory Runtime Optimization -->
+    <ServerGarbageCollection>false</ServerGarbageCollection>
+    <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
+    <RetainVMGarbageCollection>false</RetainVMGarbageCollection>
+    <TieredCompilation>true</TieredCompilation>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Remove="source\**;EmailSummarizer_terminal\**" />
+    <EmbeddedResource Remove="source\**;EmailSummarizer_terminal\**" />
+    <None Remove="source\**;EmailSummarizer_terminal\**" />
+  </ItemGroup>
 
   <ItemGroup>
     <EmbeddedResource Include="app.ico" />

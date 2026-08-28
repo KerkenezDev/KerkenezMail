@@ -173,7 +173,7 @@ namespace EmailSummarizer.UI.Tabs
             _pnlCards.SuspendLayout();
             _pnlCards.Controls.Clear();
 
-            var accounts = _configService.Settings.Accounts;
+            var accounts = _configService.GetAccounts();
             if (accounts.Count == 0)
             {
                 _lblEmpty.Visible = true;
@@ -228,7 +228,13 @@ namespace EmailSummarizer.UI.Tabs
             chkEnabled.CheckedChanged += (s, e) =>
             {
                 account.IsEnabled = chkEnabled.Checked;
-                _configService.SaveConfig();
+                var accounts = _configService.GetAccounts();
+                var existing = accounts.FirstOrDefault(a => a.Id == account.Id);
+                if (existing != null)
+                {
+                    existing.IsEnabled = account.IsEnabled;
+                }
+                _configService.SaveAccounts(accounts);
                 AccountsChanged?.Invoke();
             };
 
@@ -329,7 +335,12 @@ namespace EmailSummarizer.UI.Tabs
                     account.Port = updated.Port;
                     account.UseSsl = updated.UseSsl;
 
-                    _configService.SaveConfig();
+                    var accounts = _configService.GetAccounts();
+                    var idx = accounts.FindIndex(a => a.Id == account.Id);
+                    if (idx >= 0) accounts[idx] = account;
+                    else accounts.Add(account);
+
+                    _configService.SaveAccounts(accounts);
                     LoadAccounts();
                     AccountsChanged?.Invoke();
                 }
@@ -350,8 +361,9 @@ namespace EmailSummarizer.UI.Tabs
             {
                 if (MessageBox.Show($"Are you sure you want to remove account '{account.Name}' ({account.Email})?", "Confirm Delete", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
                 {
-                    _configService.Settings.Accounts.Remove(account);
-                    _configService.SaveConfig();
+                    var accounts = _configService.GetAccounts();
+                    accounts.RemoveAll(a => a.Id == account.Id);
+                    _configService.SaveAccounts(accounts);
                     LoadAccounts();
                     AccountsChanged?.Invoke();
                 }
@@ -375,8 +387,9 @@ namespace EmailSummarizer.UI.Tabs
             using var dlg = new AddAccountDialog(_imapService);
             if (dlg.ShowDialog(this.FindForm()) == DialogResult.OK)
             {
-                _configService.Settings.Accounts.Add(dlg.ResultAccount);
-                _configService.SaveConfig();
+                var accounts = _configService.GetAccounts();
+                accounts.Add(dlg.ResultAccount);
+                _configService.SaveAccounts(accounts);
                 LoadAccounts();
                 AccountsChanged?.Invoke();
                 _logger.Report($"[+] Added new account: {dlg.ResultAccount.Name} ({dlg.ResultAccount.Email})");
@@ -388,7 +401,8 @@ namespace EmailSummarizer.UI.Tabs
             _btnTestAll.Enabled = false;
             _logger.Report("\r\n[*] Testing connections for all configured accounts...");
 
-            foreach (var acc in _configService.Settings.Accounts)
+            var accounts = _configService.GetAccounts();
+            foreach (var acc in accounts)
             {
                 var (success, msg, unread) = await _imapService.TestConnectionAsync(acc);
                 acc.ConnectionStatus = success ? $"Connected ({unread} unread)" : "Failed";
