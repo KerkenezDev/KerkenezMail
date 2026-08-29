@@ -60,22 +60,30 @@ namespace EmailSummarizer.UI
             }
             catch { }
 
-            this.Size = new Size(520, 560);
-            this.MinimumSize = new Size(500, 530);
+            this.Size = new Size(540, 600);
+            this.MinimumSize = new Size(460, 420);
             this.StartPosition = FormStartPosition.CenterParent;
-            this.FormBorderStyle = FormBorderStyle.FixedDialog;
+            this.FormBorderStyle = FormBorderStyle.Sizable;
             this.MaximizeBox = false;
             this.MinimizeBox = false;
             this.Font = new Font("Segoe UI", 9F, FontStyle.Regular);
             this.BackColor = Color.FromArgb(248, 249, 250);
 
-            var mainPanel = new TableLayoutPanel
+            var scrollPanel = new Panel
             {
                 Dock = DockStyle.Fill,
-                Padding = new Padding(24, 20, 24, 20),
+                AutoScroll = true,
+                BackColor = Color.FromArgb(248, 249, 250)
+            };
+
+            var mainPanel = new TableLayoutPanel
+            {
+                Dock = DockStyle.Top,
+                Padding = new Padding(24, 16, 24, 16),
                 ColumnCount = 2,
                 RowCount = 10,
-                AutoSize = true
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink
             };
             mainPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 130F));
             mainPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
@@ -199,7 +207,19 @@ namespace EmailSummarizer.UI
             testPanel.Controls.Add(_btnTestConnection);
 
             // Bottom Buttons
-            var bottomButtonsPanel = new Panel { Dock = DockStyle.Bottom, Height = 50, Padding = new Padding(0, 10, 24, 10) };
+            var bottomButtonsPanel = new Panel 
+            { 
+                Dock = DockStyle.Bottom, 
+                Height = 56, 
+                Padding = new Padding(0, 12, 24, 12),
+                BackColor = Color.FromArgb(242, 244, 247)
+            };
+            bottomButtonsPanel.Paint += (s, e) =>
+            {
+                using var p = new Pen(Color.FromArgb(222, 226, 230), 1);
+                e.Graphics.DrawLine(p, 0, 0, bottomButtonsPanel.Width, 0);
+            };
+
             _btnCancel = new Button
             {
                 Text = "Cancel",
@@ -250,8 +270,10 @@ namespace EmailSummarizer.UI
             mainPanel.Controls.Add(new Label(), 0, 7);
             mainPanel.Controls.Add(testPanel, 1, 7);
 
-            this.Controls.Add(mainPanel);
+            scrollPanel.Controls.Add(mainPanel);
+            this.Controls.Add(scrollPanel);
             this.Controls.Add(bottomButtonsPanel);
+
             this.AcceptButton = _btnSave;
             this.CancelButton = _btnCancel;
         }

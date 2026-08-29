@@ -39,10 +39,8 @@ namespace EmailSummarizer.UI
             _llmService = new LlmSummarizerService();
 
             InitializeComponent();
-            string modelName = string.IsNullOrWhiteSpace(_configService.Settings.LlamaModelPath) 
-                ? "Not Selected" 
-                : Path.GetFileName(_configService.Settings.LlamaModelPath);
-            UpdateStatusStrip($"Ready • Model: {modelName}", "Ready");
+            string modelName = _configService.Settings.GetBackendDisplayName();
+            UpdateStatusStrip($"Ready • Backend: {modelName}", "Ready");
 
             // Auto-fetch and auto-summarize unread emails as soon as app opens
             this.Shown += async (s, e) =>
@@ -201,7 +199,11 @@ namespace EmailSummarizer.UI
         private void UpdateMetrics()
         {
             int enabledCount = _configService.GetAccounts().Count(a => a.IsEnabled);
-            _lblMetrics.Text = $"Accounts: {enabledCount} | VRAM: Model Loaded in VRAM";
+            string backendType = _configService.Settings.AiBackend;
+            string status = string.Equals(backendType, "LlamaCpp", StringComparison.OrdinalIgnoreCase) 
+                ? "Model Loaded in VRAM" 
+                : (string.Equals(backendType, "Ollama", StringComparison.OrdinalIgnoreCase) ? "Ollama Active" : "Cloud Active");
+            _lblMetrics.Text = $"Accounts: {enabledCount} | Backend: {status}";
         }
 
         private async void OnFormKeyDown(object? sender, KeyEventArgs e)
@@ -213,10 +215,58 @@ namespace EmailSummarizer.UI
             }
         }
 
+        private bool _isClosingFlushDone = false;
+
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
+            // Abort active IMAP sync & LLM startup/summaries immediately
+            _summariesView.CancelRunningOperations();
+
+            if (!_isClosingFlushDone && _summariesView.HasPendingOrInFlightTriage)
+            {
+                e.Cancel = true;
+                this.Hide(); // Instantly vanishes from user view!
+
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        await _summariesView.FlushPendingTriageAsync();
+                    }
+                    catch { }
+                    finally
+                    {
+                        _isClosingFlushDone = true;
+                        _llamaManager.Stop();
+                        if (!this.IsDisposed && this.IsHandleCreated)
+                        {
+                            try
+                            {
+                                this.BeginInvoke(new Action(() =>
+                                {
+                                    this.Close();
+                                }));
+                            }
+                            catch { }
+                        }
+                    }
+                });
+
+                return;
+            }
+
             base.OnFormClosing(e);
             _llamaManager.Stop();
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                _summariesView?.CancelRunningOperations();
+                _llamaManager?.Dispose();
+            }
+            base.Dispose(disposing);
         }
     }
 }

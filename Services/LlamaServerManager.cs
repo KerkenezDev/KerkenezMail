@@ -14,6 +14,8 @@ namespace EmailSummarizer.Services
         private Process? _process;
         private bool _weStartedServer;
         private readonly SemaphoreSlim _lock = new SemaphoreSlim(1, 1);
+        private readonly object _stateLock = new object();
+        private CancellationTokenSource? _startCts;
         private static readonly HttpClient HttpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(2) };
         private IntPtr _jobHandle = IntPtr.Zero;
 
@@ -198,21 +200,39 @@ namespace EmailSummarizer.Services
             IProgress<string>? logger = null,
             CancellationToken ct = default)
         {
+            CancellationTokenSource linkedCts;
+            lock (_stateLock)
+            {
+                _startCts?.Cancel();
+                _startCts?.Dispose();
+                linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                _startCts = linkedCts;
+            }
+
+            var effectiveCt = linkedCts.Token;
+
             // Thread-safe mutex lock: Prevent duplicate concurrent server launches
-            await _lock.WaitAsync(ct);
+            try
+            {
+                await _lock.WaitAsync(effectiveCt);
+            }
+            catch (OperationCanceledException)
+            {
+                return false;
+            }
+
             try
             {
                 // 1. If our process is already alive and running, simply wait for /health or return
-                if (_process != null && !_process.HasExited)
+                lock (_stateLock)
                 {
-                    if (await IsServerReadyAsync(host, port, ct))
+                    if (_process != null && !_process.HasExited)
                     {
-                        return true;
+                        // Check health below outside lock
                     }
                 }
 
-                // 2. Check if an active server is already listening on the port
-                if (await IsServerReadyAsync(host, port, ct))
+                if (await IsServerReadyAsync(host, port, effectiveCt))
                 {
                     logger?.Report($"[✓] llama-server is active on http://{host}:{port}");
                     return true;
@@ -221,6 +241,11 @@ namespace EmailSummarizer.Services
                 if (!File.Exists(modelPath))
                 {
                     logger?.Report($"[!] Model file not found at: {modelPath}");
+                    return false;
+                }
+
+                if (effectiveCt.IsCancellationRequested)
+                {
                     return false;
                 }
 
@@ -238,46 +263,71 @@ namespace EmailSummarizer.Services
                     RedirectStandardError = false
                 };
 
-                _process = Process.Start(psi);
-                if (_process == null)
+                Process? proc = null;
+                try
+                {
+                    proc = Process.Start(psi);
+                }
+                catch (Exception ex)
+                {
+                    logger?.Report($"[!] Failed to spawn llama-server process: {ex.Message}");
+                    return false;
+                }
+
+                if (proc == null)
                 {
                     logger?.Report("[!] Failed to spawn llama-server process.");
                     return false;
                 }
 
-                _weStartedServer = true;
+                lock (_stateLock)
+                {
+                    _process = proc;
+                    _weStartedServer = true;
+                }
 
                 // Bind child process to Windows Job Object for guaranteed cleanup on parent exit
-                AssignToJob(_process);
+                AssignToJob(proc);
 
                 // Wait for server to become responsive on /health
                 var startTime = DateTime.UtcNow;
                 while ((DateTime.UtcNow - startTime).TotalSeconds < waitTimeoutSeconds)
                 {
-                    if (ct.IsCancellationRequested)
+                    if (effectiveCt.IsCancellationRequested)
                     {
                         StopInternal(logger);
                         return false;
                     }
 
-                    if (_process.HasExited)
+                    if (proc.HasExited)
                     {
-                        logger?.Report($"[!] llama-server exited early with code {_process.ExitCode}");
-                        _process = null;
-                        _weStartedServer = false;
+                        logger?.Report($"[!] llama-server exited early with code {proc.ExitCode}");
+                        lock (_stateLock)
+                        {
+                            if (_process == proc)
+                            {
+                                _process = null;
+                                _weStartedServer = false;
+                            }
+                        }
                         return false;
                     }
 
-                    if (await IsServerReadyAsync(host, port, ct))
+                    if (await IsServerReadyAsync(host, port, effectiveCt))
                     {
                         logger?.Report($"[✓] llama-server is ready and listening on http://{host}:{port}");
                         return true;
                     }
 
-                    await Task.Delay(400, ct);
+                    await Task.Delay(400, effectiveCt);
                 }
 
                 logger?.Report("[!] Timed out waiting for llama-server to initialize.");
+                StopInternal(logger);
+                return false;
+            }
+            catch (OperationCanceledException)
+            {
                 StopInternal(logger);
                 return false;
             }
@@ -289,33 +339,53 @@ namespace EmailSummarizer.Services
             finally
             {
                 _lock.Release();
+                lock (_stateLock)
+                {
+                    if (_startCts == linkedCts)
+                    {
+                        _startCts = null;
+                    }
+                }
             }
         }
 
         public void Stop(IProgress<string>? logger = null)
         {
-            _lock.Wait();
-            try
+            // 1. Cancel any active StartAsync operations immediately
+            lock (_stateLock)
             {
-                StopInternal(logger);
+                try
+                {
+                    _startCts?.Cancel();
+                }
+                catch { }
             }
-            finally
-            {
-                _lock.Release();
-            }
+
+            // 2. Kill the process immediately without blocking UI thread
+            StopInternal(logger);
         }
 
         private void StopInternal(IProgress<string>? logger = null)
         {
-            if (_weStartedServer && _process != null)
+            Process? procToKill = null;
+            lock (_stateLock)
+            {
+                if (_weStartedServer && _process != null)
+                {
+                    procToKill = _process;
+                    _process = null;
+                    _weStartedServer = false;
+                }
+            }
+
+            if (procToKill != null)
             {
                 logger?.Report("[*] Freeing GPU VRAM: Stopping llama-server...");
                 try
                 {
-                    if (!_process.HasExited)
+                    if (!procToKill.HasExited)
                     {
-                        _process.Kill(true);
-                        _process.WaitForExit(3000);
+                        procToKill.Kill(true);
                     }
                     logger?.Report("[✓] llama-server stopped. GPU VRAM released successfully.");
                 }
@@ -325,9 +395,11 @@ namespace EmailSummarizer.Services
                 }
                 finally
                 {
-                    _process?.Dispose();
-                    _process = null;
-                    _weStartedServer = false;
+                    try
+                    {
+                        procToKill.Dispose();
+                    }
+                    catch { }
                 }
             }
         }

@@ -22,12 +22,27 @@ namespace EmailSummarizer.UI.Tabs
 
         private CancellationTokenSource? _cts;
         private readonly List<EmailItem> _emails = new List<EmailItem>();
+        private readonly List<EmailItem> _selectedEmailsOrder = new List<EmailItem>();
+
+        // Triage State & Debouncing
+        private enum TriageActionType { Archive, Delete }
+        private class PendingTriageItem
+        {
+            public EmailItem Email { get; set; } = null!;
+            public TriageActionType Action { get; set; }
+        }
+        private readonly List<PendingTriageItem> _pendingSingleTriage = new List<PendingTriageItem>();
+        private readonly object _triageLock = new object();
+        private System.Threading.Timer? _debounceTriageTimer;
+        private readonly List<Task> _inFlightTasks = new List<Task>();
 
         // Controls
         private Panel _topPanel = null!;
         private Button _btnRefresh = null!;
         private Button _btnCopySummary = null!;
         private Button _btnExport = null!;
+        private Button _btnArchive = null!;
+        private Button _btnDelete = null!;
         private ComboBox _cboAccountFilter = null!;
         private TextBox _txtSearch = null!;
         private ListView _lvEmails = null!;
@@ -101,8 +116,8 @@ namespace EmailSummarizer.UI.Tabs
                 UseMnemonic = false,
                 AutoSize = true,
                 AutoSizeMode = AutoSizeMode.GrowAndShrink,
-                Padding = new Padding((int)(14 * scale), (int)(6 * scale), (int)(14 * scale), (int)(6 * scale)),
-                Margin = new Padding(0, 0, (int)(10 * scale), 0),
+                Padding = new Padding((int)(10 * scale), (int)(6 * scale), (int)(10 * scale), (int)(6 * scale)),
+                Margin = new Padding(0, 0, (int)(8 * scale), 0),
                 FlatStyle = FlatStyle.System,
                 Font = new Font("Segoe UI", 9F, FontStyle.Bold),
                 Cursor = Cursors.Hand
@@ -115,8 +130,8 @@ namespace EmailSummarizer.UI.Tabs
                 UseMnemonic = false,
                 AutoSize = true,
                 AutoSizeMode = AutoSizeMode.GrowAndShrink,
-                Padding = new Padding((int)(12 * scale), (int)(6 * scale), (int)(12 * scale), (int)(6 * scale)),
-                Margin = new Padding(0, 0, (int)(10 * scale), 0),
+                Padding = new Padding((int)(10 * scale), (int)(6 * scale), (int)(10 * scale), (int)(6 * scale)),
+                Margin = new Padding(0, 0, (int)(8 * scale), 0),
                 FlatStyle = FlatStyle.System,
                 Cursor = Cursors.Hand
             };
@@ -128,12 +143,56 @@ namespace EmailSummarizer.UI.Tabs
                 UseMnemonic = false,
                 AutoSize = true,
                 AutoSizeMode = AutoSizeMode.GrowAndShrink,
-                Padding = new Padding((int)(12 * scale), (int)(6 * scale), (int)(12 * scale), (int)(6 * scale)),
-                Margin = new Padding(0, 0, (int)(18 * scale), 0),
+                Padding = new Padding((int)(10 * scale), (int)(6 * scale), (int)(10 * scale), (int)(6 * scale)),
+                Margin = new Padding(0, 0, (int)(8 * scale), 0),
                 FlatStyle = FlatStyle.System,
                 Cursor = Cursors.Hand
             };
             _btnExport.Click += OnExportClick;
+
+            // Stacked Archive and Delete half-height square buttons
+            var pnlTriageButtons = new Panel
+            {
+                Width = (int)(32 * scale),
+                Height = btnH,
+                Margin = new Padding(0, 0, (int)(14 * scale), 0),
+                Padding = new Padding(0)
+            };
+
+            int halfBtnH = (btnH - 2) / 2;
+
+            _btnArchive = new Button
+            {
+                Dock = DockStyle.Top,
+                Height = halfBtnH,
+                Text = "📥",
+                Font = new Font("Segoe UI Emoji", 7F, FontStyle.Regular),
+                Padding = new Padding(0),
+                Margin = new Padding(0),
+                FlatStyle = FlatStyle.System,
+                Cursor = Cursors.Hand
+            };
+            _btnArchive.Click += OnArchiveClick;
+
+            _btnDelete = new Button
+            {
+                Dock = DockStyle.Bottom,
+                Height = halfBtnH,
+                Text = "🗑",
+                Font = new Font("Segoe UI Emoji", 7F, FontStyle.Regular),
+                Padding = new Padding(0),
+                Margin = new Padding(0),
+                FlatStyle = FlatStyle.System,
+                Cursor = Cursors.Hand
+            };
+            _btnDelete.Click += OnDeleteClick;
+
+            var toolTip = new ToolTip();
+            toolTip.SetToolTip(_btnArchive, "Archive selected email(s)");
+            toolTip.SetToolTip(_btnDelete, "Delete selected email(s)");
+
+            pnlTriageButtons.Controls.Add(_btnDelete);
+            pnlTriageButtons.Controls.Add(_btnArchive);
 
             var lblAccount = new Label
             {
@@ -166,20 +225,41 @@ namespace EmailSummarizer.UI.Tabs
             actionsFlow.Controls.Add(_btnRefresh);
             actionsFlow.Controls.Add(_btnCopySummary);
             actionsFlow.Controls.Add(_btnExport);
+            actionsFlow.Controls.Add(pnlTriageButtons);
             actionsFlow.Controls.Add(lblAccount);
             actionsFlow.Controls.Add(_cboAccountFilter);
             actionsFlow.Controls.Add(_txtSearch);
 
             _progressBar = new ProgressBar
             {
-                Dock = DockStyle.Bottom,
-                Height = 3,
+                Height = Math.Max(3, (int)(3 * scale)),
                 Visible = false,
                 Style = ProgressBarStyle.Marquee
             };
 
-            _topPanel.Controls.Add(actionsFlow);
+            void UpdateProgressBarBounds()
+            {
+                int barH = Math.Max(3, (int)(3 * scale));
+                int btnBottom = topPad + btnH;
+                int bottomBorderY = _topPanel.Height - 1;
+                int gap = bottomBorderY - btnBottom;
+                int barY = btnBottom + Math.Max(0, (gap - barH) / 2);
+
+                int startX = actionsFlow.Left + _btnRefresh.Left;
+                int endX = actionsFlow.Left + _txtSearch.Right;
+                int barW = Math.Max(50, endX - startX);
+
+                _progressBar.SetBounds(startX, barY, barW, barH);
+                _progressBar.BringToFront();
+            }
+
+            _topPanel.Resize += (s, e) => UpdateProgressBarBounds();
+            _topPanel.Layout += (s, e) => UpdateProgressBarBounds();
+            actionsFlow.Layout += (s, e) => UpdateProgressBarBounds();
+
             _topPanel.Controls.Add(_progressBar);
+            _topPanel.Controls.Add(actionsFlow);
+            UpdateProgressBarBounds();
 
             // 2. Main SplitContainer (Left/Middle = Email Body + AI Summary, Right = Grouped Inbox List)
             _mainSplit = new SplitContainer
@@ -342,12 +422,14 @@ namespace EmailSummarizer.UI.Tabs
                 HideSelection = false,
                 BorderStyle = BorderStyle.FixedSingle,
                 Font = new Font("Segoe UI", 9F),
-                ShowGroups = true
+                ShowGroups = true,
+                MultiSelect = true
             };
             _lvEmails.Columns.Add("Subject", 210);
             _lvEmails.Columns.Add("Account", 110);
             _lvEmails.Columns.Add("From", 140);
             _lvEmails.Columns.Add("Date", 95);
+            _lvEmails.ItemSelectionChanged += OnEmailItemSelectionChanged;
             _lvEmails.SelectedIndexChanged += OnEmailSelected;
 
             rightListPanel.Controls.Add(_lvEmails);
@@ -418,22 +500,20 @@ namespace EmailSummarizer.UI.Tabs
                 return;
             }
 
-            string modelName = string.IsNullOrWhiteSpace(settings.LlamaModelPath) 
-                ? "Not Selected" 
-                : Path.GetFileName(settings.LlamaModelPath);
+            string backendName = settings.GetBackendDisplayName();
 
             StatusUpdated?.Invoke("Syncing inboxes...", "Active");
             _logger.Report("\r\n" + new string('═', 60));
-            _logger.Report($"[*] Fast-syncing all accounts in parallel with model load...");
+            _logger.Report($"[*] Fast-syncing all accounts with AI backend [{backendName}]...");
 
             _emails.Clear();
             PopulateListView();
 
             try
             {
-                // 1. Launch LLM Server in parallel background task
+                // 1. Launch LLM Server in parallel background task ONLY if using local llama.cpp
                 Task<bool>? serverTask = null;
-                if (settings.AutoStartLlamaServer)
+                if (string.Equals(settings.AiBackend, "LlamaCpp", StringComparison.OrdinalIgnoreCase) && settings.AutoStartLlamaServer)
                 {
                     serverTask = _llamaManager.StartAsync(
                         settings.LlamaModelPath,
@@ -450,23 +530,29 @@ namespace EmailSummarizer.UI.Tabs
                     _logger,
                     onEmailFetched: emailItem =>
                     {
-                        if (this.IsDisposed) return;
+                        if (this.IsDisposed || !this.IsHandleCreated) return;
 
-                        this.BeginInvoke(new Action(() =>
+                        try
                         {
-                            _emails.Add(emailItem);
-                            AddEmailItemToListView(emailItem);
-
-                            if (_lvEmails.SelectedItems.Count == 0 && _lvEmails.Items.Count > 0)
+                            this.BeginInvoke(new Action(() =>
                             {
-                                _lvEmails.Items[0].Selected = true;
-                            }
+                                if (this.IsDisposed || !this.IsHandleCreated) return;
 
-                            if (!emailItem.IsRead)
-                            {
-                                _ = SummarizeUnreadEmailInBackgroundAsync(emailItem, settings, serverTask, ct);
-                            }
-                        }));
+                                _emails.Add(emailItem);
+                                AddEmailItemToListView(emailItem);
+
+                                if (_lvEmails.SelectedItems.Count == 0 && _lvEmails.Items.Count > 0)
+                                {
+                                    _lvEmails.Items[0].Selected = true;
+                                }
+
+                                if (!emailItem.IsRead)
+                                {
+                                    _ = SummarizeUnreadEmailInBackgroundAsync(emailItem, settings, serverTask, ct);
+                                }
+                            }));
+                        }
+                        catch { }
                     },
                     ct: ct);
 
@@ -475,11 +561,14 @@ namespace EmailSummarizer.UI.Tabs
 
                 int unreadCount = _emails.Count(e => !e.IsRead);
                 _logger.Report($"[✓] Parallel sync complete. Loaded {_emails.Count} total email(s) ({unreadCount} unread).");
-                StatusUpdated?.Invoke($"Ready • {_emails.Count} emails in inbox ({unreadCount} unread)", "Model Loaded in VRAM");
+                string backendMetric = string.Equals(settings.AiBackend, "LlamaCpp", StringComparison.OrdinalIgnoreCase) 
+                    ? "Model Loaded in VRAM" 
+                    : (string.Equals(settings.AiBackend, "Ollama", StringComparison.OrdinalIgnoreCase) ? "Ollama Active" : "Cloud Active");
+                StatusUpdated?.Invoke($"Ready • {_emails.Count} emails in inbox ({unreadCount} unread)", backendMetric);
             }
             catch (OperationCanceledException)
             {
-                StatusUpdated?.Invoke("Operation cancelled", "Model Loaded in VRAM");
+                StatusUpdated?.Invoke("Operation cancelled", "Ready");
                 _logger.Report("[!] Inbox sync cancelled.");
             }
             catch (Exception ex)
@@ -503,6 +592,8 @@ namespace EmailSummarizer.UI.Tabs
                     await serverTask;
                 }
 
+                if (ct.IsCancellationRequested || this.IsDisposed) return;
+
                 email.Status = SummaryState.Summarizing;
                 string summary = await _llmService.SummarizeEmailAsync(email, settings, ct);
                 email.Summary = summary;
@@ -510,8 +601,12 @@ namespace EmailSummarizer.UI.Tabs
 
                 _logger.Report($"[✓] Background summary generated for: \"{email.Subject}\"");
 
+                if (this.IsDisposed || !this.IsHandleCreated) return;
+
                 this.BeginInvoke(new Action(() =>
                 {
+                    if (this.IsDisposed || !this.IsHandleCreated) return;
+
                     if (_lvEmails.SelectedItems.Count > 0 && _lvEmails.SelectedItems[0].Tag == email)
                     {
                         DisplayEmail(email);
@@ -552,14 +647,19 @@ namespace EmailSummarizer.UI.Tabs
                 _lvEmails.Groups.Add(group);
             }
 
-            string subjectPrefix = email.IsRead ? "   " : "● ";
+            string subjectPrefix = email.IsArchived ? "📥 " : (email.IsRead ? "   " : "● ");
             var item = new ListViewItem(subjectPrefix + email.Subject, group);
             item.SubItems.Add(email.AccountName);
             item.SubItems.Add(email.Sender);
             item.SubItems.Add(email.DateString);
             item.Tag = email;
 
-            if (email.IsRead)
+            if (email.IsArchived)
+            {
+                item.ForeColor = Color.FromArgb(150, 155, 165);
+                item.Font = new Font("Segoe UI", 8.75F, FontStyle.Regular);
+            }
+            else if (email.IsRead)
             {
                 item.ForeColor = Color.FromArgb(130, 135, 145);
                 item.Font = new Font("Segoe UI", 8.75F, FontStyle.Regular);
@@ -578,9 +678,15 @@ namespace EmailSummarizer.UI.Tabs
 
         private void PopulateListView()
         {
+            if (this.IsDisposed || !this.IsHandleCreated) return;
+
             if (this.InvokeRequired)
             {
-                this.Invoke(new Action(PopulateListView));
+                try
+                {
+                    this.BeginInvoke(new Action(PopulateListView));
+                }
+                catch { }
                 return;
             }
 
@@ -625,14 +731,19 @@ namespace EmailSummarizer.UI.Tabs
                     _lvEmails.Groups.Add(group);
                 }
 
-                string subjectPrefix = email.IsRead ? "   " : "● ";
+                string subjectPrefix = email.IsArchived ? "📥 " : (email.IsRead ? "   " : "● ");
                 var item = new ListViewItem(subjectPrefix + email.Subject, group);
                 item.SubItems.Add(email.AccountName);
                 item.SubItems.Add(email.Sender);
                 item.SubItems.Add(email.DateString);
                 item.Tag = email;
 
-                if (email.IsRead)
+                if (email.IsArchived)
+                {
+                    item.ForeColor = Color.FromArgb(150, 155, 165);
+                    item.Font = new Font("Segoe UI", 8.75F, FontStyle.Regular);
+                }
+                else if (email.IsRead)
                 {
                     item.ForeColor = Color.FromArgb(130, 135, 145);
                     item.Font = new Font("Segoe UI", 8.75F, FontStyle.Regular);
@@ -666,11 +777,41 @@ namespace EmailSummarizer.UI.Tabs
             PopulateListView();
         }
 
+        private void OnEmailItemSelectionChanged(object? sender, ListViewItemSelectionChangedEventArgs e)
+        {
+            if (e?.Item?.Tag is EmailItem email)
+            {
+                if (e.IsSelected)
+                {
+                    _selectedEmailsOrder.Remove(email);
+                    _selectedEmailsOrder.Add(email);
+                }
+                else
+                {
+                    _selectedEmailsOrder.Remove(email);
+                }
+            }
+        }
+
         private async void OnEmailSelected(object? sender, EventArgs e)
         {
-            if (_lvEmails.SelectedItems.Count == 0) return;
+            if (_lvEmails.SelectedItems.Count == 0)
+            {
+                _selectedEmailsOrder.Clear();
+                _txtSummary.Clear();
+                _txtEmailBody.Clear();
+                _lblEmailSubject.Text = "Subject: (No email selected)";
+                _lblEmailMeta.Text = "From: -   •   Date: -   •   Account: -";
+                return;
+            }
 
-            var email = _lvEmails.SelectedItems[0].Tag as EmailItem;
+            var currentSelectedTags = _lvEmails.SelectedItems.Cast<ListViewItem>()
+                .Select(i => i.Tag as EmailItem)
+                .Where(x => x != null)
+                .ToHashSet();
+            _selectedEmailsOrder.RemoveAll(x => !currentSelectedTags.Contains(x));
+
+            var email = GetCurrentPreviewEmail();
             if (email == null) return;
 
             DisplayEmail(email);
@@ -681,7 +822,7 @@ namespace EmailSummarizer.UI.Tabs
                 StatusUpdated?.Invoke($"Summarizing \"{email.Subject}\"...", "In Use (GPU)");
 
                 var settings = _configService.Settings;
-                if (settings.AutoStartLlamaServer)
+                if (string.Equals(settings.AiBackend, "LlamaCpp", StringComparison.OrdinalIgnoreCase) && settings.AutoStartLlamaServer)
                 {
                     await _llamaManager.StartAsync(settings.LlamaModelPath, settings.LlamaServerPort, settings.LlamaGpuLayers, logger: _logger);
                 }
@@ -690,22 +831,302 @@ namespace EmailSummarizer.UI.Tabs
                 email.Summary = summary;
                 email.Status = SummaryState.Completed;
 
-                if (_lvEmails.SelectedItems.Count > 0 && _lvEmails.SelectedItems[0].Tag == email)
+                if (_lvEmails.SelectedItems.Count > 0 && GetCurrentPreviewEmail() == email)
                 {
-                    _txtSummary.Text = summary;
+                    DisplayEmail(email);
                 }
 
-                StatusUpdated?.Invoke("Summary ready", "Model Loaded in VRAM");
+                string backendMetric = string.Equals(settings.AiBackend, "LlamaCpp", StringComparison.OrdinalIgnoreCase) 
+                    ? "Model Loaded in VRAM" 
+                    : (string.Equals(settings.AiBackend, "Ollama", StringComparison.OrdinalIgnoreCase) ? "Ollama Active" : "Cloud Active");
+                StatusUpdated?.Invoke("Summary ready", backendMetric);
             }
+        }
+
+        private EmailItem? GetCurrentPreviewEmail()
+        {
+            if (_lvEmails.SelectedItems.Count == 0) return null;
+
+            string previewMode = _configService.Settings.MultiSelectPreview;
+            if (string.Equals(previewMode, "FirstSelected", StringComparison.OrdinalIgnoreCase))
+            {
+                return _selectedEmailsOrder.FirstOrDefault() ?? (_lvEmails.SelectedItems[0].Tag as EmailItem);
+            }
+            
+            return _selectedEmailsOrder.LastOrDefault() ?? (_lvEmails.SelectedItems[_lvEmails.SelectedItems.Count - 1].Tag as EmailItem);
         }
 
         private void DisplayEmail(EmailItem email)
         {
             string readTag = email.IsRead ? "[Read]" : "[Unread]";
+            if (email.IsArchived) readTag = "[Archived] • " + readTag;
+
             _lblEmailSubject.Text = $"Subject: {email.Subject}";
             _lblEmailMeta.Text = $"From: {email.Sender}   •   Date: {email.DateString}   •   Account: {email.AccountName}   •   {readTag}";
-            _txtSummary.Text = string.IsNullOrWhiteSpace(email.Summary) ? "✨ Generating AI summary for this email..." : email.Summary;
+
+            string summaryText = string.IsNullOrWhiteSpace(email.Summary) 
+                ? "✨ Generating AI summary for this email..." 
+                : email.Summary;
+
+            if (email.IsArchived && !summaryText.StartsWith("📥 ", StringComparison.OrdinalIgnoreCase) && !summaryText.StartsWith("[Archived] ", StringComparison.OrdinalIgnoreCase))
+            {
+                summaryText = "📥 " + summaryText;
+            }
+
+            _txtSummary.Text = summaryText;
             _txtEmailBody.Text = email.CleanBody;
+        }
+
+        private void UpdateListViewItemForEmail(EmailItem email)
+        {
+            foreach (ListViewItem item in _lvEmails.Items)
+            {
+                if (item.Tag == email)
+                {
+                    string subjectPrefix = email.IsArchived ? "📥 " : (email.IsRead ? "   " : "● ");
+                    item.Text = subjectPrefix + email.Subject;
+
+                    if (email.IsArchived)
+                    {
+                        item.ForeColor = Color.FromArgb(150, 155, 165);
+                        item.Font = new Font("Segoe UI", 8.75F, FontStyle.Regular);
+                    }
+                    else if (email.IsRead)
+                    {
+                        item.ForeColor = Color.FromArgb(130, 135, 145);
+                        item.Font = new Font("Segoe UI", 8.75F, FontStyle.Regular);
+                    }
+                    else
+                    {
+                        item.ForeColor = Color.FromArgb(15, 15, 15);
+                        item.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
+                    }
+                    break;
+                }
+            }
+        }
+
+        private List<EmailItem> GetSelectedEmailItems()
+        {
+            var list = new List<EmailItem>();
+            foreach (ListViewItem item in _lvEmails.SelectedItems)
+            {
+                if (item.Tag is EmailItem email)
+                {
+                    list.Add(email);
+                }
+            }
+            return list;
+        }
+
+        private void OnArchiveClick(object? sender, EventArgs e)
+        {
+            var selected = GetSelectedEmailItems();
+            if (selected.Count == 0) return;
+
+            foreach (var email in selected)
+            {
+                email.IsArchived = true;
+                UpdateListViewItemForEmail(email);
+            }
+
+            var previewEmail = GetCurrentPreviewEmail();
+            if (previewEmail != null)
+            {
+                DisplayEmail(previewEmail);
+            }
+
+            if (selected.Count > 1)
+            {
+                var task = ExecuteImapTriageAsync(selected.Select(em => new PendingTriageItem { Email = em, Action = TriageActionType.Archive }).ToList());
+                TrackInFlightTask(task);
+            }
+            else
+            {
+                QueueSingleTriage(selected[0], TriageActionType.Archive);
+            }
+        }
+
+        private void OnDeleteClick(object? sender, EventArgs e)
+        {
+            var selected = GetSelectedEmailItems();
+            if (selected.Count == 0) return;
+
+            _lvEmails.BeginUpdate();
+            foreach (var email in selected)
+            {
+                _emails.Remove(email);
+                _selectedEmailsOrder.Remove(email);
+
+                ListViewItem? foundItem = null;
+                foreach (ListViewItem lvi in _lvEmails.Items)
+                {
+                    if (lvi.Tag == email)
+                    {
+                        foundItem = lvi;
+                        break;
+                    }
+                }
+                if (foundItem != null)
+                {
+                    _lvEmails.Items.Remove(foundItem);
+                }
+            }
+            _lvEmails.EndUpdate();
+
+            int unreadCount = _emails.Count(em => !em.IsRead);
+            _lblInboxHeader.Text = $"Inbox ({_emails.Count} emails, {unreadCount} unread)";
+
+            if (_lvEmails.Items.Count > 0)
+            {
+                if (_lvEmails.SelectedItems.Count == 0)
+                {
+                    _lvEmails.Items[0].Selected = true;
+                }
+                else
+                {
+                    var previewEmail = GetCurrentPreviewEmail();
+                    if (previewEmail != null)
+                    {
+                        DisplayEmail(previewEmail);
+                    }
+                }
+            }
+            else
+            {
+                _txtSummary.Clear();
+                _txtEmailBody.Clear();
+                _lblEmailSubject.Text = "Subject: (No email selected)";
+                _lblEmailMeta.Text = "From: -   •   Date: -   •   Account: -";
+            }
+
+            if (selected.Count > 1)
+            {
+                var task = ExecuteImapTriageAsync(selected.Select(em => new PendingTriageItem { Email = em, Action = TriageActionType.Delete }).ToList());
+                TrackInFlightTask(task);
+            }
+            else
+            {
+                QueueSingleTriage(selected[0], TriageActionType.Delete);
+            }
+        }
+
+        private void QueueSingleTriage(EmailItem email, TriageActionType action)
+        {
+            lock (_triageLock)
+            {
+                _pendingSingleTriage.RemoveAll(x => x.Email.UniqueId == email.UniqueId && string.Equals(x.Email.AccountEmail, email.AccountEmail, StringComparison.OrdinalIgnoreCase));
+                _pendingSingleTriage.Add(new PendingTriageItem { Email = email, Action = action });
+
+                _debounceTriageTimer?.Dispose();
+                _debounceTriageTimer = new System.Threading.Timer(_ =>
+                {
+                    FlushPendingSingleTriage();
+                }, null, 1500, Timeout.Infinite);
+            }
+        }
+
+        private void FlushPendingSingleTriage()
+        {
+            List<PendingTriageItem> itemsToFlush;
+            lock (_triageLock)
+            {
+                _debounceTriageTimer?.Dispose();
+                _debounceTriageTimer = null;
+
+                if (_pendingSingleTriage.Count == 0) return;
+                itemsToFlush = new List<PendingTriageItem>(_pendingSingleTriage);
+                _pendingSingleTriage.Clear();
+            }
+
+            var task = ExecuteImapTriageAsync(itemsToFlush);
+            TrackInFlightTask(task);
+        }
+
+        private async Task ExecuteImapTriageAsync(List<PendingTriageItem> items)
+        {
+            if (items.Count == 0) return;
+
+            var accounts = _configService.GetAccounts();
+            var deleteEmails = items.Where(i => i.Action == TriageActionType.Delete).Select(i => i.Email).ToList();
+            var archiveEmails = items.Where(i => i.Action == TriageActionType.Archive).Select(i => i.Email).ToList();
+
+            var tasks = new List<Task>();
+
+            if (deleteEmails.Count > 0)
+            {
+                tasks.Add(_imapService.DeleteEmailsBatchAsync(deleteEmails, accounts, _logger));
+            }
+
+            if (archiveEmails.Count > 0)
+            {
+                tasks.Add(_imapService.ArchiveEmailsBatchAsync(archiveEmails, accounts, _logger));
+            }
+
+            await Task.WhenAll(tasks);
+        }
+
+        private void TrackInFlightTask(Task task)
+        {
+            lock (_inFlightTasks)
+            {
+                _inFlightTasks.Add(task);
+            }
+            _ = task.ContinueWith(t =>
+            {
+                lock (_inFlightTasks)
+                {
+                    _inFlightTasks.Remove(task);
+                }
+            });
+        }
+
+        public bool HasPendingOrInFlightTriage
+        {
+            get
+            {
+                lock (_triageLock)
+                {
+                    if (_pendingSingleTriage.Count > 0) return true;
+                }
+                lock (_inFlightTasks)
+                {
+                    return _inFlightTasks.Any(t => !t.IsCompleted);
+                }
+            }
+        }
+
+        public async Task FlushPendingTriageAsync()
+        {
+            List<PendingTriageItem> itemsToFlush;
+            lock (_triageLock)
+            {
+                _debounceTriageTimer?.Dispose();
+                _debounceTriageTimer = null;
+                itemsToFlush = new List<PendingTriageItem>(_pendingSingleTriage);
+                _pendingSingleTriage.Clear();
+            }
+
+            if (itemsToFlush.Count > 0)
+            {
+                var task = ExecuteImapTriageAsync(itemsToFlush);
+                TrackInFlightTask(task);
+            }
+
+            List<Task> currentTasks;
+            lock (_inFlightTasks)
+            {
+                currentTasks = _inFlightTasks.Where(t => !t.IsCompleted).ToList();
+            }
+
+            if (currentTasks.Count > 0)
+            {
+                try
+                {
+                    await Task.WhenAll(currentTasks).WaitAsync(TimeSpan.FromSeconds(8));
+                }
+                catch { }
+            }
         }
 
         private void OnCopySummaryClick(object? sender, EventArgs e)
@@ -792,6 +1213,31 @@ namespace EmailSummarizer.UI.Tabs
                     MessageBox.Show($"Failed to export file: {ex.Message}", "Export Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
             }
+        }
+
+        public void CancelRunningOperations()
+        {
+            try
+            {
+                _cts?.Cancel();
+                _cts?.Dispose();
+                _cts = null;
+            }
+            catch { }
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                CancelRunningOperations();
+                lock (_triageLock)
+                {
+                    _debounceTriageTimer?.Dispose();
+                    _debounceTriageTimer = null;
+                }
+            }
+            base.Dispose(disposing);
         }
     }
 }

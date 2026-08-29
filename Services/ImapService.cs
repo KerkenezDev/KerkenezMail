@@ -164,6 +164,199 @@ namespace EmailSummarizer.Services
             return allEmails;
         }
 
+        public async Task<bool> DeleteEmailsAsync(
+            EmailAccount account,
+            IEnumerable<uint> uids,
+            IProgress<string>? logger = null,
+            CancellationToken ct = default)
+        {
+            var uidList = uids.Select(u => new UniqueId(u)).ToList();
+            if (uidList.Count == 0 || !account.IsEnabled) return true;
+
+            using var client = new ImapClient();
+            try
+            {
+                logger?.Report($"[*] Connecting to {account.Name} to delete {uidList.Count} message(s)...");
+                client.Timeout = 15000;
+                var sslOption = account.UseSsl ? SecureSocketOptions.SslOnConnect : SecureSocketOptions.Auto;
+
+                await client.ConnectAsync(account.Host, account.Port, sslOption, ct);
+                await client.AuthenticateAsync(account.Email, account.AppPassword, ct);
+
+                var inbox = client.Inbox;
+                await inbox.OpenAsync(FolderAccess.ReadWrite, ct);
+
+                // Try to move to Trash if available, otherwise mark Deleted and Expunge
+                IMailFolder? trashFolder = null;
+                try
+                {
+                    trashFolder = client.GetFolder(SpecialFolder.Trash);
+                }
+                catch { }
+
+                if (trashFolder != null && trashFolder.FullName != inbox.FullName)
+                {
+                    await inbox.MoveToAsync(uidList, trashFolder, ct);
+                }
+                else
+                {
+                    await inbox.AddFlagsAsync(uidList, MessageFlags.Deleted, true, ct);
+                    await inbox.ExpungeAsync(ct);
+                }
+
+                await client.DisconnectAsync(true, ct);
+                logger?.Report($"[✓] {account.Name}: Successfully deleted {uidList.Count} message(s).");
+                return true;
+            }
+            catch (OperationCanceledException)
+            {
+                logger?.Report($"[!] {account.Name}: Deletion cancelled.");
+                return false;
+            }
+            catch (Exception ex)
+            {
+                logger?.Report($"[!] {account.Name} Delete Error: {ex.Message}");
+                return false;
+            }
+        }
+
+        public async Task<bool> ArchiveEmailsAsync(
+            EmailAccount account,
+            IEnumerable<uint> uids,
+            IProgress<string>? logger = null,
+            CancellationToken ct = default)
+        {
+            var uidList = uids.Select(u => new UniqueId(u)).ToList();
+            if (uidList.Count == 0 || !account.IsEnabled) return true;
+
+            using var client = new ImapClient();
+            try
+            {
+                logger?.Report($"[*] Connecting to {account.Name} to archive {uidList.Count} message(s)...");
+                client.Timeout = 15000;
+                var sslOption = account.UseSsl ? SecureSocketOptions.SslOnConnect : SecureSocketOptions.Auto;
+
+                await client.ConnectAsync(account.Host, account.Port, sslOption, ct);
+                await client.AuthenticateAsync(account.Email, account.AppPassword, ct);
+
+                var inbox = client.Inbox;
+                await inbox.OpenAsync(FolderAccess.ReadWrite, ct);
+
+                // Look for standard Archive or All Mail folder
+                IMailFolder? targetFolder = null;
+                try
+                {
+                    targetFolder = client.GetFolder(SpecialFolder.Archive);
+                }
+                catch { }
+
+                if (targetFolder == null)
+                {
+                    try
+                    {
+                        targetFolder = client.GetFolder(SpecialFolder.All);
+                    }
+                    catch { }
+                }
+
+                if (targetFolder == null)
+                {
+                    try
+                    {
+                        var personal = client.GetFolder(client.PersonalNamespaces.FirstOrDefault()?.Path ?? "");
+                        var subfolders = await personal.GetSubfoldersAsync(false, ct);
+                        targetFolder = subfolders.FirstOrDefault(f =>
+                            f.Name.Equals("Archive", StringComparison.OrdinalIgnoreCase) ||
+                            f.Name.Equals("Archives", StringComparison.OrdinalIgnoreCase) ||
+                            f.Name.Equals("All Mail", StringComparison.OrdinalIgnoreCase));
+                    }
+                    catch { }
+                }
+
+                if (targetFolder != null && targetFolder.FullName != inbox.FullName)
+                {
+                    await inbox.MoveToAsync(uidList, targetFolder, ct);
+                }
+                else
+                {
+                    // If no dedicated archive folder exists, mark as Seen and remove from inbox via Deleted+Expunge
+                    await inbox.AddFlagsAsync(uidList, MessageFlags.Seen, true, ct);
+                    await inbox.AddFlagsAsync(uidList, MessageFlags.Deleted, true, ct);
+                    await inbox.ExpungeAsync(ct);
+                }
+
+                await client.DisconnectAsync(true, ct);
+                logger?.Report($"[✓] {account.Name}: Successfully archived {uidList.Count} message(s).");
+                return true;
+            }
+            catch (OperationCanceledException)
+            {
+                logger?.Report($"[!] {account.Name}: Archive cancelled.");
+                return false;
+            }
+            catch (Exception ex)
+            {
+                logger?.Report($"[!] {account.Name} Archive Error: {ex.Message}");
+                return false;
+            }
+        }
+
+        public async Task DeleteEmailsBatchAsync(
+            IEnumerable<EmailItem> emails,
+            IEnumerable<EmailAccount> accounts,
+            IProgress<string>? logger = null,
+            CancellationToken ct = default)
+        {
+            var emailList = emails.ToList();
+            if (emailList.Count == 0) return;
+
+            var accList = accounts.ToList();
+            var grouped = emailList.GroupBy(e => 
+                accList.FirstOrDefault(a => 
+                    string.Equals(a.Email, e.AccountEmail, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(a.Name, e.AccountName, StringComparison.OrdinalIgnoreCase)));
+
+            var tasks = new List<Task>();
+            foreach (var group in grouped)
+            {
+                var account = group.Key;
+                if (account == null) continue;
+
+                var uids = group.Select(e => e.UniqueId).Distinct().ToList();
+                tasks.Add(DeleteEmailsAsync(account, uids, logger, ct));
+            }
+
+            await Task.WhenAll(tasks);
+        }
+
+        public async Task ArchiveEmailsBatchAsync(
+            IEnumerable<EmailItem> emails,
+            IEnumerable<EmailAccount> accounts,
+            IProgress<string>? logger = null,
+            CancellationToken ct = default)
+        {
+            var emailList = emails.ToList();
+            if (emailList.Count == 0) return;
+
+            var accList = accounts.ToList();
+            var grouped = emailList.GroupBy(e => 
+                accList.FirstOrDefault(a => 
+                    string.Equals(a.Email, e.AccountEmail, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(a.Name, e.AccountName, StringComparison.OrdinalIgnoreCase)));
+
+            var tasks = new List<Task>();
+            foreach (var group in grouped)
+            {
+                var account = group.Key;
+                if (account == null) continue;
+
+                var uids = group.Select(e => e.UniqueId).Distinct().ToList();
+                tasks.Add(ArchiveEmailsAsync(account, uids, logger, ct));
+            }
+
+            await Task.WhenAll(tasks);
+        }
+
         private static string ExtractAndCleanBody(MimeMessage message)
         {
             string raw = message.TextBody ?? string.Empty;

@@ -16,7 +16,13 @@ namespace EmailSummarizer.UI.Tabs
         private readonly LlmSummarizerService _llmService;
         private readonly IProgress<string> _logger;
 
-        // Model controls
+        // AI Backend Selection & Containers
+        private ComboBox _cboAiBackend = null!;
+        private FlowLayoutPanel _pnlLlamaContainer = null!;
+        private FlowLayoutPanel _pnlOllamaContainer = null!;
+        private FlowLayoutPanel _pnlCloudContainer = null!;
+
+        // 1. llama.cpp controls
         private TextBox _txtModelPath = null!;
         private Button _btnBrowseModel = null!;
         private NumericUpDown _numPort = null!;
@@ -24,6 +30,24 @@ namespace EmailSummarizer.UI.Tabs
         private TextBox _txtServerUrl = null!;
         private CheckBox _chkAutoStart = null!;
         private CheckBox _chkInstantVram = null!;
+
+        // 2. Ollama controls
+        private TextBox _txtOllamaUrl = null!;
+        private TextBox _txtOllamaModel = null!;
+
+        // 3. Cloud controls
+        private ComboBox _cboCloudPreset = null!;
+        private TextBox _txtCloudUrl = null!;
+        private TextBox _txtCloudApiKey = null!;
+        private TextBox _txtCloudModel = null!;
+        private Button _btnToggleKeyVisibility = null!;
+        private bool _isApiKeyVisible = false;
+
+        // 4. Global LLM controls
+        private NumericUpDown _numTemperature = null!;
+        private NumericUpDown _numMaxTokens = null!;
+
+        // Test LLM controls
         private Button _btnTestLlm = null!;
         private Label _lblLlmTestResult = null!;
 
@@ -31,6 +55,7 @@ namespace EmailSummarizer.UI.Tabs
         private NumericUpDown _numMaxEmails = null!;
         private CheckBox _chkOnlyUnread = null!;
         private CheckBox _chkMarkAsSeen = null!;
+        private ComboBox _cboMultiSelectPreview = null!;
 
         // System Tray & Notification controls
         private CheckBox _chkAlwaysKeepOn = null!;
@@ -87,8 +112,41 @@ namespace EmailSummarizer.UI.Tabs
             // ==================== 1. AI Engine Section ====================
             var pnlLlmCard = CreateCardPanel(ContentW);
             
-            var lblSec1 = CreateSectionHeader("🤖  Local AI & llama.cpp Engine");
-            
+            var lblSec1 = CreateSectionHeader("🤖  AI Engine & LLM Backend");
+
+            var lblBackend = new Label
+            {
+                Text = "Select Inference Backend:",
+                AutoSize = true,
+                Font = new Font("Segoe UI", 9F, FontStyle.Bold),
+                ForeColor = Color.FromArgb(40, 40, 40),
+                Margin = new Padding(0, 0, 0, 4)
+            };
+
+            _cboAiBackend = new ComboBox
+            {
+                DropDownStyle = ComboBoxStyle.DropDownList,
+                Width = ContentW - 28,
+                Font = new Font("Segoe UI", 9.5F, FontStyle.Bold),
+                Margin = new Padding(0, 0, 0, 12)
+            };
+            _cboAiBackend.Items.Add("🦙  Local llama.cpp (Embedded GGUF)");
+            _cboAiBackend.Items.Add("🦙  Local Ollama (localhost:11434)");
+            _cboAiBackend.Items.Add("☁️  Cloud / Custom API (OpenAI, OpenRouter, Groq, DeepSeek)");
+            _cboAiBackend.SelectedIndex = 0;
+            _cboAiBackend.SelectedIndexChanged += (s, e) => UpdateAiBackendPanelsVisibility();
+
+            // ------------------ 1A. llama.cpp Container ------------------
+            _pnlLlamaContainer = new FlowLayoutPanel
+            {
+                Width = ContentW - 28,
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                FlowDirection = FlowDirection.TopDown,
+                WrapContents = false,
+                Margin = new Padding(0, 0, 0, 4)
+            };
+
             var lblModel = new Label { Text = "GGUF Model File Path:", AutoSize = true, Margin = new Padding(0, 0, 0, 3), ForeColor = Color.FromArgb(50, 50, 50) };
             
             var rowModel = new TableLayoutPanel
@@ -118,7 +176,6 @@ namespace EmailSummarizer.UI.Tabs
             rowModel.Controls.Add(_txtModelPath, 0, 0);
             rowModel.Controls.Add(_btnBrowseModel, 1, 0);
 
-            // Row for GPU Layers & Server Port (Visible, clearly styled flow layout)
             var rowParams = new FlowLayoutPanel
             {
                 Width = ContentW - 28,
@@ -177,7 +234,6 @@ namespace EmailSummarizer.UI.Tabs
             rowParams.Controls.Add(pnlLayers);
             rowParams.Controls.Add(pnlPort);
 
-            // Endpoint URL
             var lblUrl = new Label { Text = "OpenAI Chat Endpoint URL:", AutoSize = true, Margin = new Padding(0, 0, 0, 3), Font = new Font("Segoe UI", 8.75F) };
             _txtServerUrl = new TextBox { Width = ContentW - 28, Font = new Font("Segoe UI", 9F), Margin = new Padding(0, 0, 0, 8) };
 
@@ -199,13 +255,221 @@ namespace EmailSummarizer.UI.Tabs
                 Font = new Font("Segoe UI", 9F)
             };
 
+            _pnlLlamaContainer.Controls.Add(lblModel);
+            _pnlLlamaContainer.Controls.Add(rowModel);
+            _pnlLlamaContainer.Controls.Add(rowParams);
+            _pnlLlamaContainer.Controls.Add(lblUrl);
+            _pnlLlamaContainer.Controls.Add(_txtServerUrl);
+            _pnlLlamaContainer.Controls.Add(_chkAutoStart);
+            _pnlLlamaContainer.Controls.Add(_chkInstantVram);
+
+            // ------------------ 1B. Ollama Container ------------------
+            _pnlOllamaContainer = new FlowLayoutPanel
+            {
+                Width = ContentW - 28,
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                FlowDirection = FlowDirection.TopDown,
+                WrapContents = false,
+                Visible = false,
+                Margin = new Padding(0, 0, 0, 4)
+            };
+
+            var lblOllamaInfo = new Label
+            {
+                Text = "💡 Connects directly to local Ollama. Ensure Ollama is running (`ollama serve` or desktop app).",
+                AutoSize = true,
+                Font = new Font("Segoe UI", 8.75F, FontStyle.Italic),
+                ForeColor = Color.FromArgb(70, 70, 70),
+                Margin = new Padding(0, 0, 0, 8)
+            };
+
+            var lblOllamaUrl = new Label { Text = "Ollama Endpoint URL:", AutoSize = true, Margin = new Padding(0, 0, 0, 3), Font = new Font("Segoe UI", 8.75F) };
+            _txtOllamaUrl = new TextBox { Width = ContentW - 28, Font = new Font("Segoe UI", 9F), Margin = new Padding(0, 0, 0, 8), Text = "http://127.0.0.1:11434/v1/chat/completions" };
+
+            var lblOllamaModel = new Label { Text = "Ollama Model Name (e.g. llama3.2, qwen2.5:3b, mistral):", AutoSize = true, Margin = new Padding(0, 0, 0, 3), Font = new Font("Segoe UI", 8.75F) };
+            _txtOllamaModel = new TextBox { Width = ContentW - 28, Font = new Font("Segoe UI", 9F), Margin = new Padding(0, 0, 0, 6), Text = "llama3.2" };
+
+            // Quick suggestion chips for Ollama
+            var rowOllamaChips = new FlowLayoutPanel
+            {
+                Width = ContentW - 28,
+                AutoSize = true,
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = true,
+                Margin = new Padding(0, 0, 0, 8)
+            };
+            var lblSuggestions = new Label { Text = "Suggestions:", AutoSize = true, Font = new Font("Segoe UI", 8.25F, FontStyle.Bold), Margin = new Padding(0, 4, 6, 0) };
+            rowOllamaChips.Controls.Add(lblSuggestions);
+
+            string[] ollamaSuggestions = { "llama3.2", "qwen2.5:3b", "mistral", "gemma2:2b", "deepseek-r1:1.5b" };
+            foreach (var mod in ollamaSuggestions)
+            {
+                var btnChip = new Button
+                {
+                    Text = mod,
+                    AutoSize = true,
+                    AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                    Padding = new Padding(6, 2, 6, 2),
+                    Margin = new Padding(0, 0, 4, 2),
+                    Font = new Font("Segoe UI", 8F),
+                    FlatStyle = FlatStyle.System,
+                    Cursor = Cursors.Hand
+                };
+                string currentMod = mod;
+                btnChip.Click += (s, e) => _txtOllamaModel.Text = currentMod;
+                rowOllamaChips.Controls.Add(btnChip);
+            }
+
+            _pnlOllamaContainer.Controls.Add(lblOllamaInfo);
+            _pnlOllamaContainer.Controls.Add(lblOllamaUrl);
+            _pnlOllamaContainer.Controls.Add(_txtOllamaUrl);
+            _pnlOllamaContainer.Controls.Add(lblOllamaModel);
+            _pnlOllamaContainer.Controls.Add(_txtOllamaModel);
+            _pnlOllamaContainer.Controls.Add(rowOllamaChips);
+
+            // ------------------ 1C. Cloud / Custom API Container ------------------
+            _pnlCloudContainer = new FlowLayoutPanel
+            {
+                Width = ContentW - 28,
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                FlowDirection = FlowDirection.TopDown,
+                WrapContents = false,
+                Visible = false,
+                Margin = new Padding(0, 0, 0, 4)
+            };
+
+            var lblPreset = new Label { Text = "Provider Preset:", AutoSize = true, Margin = new Padding(0, 0, 0, 3), Font = new Font("Segoe UI", 8.75F) };
+            _cboCloudPreset = new ComboBox
+            {
+                DropDownStyle = ComboBoxStyle.DropDownList,
+                Width = ContentW - 28,
+                Font = new Font("Segoe UI", 9F),
+                Margin = new Padding(0, 0, 0, 8)
+            };
+            _cboCloudPreset.Items.Add("(Select Provider Preset...)");
+            _cboCloudPreset.Items.Add("OpenAI (gpt-4o-mini)");
+            _cboCloudPreset.Items.Add("OpenRouter (meta-llama/llama-3.2-3b-instruct:free)");
+            _cboCloudPreset.Items.Add("Groq (llama-3.1-8b-instant — Ultra Fast)");
+            _cboCloudPreset.Items.Add("DeepSeek (deepseek-chat)");
+            _cboCloudPreset.SelectedIndex = 0;
+            _cboCloudPreset.SelectedIndexChanged += OnCloudPresetChanged;
+
+            var lblCloudUrl = new Label { Text = "API Endpoint URL (/v1/chat/completions):", AutoSize = true, Margin = new Padding(0, 0, 0, 3), Font = new Font("Segoe UI", 8.75F) };
+            _txtCloudUrl = new TextBox { Width = ContentW - 28, Font = new Font("Segoe UI", 9F), Margin = new Padding(0, 0, 0, 8), Text = "https://api.openai.com/v1/chat/completions" };
+
+            var lblApiKey = new Label { Text = "API Key (Bearer Token):", AutoSize = true, Margin = new Padding(0, 0, 0, 3), Font = new Font("Segoe UI", 8.75F) };
+            
+            var rowApiKey = new TableLayoutPanel
+            {
+                Width = ContentW - 28,
+                Height = 32,
+                ColumnCount = 2,
+                Margin = new Padding(0, 0, 0, 8)
+            };
+            rowApiKey.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+            rowApiKey.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+
+            _txtCloudApiKey = new TextBox { Dock = DockStyle.Fill, Font = new Font("Segoe UI", 9F), UseSystemPasswordChar = true, Margin = new Padding(0, 2, 8, 0) };
+            _btnToggleKeyVisibility = new Button
+            {
+                Text = "👁️ Show",
+                UseMnemonic = false,
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                Padding = new Padding(10, 4, 10, 4),
+                Margin = new Padding(0),
+                FlatStyle = FlatStyle.System,
+                Cursor = Cursors.Hand
+            };
+            _btnToggleKeyVisibility.Click += (s, e) =>
+            {
+                _isApiKeyVisible = !_isApiKeyVisible;
+                _txtCloudApiKey.UseSystemPasswordChar = !_isApiKeyVisible;
+                _btnToggleKeyVisibility.Text = _isApiKeyVisible ? "🔒 Hide" : "👁️ Show";
+            };
+
+            rowApiKey.Controls.Add(_txtCloudApiKey, 0, 0);
+            rowApiKey.Controls.Add(_btnToggleKeyVisibility, 1, 0);
+
+            var lblCloudModel = new Label { Text = "Model ID / Name (e.g. gpt-4o-mini, deepseek-chat):", AutoSize = true, Margin = new Padding(0, 0, 0, 3), Font = new Font("Segoe UI", 8.75F) };
+            _txtCloudModel = new TextBox { Width = ContentW - 28, Font = new Font("Segoe UI", 9F), Margin = new Padding(0, 0, 0, 8), Text = "gpt-4o-mini" };
+
+            _pnlCloudContainer.Controls.Add(lblPreset);
+            _pnlCloudContainer.Controls.Add(_cboCloudPreset);
+            _pnlCloudContainer.Controls.Add(lblCloudUrl);
+            _pnlCloudContainer.Controls.Add(_txtCloudUrl);
+            _pnlCloudContainer.Controls.Add(lblApiKey);
+            _pnlCloudContainer.Controls.Add(rowApiKey);
+            _pnlCloudContainer.Controls.Add(lblCloudModel);
+            _pnlCloudContainer.Controls.Add(_txtCloudModel);
+
+            // ------------------ 1D. Global Inference Settings ------------------
+            var pnlGlobalParams = new FlowLayoutPanel
+            {
+                Width = ContentW - 28,
+                AutoSize = true,
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = false,
+                Margin = new Padding(0, 4, 0, 8)
+            };
+
+            var pnlTemp = new FlowLayoutPanel
+            {
+                Width = 220,
+                AutoSize = true,
+                FlowDirection = FlowDirection.TopDown,
+                WrapContents = false,
+                Margin = new Padding(0, 0, 20, 0)
+            };
+            var lblTemp = new Label { Text = "Temperature:", AutoSize = true, Font = new Font("Segoe UI", 8.75F), Margin = new Padding(0, 0, 0, 4) };
+            _numTemperature = new NumericUpDown
+            {
+                Width = 150,
+                Height = 28,
+                Minimum = 0.0m,
+                Maximum = 2.0m,
+                DecimalPlaces = 1,
+                Increment = 0.1m,
+                Value = 0.2m,
+                Font = new Font("Segoe UI", 9.5F)
+            };
+            pnlTemp.Controls.Add(lblTemp);
+            pnlTemp.Controls.Add(_numTemperature);
+
+            var pnlMaxTokens = new FlowLayoutPanel
+            {
+                Width = 220,
+                AutoSize = true,
+                FlowDirection = FlowDirection.TopDown,
+                WrapContents = false,
+                Margin = new Padding(0)
+            };
+            var lblMaxTokens = new Label { Text = "Max Output Tokens:", AutoSize = true, Font = new Font("Segoe UI", 8.75F), Margin = new Padding(0, 0, 0, 4) };
+            _numMaxTokens = new NumericUpDown
+            {
+                Width = 150,
+                Height = 28,
+                Minimum = 16,
+                Maximum = 4096,
+                Value = 350,
+                Font = new Font("Segoe UI", 9.5F)
+            };
+            pnlMaxTokens.Controls.Add(lblMaxTokens);
+            pnlMaxTokens.Controls.Add(_numMaxTokens);
+
+            pnlGlobalParams.Controls.Add(pnlTemp);
+            pnlGlobalParams.Controls.Add(pnlMaxTokens);
+
+            // ------------------ Test Connection Row ------------------
             var rowTestLlm = new FlowLayoutPanel
             {
                 Width = ContentW - 28,
                 AutoSize = true,
                 FlowDirection = FlowDirection.LeftToRight,
                 WrapContents = false,
-                Margin = new Padding(0, 2, 0, 0)
+                Margin = new Padding(0, 4, 0, 0)
             };
 
             _btnTestLlm = new Button
@@ -233,13 +497,12 @@ namespace EmailSummarizer.UI.Tabs
             rowTestLlm.Controls.Add(_lblLlmTestResult);
 
             pnlLlmCard.Controls.Add(lblSec1);
-            pnlLlmCard.Controls.Add(lblModel);
-            pnlLlmCard.Controls.Add(rowModel);
-            pnlLlmCard.Controls.Add(rowParams);
-            pnlLlmCard.Controls.Add(lblUrl);
-            pnlLlmCard.Controls.Add(_txtServerUrl);
-            pnlLlmCard.Controls.Add(_chkAutoStart);
-            pnlLlmCard.Controls.Add(_chkInstantVram);
+            pnlLlmCard.Controls.Add(lblBackend);
+            pnlLlmCard.Controls.Add(_cboAiBackend);
+            pnlLlmCard.Controls.Add(_pnlLlamaContainer);
+            pnlLlmCard.Controls.Add(_pnlOllamaContainer);
+            pnlLlmCard.Controls.Add(_pnlCloudContainer);
+            pnlLlmCard.Controls.Add(pnlGlobalParams);
             pnlLlmCard.Controls.Add(rowTestLlm);
 
             // ==================== 2. Email Options Section ====================
@@ -273,14 +536,36 @@ namespace EmailSummarizer.UI.Tabs
                 Text = "Mark emails as read on IMAP server upon fetching (\\Seen flag)",
                 AutoSize = true,
                 Checked = false,
-                Margin = new Padding(0, 0, 0, 0),
+                Margin = new Padding(0, 0, 0, 6),
                 Font = new Font("Segoe UI", 9F)
             };
+
+            var rowPreview = new FlowLayoutPanel
+            {
+                AutoSize = true,
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = false,
+                Margin = new Padding(0, 4, 0, 2)
+            };
+            var lblPreview = new Label { Text = "Multi-select preview email (Ctrl+click):", AutoSize = true, Margin = new Padding(0, 4, 8, 0), Font = new Font("Segoe UI", 9F) };
+            _cboMultiSelectPreview = new ComboBox
+            {
+                DropDownStyle = ComboBoxStyle.DropDownList,
+                Width = 240,
+                Height = 28,
+                Font = new Font("Segoe UI", 9F)
+            };
+            _cboMultiSelectPreview.Items.Add("Show last selected email (Default)");
+            _cboMultiSelectPreview.Items.Add("Show first selected email");
+            _cboMultiSelectPreview.SelectedIndex = 0;
+            rowPreview.Controls.Add(lblPreview);
+            rowPreview.Controls.Add(_cboMultiSelectPreview);
 
             pnlEmailCard.Controls.Add(lblSec2);
             pnlEmailCard.Controls.Add(rowMax);
             pnlEmailCard.Controls.Add(_chkOnlyUnread);
             pnlEmailCard.Controls.Add(_chkMarkAsSeen);
+            pnlEmailCard.Controls.Add(rowPreview);
 
             // ==================== 3. System Tray Daemon & Notifications ====================
             var pnlTrayCard = CreateCardPanel(ContentW);
@@ -468,23 +753,87 @@ namespace EmailSummarizer.UI.Tabs
             };
         }
 
+        private void UpdateAiBackendPanelsVisibility()
+        {
+            int idx = _cboAiBackend.SelectedIndex;
+            _pnlLlamaContainer.Visible = (idx == 0);
+            _pnlOllamaContainer.Visible = (idx == 1);
+            _pnlCloudContainer.Visible = (idx == 2);
+            _lblLlmTestResult.Text = "";
+        }
+
+        private void OnCloudPresetChanged(object? sender, EventArgs e)
+        {
+            int idx = _cboCloudPreset.SelectedIndex;
+            if (idx == 1) // OpenAI
+            {
+                _txtCloudUrl.Text = "https://api.openai.com/v1/chat/completions";
+                _txtCloudModel.Text = "gpt-4o-mini";
+            }
+            else if (idx == 2) // OpenRouter
+            {
+                _txtCloudUrl.Text = "https://openrouter.ai/api/v1/chat/completions";
+                _txtCloudModel.Text = "meta-llama/llama-3.2-3b-instruct:free";
+            }
+            else if (idx == 3) // Groq
+            {
+                _txtCloudUrl.Text = "https://api.groq.com/openai/v1/chat/completions";
+                _txtCloudModel.Text = "llama-3.1-8b-instant";
+            }
+            else if (idx == 4) // DeepSeek
+            {
+                _txtCloudUrl.Text = "https://api.deepseek.com/v1/chat/completions";
+                _txtCloudModel.Text = "deepseek-chat";
+            }
+        }
+
         public void LoadSettings()
         {
             var s = _configService.Settings;
+
+            // AI Backend Selection
+            if (string.Equals(s.AiBackend, "Ollama", StringComparison.OrdinalIgnoreCase))
+            {
+                _cboAiBackend.SelectedIndex = 1;
+            }
+            else if (string.Equals(s.AiBackend, "Cloud", StringComparison.OrdinalIgnoreCase))
+            {
+                _cboAiBackend.SelectedIndex = 2;
+            }
+            else
+            {
+                _cboAiBackend.SelectedIndex = 0;
+            }
+            UpdateAiBackendPanelsVisibility();
+
+            // llama.cpp settings
             _txtModelPath.Text = s.LlamaModelPath;
-            
-            // Explicit range-checked assignment
             _numPort.Value = Math.Max(_numPort.Minimum, Math.Min(_numPort.Maximum, s.LlamaServerPort));
             _numGpuLayers.Value = Math.Max(_numGpuLayers.Minimum, Math.Min(_numGpuLayers.Maximum, s.LlamaGpuLayers));
-            
             _txtServerUrl.Text = s.LlamaServerUrl;
             _chkAutoStart.Checked = s.AutoStartLlamaServer;
             _chkInstantVram.Checked = s.InstantVramUnload;
 
+            // Ollama settings
+            _txtOllamaUrl.Text = s.OllamaServerUrl;
+            _txtOllamaModel.Text = s.OllamaModelName;
+
+            // Cloud settings
+            _txtCloudUrl.Text = s.CloudApiUrl;
+            _txtCloudApiKey.Text = s.CloudApiKey;
+            _txtCloudModel.Text = s.CloudModelName;
+
+            // Global LLM settings
+            _numTemperature.Value = Math.Max(_numTemperature.Minimum, Math.Min(_numTemperature.Maximum, (decimal)s.Temperature));
+            _numMaxTokens.Value = Math.Max(_numMaxTokens.Minimum, Math.Min(_numMaxTokens.Maximum, s.MaxTokens > 0 ? s.MaxTokens : 350));
+
+            // Email settings
             _numMaxEmails.Value = Math.Max(_numMaxEmails.Minimum, Math.Min(_numMaxEmails.Maximum, s.MaxEmailsPerAccount));
             _chkOnlyUnread.Checked = s.OnlyUnread;
             _chkMarkAsSeen.Checked = s.MarkAsSeen;
+            _cboMultiSelectPreview.SelectedIndex = string.Equals(s.MultiSelectPreview, "FirstSelected", StringComparison.OrdinalIgnoreCase) ? 1 : 0;
 
+            // System Tray settings
             _chkAlwaysKeepOn.Checked = s.AlwaysKeepOn;
             _chkEnableTrayNotifs.Checked = s.EnableTrayNotifications;
             _numTrayInterval.Value = Math.Max(_numTrayInterval.Minimum, Math.Min(_numTrayInterval.Maximum, s.TrayRefreshIntervalMinutes));
@@ -518,19 +867,32 @@ namespace EmailSummarizer.UI.Tabs
             _lblLlmTestResult.ForeColor = Color.DarkOrange;
             _lblLlmTestResult.Text = "Testing connection...";
 
-            bool isOnline = await _llmService.TestLlmConnectionAsync(_txtServerUrl.Text.Trim());
+            string url;
+            string model;
+            string? apiKey = null;
+
+            if (_cboAiBackend.SelectedIndex == 1) // Ollama
+            {
+                url = _txtOllamaUrl.Text.Trim();
+                model = _txtOllamaModel.Text.Trim();
+            }
+            else if (_cboAiBackend.SelectedIndex == 2) // Cloud
+            {
+                url = _txtCloudUrl.Text.Trim();
+                model = _txtCloudModel.Text.Trim();
+                apiKey = _txtCloudApiKey.Text.Trim();
+            }
+            else // llama.cpp
+            {
+                url = _txtServerUrl.Text.Trim();
+                model = "default";
+            }
+
+            var (success, msg) = await _llmService.TestLlmConnectionDetailedAsync(url, model, apiKey);
 
             _btnTestLlm.Enabled = true;
-            if (isOnline)
-            {
-                _lblLlmTestResult.ForeColor = Color.DarkGreen;
-                _lblLlmTestResult.Text = "✓ LLM endpoint is active and responding!";
-            }
-            else
-            {
-                _lblLlmTestResult.ForeColor = Color.Red;
-                _lblLlmTestResult.Text = "✗ Could not reach LLM endpoint. Is the server running?";
-            }
+            _lblLlmTestResult.ForeColor = success ? Color.DarkGreen : Color.Red;
+            _lblLlmTestResult.Text = msg;
         }
 
         private async void OnRestartDaemonClick(object? sender, EventArgs e)
@@ -682,6 +1044,22 @@ namespace EmailSummarizer.UI.Tabs
         private void SaveCurrentValuesToConfig()
         {
             var s = _configService.Settings;
+
+            // AI Backend Selection
+            if (_cboAiBackend.SelectedIndex == 1)
+            {
+                s.AiBackend = "Ollama";
+            }
+            else if (_cboAiBackend.SelectedIndex == 2)
+            {
+                s.AiBackend = "Cloud";
+            }
+            else
+            {
+                s.AiBackend = "LlamaCpp";
+            }
+
+            // llama.cpp settings
             s.LlamaModelPath = _txtModelPath.Text.Trim();
             s.LlamaServerPort = (int)_numPort.Value;
             s.LlamaGpuLayers = (int)_numGpuLayers.Value;
@@ -689,10 +1067,26 @@ namespace EmailSummarizer.UI.Tabs
             s.AutoStartLlamaServer = _chkAutoStart.Checked;
             s.InstantVramUnload = _chkInstantVram.Checked;
 
+            // Ollama settings
+            s.OllamaServerUrl = _txtOllamaUrl.Text.Trim();
+            s.OllamaModelName = _txtOllamaModel.Text.Trim();
+
+            // Cloud settings
+            s.CloudApiUrl = _txtCloudUrl.Text.Trim();
+            s.CloudApiKey = _txtCloudApiKey.Text.Trim();
+            s.CloudModelName = _txtCloudModel.Text.Trim();
+
+            // Global LLM settings
+            s.Temperature = (double)_numTemperature.Value;
+            s.MaxTokens = (int)_numMaxTokens.Value;
+
+            // Email settings
             s.MaxEmailsPerAccount = (int)_numMaxEmails.Value;
             s.OnlyUnread = _chkOnlyUnread.Checked;
             s.MarkAsSeen = _chkMarkAsSeen.Checked;
+            s.MultiSelectPreview = _cboMultiSelectPreview.SelectedIndex == 1 ? "FirstSelected" : "LastSelected";
 
+            // System Tray settings
             s.AlwaysKeepOn = _chkAlwaysKeepOn.Checked;
             s.EnableTrayNotifications = _chkEnableTrayNotifs.Checked;
             s.TrayRefreshIntervalMinutes = (int)_numTrayInterval.Value;

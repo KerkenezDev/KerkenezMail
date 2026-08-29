@@ -72,8 +72,8 @@ namespace EmailSummarizer.Services
                     var loaded = JsonSerializer.Deserialize<AppSettings>(json, JsonOptions);
                     if (loaded != null)
                     {
-                        Settings = loaded;
-                        return loaded;
+                        Settings = HealAndNormalizeSettings(loaded);
+                        return Settings;
                     }
                 }
             }
@@ -86,6 +86,61 @@ namespace EmailSummarizer.Services
             var defaults = AppSettings.CreateDefault();
             SaveConfig(defaults);
             return defaults;
+        }
+
+        private static AppSettings HealAndNormalizeSettings(AppSettings s)
+        {
+            if (s == null) return AppSettings.CreateDefault();
+
+            // 1. Heal AI Backend
+            if (string.IsNullOrWhiteSpace(s.AiBackend))
+            {
+                s.AiBackend = "LlamaCpp";
+            }
+
+            // 2. Heal llama.cpp settings
+            if (s.LlamaServerPort <= 0) s.LlamaServerPort = 8080;
+            if (string.IsNullOrWhiteSpace(s.LlamaServerUrl))
+            {
+                s.LlamaServerUrl = $"http://127.0.0.1:{s.LlamaServerPort}/v1/chat/completions";
+            }
+            if (s.LlamaGpuLayers < 0) s.LlamaGpuLayers = 99;
+
+            // 3. Heal Ollama settings
+            if (string.IsNullOrWhiteSpace(s.OllamaServerUrl))
+            {
+                s.OllamaServerUrl = "http://127.0.0.1:11434/v1/chat/completions";
+            }
+            if (string.IsNullOrWhiteSpace(s.OllamaModelName))
+            {
+                s.OllamaModelName = "llama3.2";
+            }
+
+            // 4. Heal Cloud settings
+            if (string.IsNullOrWhiteSpace(s.CloudApiUrl))
+            {
+                s.CloudApiUrl = "https://api.openai.com/v1/chat/completions";
+            }
+            if (string.IsNullOrWhiteSpace(s.CloudModelName))
+            {
+                s.CloudModelName = "gpt-4o-mini";
+            }
+            if (s.CloudApiKey == null)
+            {
+                s.CloudApiKey = "";
+            }
+
+            // 5. Heal Global Inference settings
+            if (s.MaxTokens <= 0) s.MaxTokens = 350;
+            if (s.Temperature < 0.0 || s.Temperature > 2.0) s.Temperature = 0.2;
+
+            // 6. Heal Email / System settings
+            if (s.MaxEmailsPerAccount <= 0) s.MaxEmailsPerAccount = 15;
+            if (s.TrayRefreshIntervalMinutes <= 0) s.TrayRefreshIntervalMinutes = 5;
+            if (string.IsNullOrWhiteSpace(s.SystemPrompt)) s.SystemPrompt = AppSettings.CreateDefault().SystemPrompt;
+            if (s.AccountIds == null) s.AccountIds = new List<string>();
+
+            return s;
         }
 
         private void CheckAndMigrateLegacyConfig(string json)
@@ -145,6 +200,20 @@ namespace EmailSummarizer.Services
                         string cleanJson = JsonSerializer.Serialize(settings, JsonOptions);
                         File.WriteAllText(ConfigFilePath, cleanJson);
                         System.Diagnostics.Debug.WriteLine("[ConfigService] Legacy migration complete. config.json updated with AccountIds only.");
+                    }
+                }
+
+                // Check if config.json contains legacy unencrypted CloudApiKey
+                if (root.TryGetProperty("CloudApiKey", out var apiKeyProp) && apiKeyProp.ValueKind == JsonValueKind.String)
+                {
+                    string legacyPlainKey = apiKeyProp.GetString() ?? "";
+                    if (!string.IsNullOrEmpty(legacyPlainKey))
+                    {
+                        var settings = JsonSerializer.Deserialize<AppSettings>(json, JsonOptions) ?? AppSettings.CreateDefault();
+                        settings.CloudApiKey = legacyPlainKey; // In-memory plaintext is encrypted on disk via CloudApiKeyEncrypted
+                        string encryptedJson = JsonSerializer.Serialize(settings, JsonOptions);
+                        File.WriteAllText(ConfigFilePath, encryptedJson);
+                        System.Diagnostics.Debug.WriteLine("[ConfigService] Legacy plaintext CloudApiKey encrypted on disk.");
                     }
                 }
             }

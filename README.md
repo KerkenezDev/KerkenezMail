@@ -35,21 +35,24 @@ Get the latest version from [GitHub Releases](https://github.com/ismlEraslan/ema
 - **Per-Account Controls**: Enable/disable individual mailboxes on the fly.
 
 ### 🔒 Bank-Grade Encrypted Credential Security
-- **Windows DPAPI Encryption**: All account credentials and App Passwords are encrypted using native Windows Data Protection API (`ProtectedData.Protect` / `DataProtectionScope.CurrentUser`) and stored in `%APPDATA%\EmailSummarizer\accounts.dat`.
-- **In-Memory Decryption**: Passwords exist in memory *only* during active IMAP fetch cycles.
-- **Clean Config**: The unencrypted `config.json` stores only general preferences and `AccountIds` references.
+- **Windows DPAPI Encryption**: All email account credentials, App Passwords, and Cloud AI API keys are encrypted using native Windows Data Protection API (`ProtectedData.Protect` / `DataProtectionScope.CurrentUser`).
+- **Encrypted Storage**: Credentials and keys are stored encrypted on your SSD in `%APPDATA%\EmailSummarizer\accounts.dat` and `%APPDATA%\EmailSummarizer\config.json`.
+- **In-Memory Decryption**: Decrypted credentials exist in memory *only* during active API / IMAP requests.
+- **Clean Config**: The unencrypted portions of `config.json` store only general preferences and `AccountIds` references.
 - **Seamless Backward Compatibility**: Automatically detects and migrates legacy plain-text configs into encrypted storage on startup.
 
 ### 🔔 Low-Footprint System Tray Daemon
 - **Continuous Background Monitoring**: Periodically polls configured accounts on a configurable timer (1–120 min).
 - **Windows Notifications**: Rich desktop notifications for newly received unread emails.
 - **Ultra-Low Memory Consumption**: Native Win32 message pump host with aggressive working-set memory trimming maintaining **< 5 MB RAM** idle footprint.
+- **Independent from AI Backend**: The background daemon polls IMAP headers without waking or loading LLMs, keeping CPU at 0%.
 - **System Startup**: Optional automatic start with Windows logon (`HKCU\...\Run`).
 
-### 🤖 Local llama.cpp Engine & VRAM Control
-- **Auto-Managed llama-server**: Starts `llama-server.exe` on demand and connects via OpenAI-compatible endpoint (`/v1/chat/completions`).
-- **GPU Layer Offload**: Full control over GPU acceleration (`-ngl 99`).
-- **Instant VRAM Unloading**: Option to automatically unload model weights when idle or maintain warm VRAM for instant inference.
+### 🤖 Multi-Backend AI Engine
+- **Local llama.cpp (Embedded GGUF)**: Starts `llama-server.exe` on demand with full GPU offloading (`-ngl 99`) and instant VRAM unload.
+- **Local Ollama**: Out-of-the-box support for local Ollama instances (`http://127.0.0.1:11434/v1/chat/completions`) with model suggestion chips (`llama3.2`, `qwen2.5:3b`, `mistral`, etc.).
+- **Cloud & Custom APIs**: Native compatibility with OpenAI (`gpt-4o-mini`), OpenRouter, Groq (`llama-3.1-8b-instant`), DeepSeek, and custom OpenAI-compatible endpoints with DPAPI-encrypted Bearer tokens.
+- **Inference Control**: Global temperature and max token ceiling controls.
 
 ### 📜 Real-Time Logs
 - Color-coded live diagnostic console tracking IMAP connection states, MailKit handshakes, and LLM completions.
@@ -60,7 +63,7 @@ Get the latest version from [GitHub Releases](https://github.com/ismlEraslan/ema
 
 - **Operating System**: Windows 10 (Build 19041+) or Windows 11 (64-bit).
 - **Runtime**: [.NET 8.0 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0) (x64).
-- **AI Model Backend**: Any GGUF LLM (Recommended: `Qwen2.5-VL-3B-Instruct.gguf` or `Llama-3.2-3B-Instruct.gguf`) with `llama-server.exe` in PATH or specified in settings.
+- **AI Model Backend**: Any GGUF LLM for local inference (`llama-server.exe`), local **Ollama**, or any OpenAI-compatible Cloud API endpoint.
 
 ---
 

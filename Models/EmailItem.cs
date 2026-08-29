@@ -28,6 +28,9 @@ namespace EmailSummarizer.Models
         // Track whether email was already read on IMAP server
         public bool IsRead { get; set; }
 
+        // Track whether email is archived
+        public bool IsArchived { get; set; }
+
         public string DateString => Date.LocalDateTime.ToString("dd/MM/yyyy HH:mm");
         public string ShortDateString => Date.LocalDateTime.ToString("dd/MM HH:mm");
     }
