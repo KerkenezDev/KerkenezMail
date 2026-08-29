@@ -1,27 +1,28 @@
-## [Visual Studio / .NET .gitignore]
-## Build results
+## Build and SDK outputs
 [Bb]in/
 [Oo]bj/
-[Ll]og/
-[Ll]ogs/
-publish/
-
-## Visual Studio files
-.vs/
 *.user
+*.suo
 *.userosscache
 *.sln.docstates
-*.suo
-*.userprefs
 
-## User / local runtime configurations
-config.json
-accounts.dat
-*.dat
-*.tmp
-*.enc
-*.local.json
+## IDE / Visual Studio / JetBrains
+.vs/
+.vscode/
+.idea/
+
+## Crash and memory dumps
+*.dmp
+*.dump
+
+## Release and package artifacts
+publish/
+source/
+*.zip
 
 ## OS generated files
-.DS_Store
 Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.DS_Store

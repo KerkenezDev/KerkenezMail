@@ -57,6 +57,13 @@ namespace EmailSummarizer.UI.Tabs
         private CheckBox _chkMarkAsSeen = null!;
         private ComboBox _cboMultiSelectPreview = null!;
 
+        // UI & Layout controls
+        private CheckBox _chkCollapseSidebarByDefault = null!;
+        private NumericUpDown _numWindowWidthScale = null!;
+        private NumericUpDown _numWindowHeightScale = null!;
+        private Label _lblScalePreview = null!;
+        private Button _btnApplyWindowSizeNow = null!;
+
         // System Tray & Notification controls
         private CheckBox _chkAlwaysKeepOn = null!;
         private CheckBox _chkEnableTrayNotifs = null!;
@@ -567,7 +574,132 @@ namespace EmailSummarizer.UI.Tabs
             pnlEmailCard.Controls.Add(_chkMarkAsSeen);
             pnlEmailCard.Controls.Add(rowPreview);
 
-            // ==================== 3. System Tray Daemon & Notifications ====================
+            // ==================== 3. Interface & Layout Section ====================
+            var pnlUiCard = CreateCardPanel(ContentW);
+            var lblSecUi = CreateSectionHeader("🖥️  Interface & Layout");
+
+            _chkCollapseSidebarByDefault = new CheckBox
+            {
+                Text = "Start with left sidebar collapsed by default (compact icon rail on launch)",
+                AutoSize = true,
+                Checked = false,
+                Margin = new Padding(0, 0, 0, 10),
+                Font = new Font("Segoe UI", 9F)
+            };
+
+            var lblScalingHeader = new Label
+            {
+                Text = "Default Launch Window Scaling (Relative to Display):",
+                AutoSize = true,
+                Font = new Font("Segoe UI", 9F, FontStyle.Bold),
+                ForeColor = Color.FromArgb(40, 40, 40),
+                Margin = new Padding(0, 4, 0, 2)
+            };
+
+            var lblScalingDesc = new Label
+            {
+                Text = "Target proportion of the active monitor's usable desktop area (working area) on launch (Default: 60% width × 56% height).",
+                AutoSize = true,
+                Font = new Font("Segoe UI", 8.5F),
+                ForeColor = Color.FromArgb(100, 100, 100),
+                Margin = new Padding(0, 0, 0, 8)
+            };
+
+            var rowScaleControls = new FlowLayoutPanel
+            {
+                Width = ContentW - 28,
+                AutoSize = true,
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = true,
+                Margin = new Padding(0, 0, 0, 6)
+            };
+
+            var lblWidth = new Label { Text = "Width Scale (%):", AutoSize = true, Margin = new Padding(0, 4, 6, 0), Font = new Font("Segoe UI", 9F) };
+            _numWindowWidthScale = new NumericUpDown
+            {
+                Width = 80,
+                DecimalPlaces = 1,
+                Minimum = 30.0M,
+                Maximum = 100.0M,
+                Increment = 1.0M,
+                Value = 60.0M,
+                Font = new Font("Segoe UI", 9F),
+                Margin = new Padding(0, 0, 16, 0)
+            };
+            _numWindowWidthScale.ValueChanged += (s, e) => UpdateScalePreview();
+
+            var lblHeight = new Label { Text = "Height Scale (%):", AutoSize = true, Margin = new Padding(0, 4, 6, 0), Font = new Font("Segoe UI", 9F) };
+            _numWindowHeightScale = new NumericUpDown
+            {
+                Width = 80,
+                DecimalPlaces = 1,
+                Minimum = 30.0M,
+                Maximum = 100.0M,
+                Increment = 0.5M,
+                Value = 56.0M,
+                Font = new Font("Segoe UI", 9F),
+                Margin = new Padding(0, 0, 14, 0)
+            };
+            _numWindowHeightScale.ValueChanged += (s, e) => UpdateScalePreview();
+
+            _btnApplyWindowSizeNow = new Button
+            {
+                Text = "⚡ Resize Active Window",
+                UseMnemonic = false,
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                Padding = new Padding(10, 4, 10, 4),
+                Margin = new Padding(0, 0, 0, 0),
+                FlatStyle = FlatStyle.System,
+                Cursor = Cursors.Hand
+            };
+            _btnApplyWindowSizeNow.Click += OnApplyWindowSizeNowClick;
+
+            rowScaleControls.Controls.Add(lblWidth);
+            rowScaleControls.Controls.Add(_numWindowWidthScale);
+            rowScaleControls.Controls.Add(lblHeight);
+            rowScaleControls.Controls.Add(_numWindowHeightScale);
+            rowScaleControls.Controls.Add(_btnApplyWindowSizeNow);
+
+            var rowPresets = new FlowLayoutPanel
+            {
+                Width = ContentW - 28,
+                AutoSize = true,
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = true,
+                Margin = new Padding(0, 0, 0, 6)
+            };
+
+            var lblPresets = new Label { Text = "Presets:", AutoSize = true, Margin = new Padding(0, 4, 6, 0), Font = new Font("Segoe UI", 8.5F, FontStyle.Bold), ForeColor = Color.FromArgb(80, 80, 80) };
+            var btnPresetDefault = CreatePresetChip("60% × 56% (Default)", 60.0M, 56.0M);
+            var btnPresetCompact = CreatePresetChip("50% × 50% (Compact)", 50.0M, 50.0M);
+            var btnPresetLarge = CreatePresetChip("75% × 70% (Large)", 75.0M, 70.0M);
+            var btnPresetMax = CreatePresetChip("95% × 90% (Near Max)", 95.0M, 90.0M);
+
+            rowPresets.Controls.Add(lblPresets);
+            rowPresets.Controls.Add(btnPresetDefault);
+            rowPresets.Controls.Add(btnPresetCompact);
+            rowPresets.Controls.Add(btnPresetLarge);
+            rowPresets.Controls.Add(btnPresetMax);
+
+            _lblScalePreview = new Label
+            {
+                Text = "",
+                AutoSize = true,
+                Font = new Font("Segoe UI", 8.5F),
+                ForeColor = Color.FromArgb(70, 70, 70),
+                Margin = new Padding(0, 2, 0, 2)
+            };
+
+            pnlUiCard.Controls.Add(lblSecUi);
+            pnlUiCard.Controls.Add(_chkCollapseSidebarByDefault);
+            pnlUiCard.Controls.Add(lblScalingHeader);
+            pnlUiCard.Controls.Add(lblScalingDesc);
+            pnlUiCard.Controls.Add(rowScaleControls);
+            pnlUiCard.Controls.Add(rowPresets);
+            pnlUiCard.Controls.Add(_lblScalePreview);
+
+            // ==================== 4. System Tray Daemon & Notifications ====================
             var pnlTrayCard = CreateCardPanel(ContentW);
             var lblSecTray = CreateSectionHeader("🔔  System Tray Daemon & Notifications");
 
@@ -710,6 +842,7 @@ namespace EmailSummarizer.UI.Tabs
 
             _mainFlow.Controls.Add(pnlLlmCard);
             _mainFlow.Controls.Add(pnlEmailCard);
+            _mainFlow.Controls.Add(pnlUiCard);
             _mainFlow.Controls.Add(pnlTrayCard);
             _mainFlow.Controls.Add(pnlPromptCard);
             _mainFlow.Controls.Add(pnlButtons);
@@ -833,6 +966,14 @@ namespace EmailSummarizer.UI.Tabs
             _chkMarkAsSeen.Checked = s.MarkAsSeen;
             _cboMultiSelectPreview.SelectedIndex = string.Equals(s.MultiSelectPreview, "FirstSelected", StringComparison.OrdinalIgnoreCase) ? 1 : 0;
 
+            // UI & Layout settings
+            _chkCollapseSidebarByDefault.Checked = s.CollapseSidebarByDefault;
+            decimal wScale = (decimal)(s.WindowWidthScale > 0.1 && s.WindowWidthScale <= 1.0 ? s.WindowWidthScale * 100.0 : 60.0);
+            decimal hScale = (decimal)(s.WindowHeightScale > 0.1 && s.WindowHeightScale <= 1.0 ? s.WindowHeightScale * 100.0 : 56.0);
+            _numWindowWidthScale.Value = Math.Max(_numWindowWidthScale.Minimum, Math.Min(_numWindowWidthScale.Maximum, wScale));
+            _numWindowHeightScale.Value = Math.Max(_numWindowHeightScale.Minimum, Math.Min(_numWindowHeightScale.Maximum, hScale));
+            UpdateScalePreview();
+
             // System Tray settings
             _chkAlwaysKeepOn.Checked = s.AlwaysKeepOn;
             _chkEnableTrayNotifs.Checked = s.EnableTrayNotifications;
@@ -840,6 +981,73 @@ namespace EmailSummarizer.UI.Tabs
             _chkStartWithWindows.Checked = s.StartWithWindows || IsStartupWithWindowsEnabled();
 
             _txtPrompt.Text = s.SystemPrompt;
+        }
+
+        private Button CreatePresetChip(string text, decimal widthVal, decimal heightVal)
+        {
+            var btn = new Button
+            {
+                Text = text,
+                UseMnemonic = false,
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                Padding = new Padding(6, 2, 6, 2),
+                Margin = new Padding(0, 0, 6, 0),
+                FlatStyle = FlatStyle.System,
+                Cursor = Cursors.Hand,
+                Font = new Font("Segoe UI", 8.25F)
+            };
+            btn.Click += (s, e) =>
+            {
+                _numWindowWidthScale.Value = widthVal;
+                _numWindowHeightScale.Value = heightVal;
+            };
+            return btn;
+        }
+
+        private void UpdateScalePreview()
+        {
+            try
+            {
+                var screen = Screen.FromControl(this) ?? Screen.PrimaryScreen;
+                var wa = screen?.WorkingArea ?? (Screen.PrimaryScreen != null ? Screen.PrimaryScreen.WorkingArea : new Rectangle(0, 0, 1920, 1080));
+                double wScale = (double)_numWindowWidthScale.Value / 100.0;
+                double hScale = (double)_numWindowHeightScale.Value / 100.0;
+                int targetW = (int)Math.Round(wa.Width * wScale);
+                int targetH = (int)Math.Round(wa.Height * hScale);
+                _lblScalePreview.Text = $"Estimated resolution on active display: {targetW} × {targetH} px (Display working area: {wa.Width} × {wa.Height} px)";
+            }
+            catch
+            {
+                // Fallback
+            }
+        }
+
+        private void OnApplyWindowSizeNowClick(object? sender, EventArgs e)
+        {
+            try
+            {
+                var mainForm = this.FindForm();
+                if (mainForm != null)
+                {
+                    var screen = Screen.FromControl(mainForm) ?? Screen.PrimaryScreen;
+                    var wa = screen?.WorkingArea ?? (Screen.PrimaryScreen != null ? Screen.PrimaryScreen.WorkingArea : new Rectangle(0, 0, 1920, 1080));
+                    double wScale = (double)_numWindowWidthScale.Value / 100.0;
+                    double hScale = (double)_numWindowHeightScale.Value / 100.0;
+                    int targetW = (int)Math.Round(wa.Width * wScale);
+                    int targetH = (int)Math.Round(wa.Height * hScale);
+                    int minW = Math.Min(960, wa.Width);
+                    int minH = Math.Min(540, wa.Height);
+                    targetW = Math.Clamp(targetW, minW, wa.Width);
+                    targetH = Math.Clamp(targetH, minH, wa.Height);
+                    mainForm.Size = new Size(targetW, targetH);
+                    mainForm.Location = new Point(
+                        wa.Left + Math.Max(0, (wa.Width - targetW) / 2),
+                        wa.Top + Math.Max(0, (wa.Height - targetH) / 2)
+                    );
+                }
+            }
+            catch { }
         }
 
         private void OnBrowseModelClick(object? sender, EventArgs e)
@@ -1085,6 +1293,11 @@ namespace EmailSummarizer.UI.Tabs
             s.OnlyUnread = _chkOnlyUnread.Checked;
             s.MarkAsSeen = _chkMarkAsSeen.Checked;
             s.MultiSelectPreview = _cboMultiSelectPreview.SelectedIndex == 1 ? "FirstSelected" : "LastSelected";
+
+            // UI & Layout settings
+            s.CollapseSidebarByDefault = _chkCollapseSidebarByDefault.Checked;
+            s.WindowWidthScale = (double)_numWindowWidthScale.Value / 100.0;
+            s.WindowHeightScale = (double)_numWindowHeightScale.Value / 100.0;
 
             // System Tray settings
             s.AlwaysKeepOn = _chkAlwaysKeepOn.Checked;

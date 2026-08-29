@@ -76,10 +76,33 @@ namespace EmailSummarizer.UI
                 // Fallback
             }
 
-            // Window Dimensions
-            this.Size = new Size(1535, 890);
-            this.MinimumSize = new Size(1000, 600);
-            this.StartPosition = FormStartPosition.CenterScreen;
+            // Window Dimensions (Dynamically scaled from settings, defaulting to 60.0% width × 56.0% height of screen working area)
+            var currentScreen = Screen.FromPoint(Cursor.Position) ?? Screen.PrimaryScreen;
+            var workingArea = currentScreen?.WorkingArea ?? (Screen.PrimaryScreen != null ? Screen.PrimaryScreen.WorkingArea : new Rectangle(0, 0, 1920, 1080));
+
+            double widthScale = _configService.Settings.WindowWidthScale > 0.1 && _configService.Settings.WindowWidthScale <= 1.0
+                ? _configService.Settings.WindowWidthScale
+                : 0.60;
+            double heightScale = _configService.Settings.WindowHeightScale > 0.1 && _configService.Settings.WindowHeightScale <= 1.0
+                ? _configService.Settings.WindowHeightScale
+                : 0.56;
+
+            int targetWidth = (int)Math.Round(workingArea.Width * widthScale);
+            int targetHeight = (int)Math.Round(workingArea.Height * heightScale);
+
+            int minWidth = Math.Min(960, workingArea.Width);
+            int minHeight = Math.Min(540, workingArea.Height);
+
+            targetWidth = Math.Clamp(targetWidth, minWidth, workingArea.Width);
+            targetHeight = Math.Clamp(targetHeight, minHeight, workingArea.Height);
+
+            this.MinimumSize = new Size(minWidth, minHeight);
+            this.Size = new Size(targetWidth, targetHeight);
+            this.StartPosition = FormStartPosition.Manual;
+            this.Location = new Point(
+                workingArea.Left + Math.Max(0, (workingArea.Width - targetWidth) / 2),
+                workingArea.Top + Math.Max(0, (workingArea.Height - targetHeight) / 2)
+            );
             this.Font = new Font("Segoe UI", 9F, FontStyle.Regular);
             this.BackColor = Color.FromArgb(248, 249, 250);
             this.KeyPreview = true;
@@ -142,6 +165,7 @@ namespace EmailSummarizer.UI
 
             // 5. Left Sidebar Navigation
             _sidebar = new SidebarNav();
+            _sidebar.IsCollapsed = _configService.Settings.CollapseSidebarByDefault;
             _sidebar.TabChanged += OnSidebarTabChanged;
 
             // Initial view
@@ -208,6 +232,13 @@ namespace EmailSummarizer.UI
 
         private async void OnFormKeyDown(object? sender, KeyEventArgs e)
         {
+            if (e.Control && e.KeyCode == Keys.B)
+            {
+                _sidebar.ToggleCollapsed();
+                e.Handled = true;
+                return;
+            }
+
             if (e.Control && e.KeyCode == Keys.R)
             {
                 await _summariesView.FetchAndAutoSummarizeAsync();

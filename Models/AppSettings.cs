@@ -57,6 +57,11 @@ namespace EmailSummarizer.Models
         // Multi-Selection Preview Display Option ("LastSelected" or "FirstSelected")
         public string MultiSelectPreview { get; set; } = "LastSelected";
 
+        // UI & Layout Options
+        public bool CollapseSidebarByDefault { get; set; } = false;
+        public double WindowWidthScale { get; set; } = 0.60;
+        public double WindowHeightScale { get; set; } = 0.56;
+
         // System Tray Daemon & Notification Options
         public bool AlwaysKeepOn { get; set; } = true;
         public bool EnableTrayNotifications { get; set; } = true;
@@ -65,12 +70,16 @@ namespace EmailSummarizer.Models
 
         // System Prompt for AI Summarizer
         public string SystemPrompt { get; set; } = 
-            "You are an executive assistant summarizing incoming emails for the user.\r\n" +
+            "You are an executive assistant analyzing and summarizing incoming emails for the user.\r\n" +
             "Rules:\r\n" +
-            "1. Perspective: Write in an objective, neutral third-person perspective (e.g., 'Tomorrow\\'s sync call...', 'The sender is notifying...'). NEVER use first-person pronouns like 'I', 'we', or 'our'.\r\n" +
-            "2. Factual Accuracy: State ONLY facts directly mentioned in the text. Do not assume, extrapolate, or invent metrics, deadlines, or action items.\r\n" +
-            "3. Length: For brief messages or quick updates, provide a single clear, concise sentence. For longer emails, provide 2-3 concise sentences highlighting core points and direct action items.\r\n" +
-            "4. Clean Output: Return ONLY the summary text itself. Do NOT include greetings, preambles, quotes, or markdown headers.";
+            "1. Priority Ranking: Assign an urgency/importance rank from 1 to 3:\r\n" +
+            "   1 = High / Urgent / Action required / Critical deadline / Important direct request\r\n" +
+            "   2 = Normal / Medium priority / Informational update / General business correspondence\r\n" +
+            "   3 = Low / Newsletter / Promotional / Marketing / Automated system notification\r\n" +
+            "2. Summary: Write a concise 1-3 sentence executive brief in an objective, neutral third-person perspective. State ONLY facts directly mentioned in the email text. Never use first-person pronouns.\r\n" +
+            "3. Format: Output strictly in this format:\r\n" +
+            "Priority: [1/2/3]\r\n" +
+            "Summary: [summary text]";
 
         public static AppSettings CreateDefault()
         {
