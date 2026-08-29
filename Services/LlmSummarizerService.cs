@@ -55,71 +55,98 @@ namespace EmailSummarizer.Services
 
             string jsonPayload = JsonSerializer.Serialize(requestBody);
 
-            try
+            const int maxRetries = 20; // Up to ~30-40s wait for large models to finish VRAM allocation
+            for (int attempt = 0; attempt < maxRetries; attempt++)
             {
-                using var request = new HttpRequestMessage(HttpMethod.Post, endpointUrl);
-                request.Content = new StringContent(jsonPayload, Encoding.UTF8, "application/json");
+                if (ct.IsCancellationRequested) return "(Summarization cancelled)";
 
-                if (!string.IsNullOrWhiteSpace(apiKey))
+                try
                 {
-                    request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey.Trim());
-                }
+                    using var request = new HttpRequestMessage(HttpMethod.Post, endpointUrl);
+                    request.Content = new StringContent(jsonPayload, Encoding.UTF8, "application/json");
 
-                var response = await HttpClient.SendAsync(request, ct);
-                
-                if (response.IsSuccessStatusCode)
-                {
-                    string responseJson = await response.Content.ReadAsStringAsync(ct);
-                    using var doc = JsonDocument.Parse(responseJson);
-
-                    if (doc.RootElement.TryGetProperty("choices", out var choices) && choices.GetArrayLength() > 0)
+                    if (!string.IsNullOrWhiteSpace(apiKey))
                     {
-                        var firstChoice = choices[0];
-                        if (firstChoice.TryGetProperty("message", out var msg))
-                        {
-                            string contentText = msg.TryGetProperty("content", out var cp) && cp.ValueKind == JsonValueKind.String ? cp.GetString() ?? "" : "";
-                            string reasoningText = msg.TryGetProperty("reasoning_content", out var rp) && rp.ValueKind == JsonValueKind.String ? rp.GetString() ?? "" : "";
-                            if (string.IsNullOrWhiteSpace(reasoningText) && msg.TryGetProperty("reasoning", out var rp2) && rp2.ValueKind == JsonValueKind.String)
-                            {
-                                reasoningText = rp2.GetString() ?? "";
-                            }
-
-                            string rawOutput = !string.IsNullOrWhiteSpace(contentText) ? contentText.Trim() : reasoningText.Trim();
-
-                            if (string.IsNullOrWhiteSpace(rawOutput))
-                            {
-                                email.Priority = 2;
-                                return "(Empty response from LLM)";
-                            }
-
-                            var (cleanSummary, parsedPriority) = ParseLlmSummaryAndPriority(rawOutput);
-                            email.Priority = parsedPriority;
-                            return cleanSummary;
-                        }
+                        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey.Trim());
                     }
 
-                    email.Priority = 2;
-                    return "(No summary content found in LLM response)";
+                    var response = await HttpClient.SendAsync(request, ct);
+                    
+                    if (response.IsSuccessStatusCode)
+                    {
+                        string responseJson = await response.Content.ReadAsStringAsync(ct);
+                        using var doc = JsonDocument.Parse(responseJson);
+
+                        if (doc.RootElement.TryGetProperty("choices", out var choices) && choices.GetArrayLength() > 0)
+                        {
+                            var firstChoice = choices[0];
+                            if (firstChoice.TryGetProperty("message", out var msg))
+                            {
+                                string contentText = msg.TryGetProperty("content", out var cp) && cp.ValueKind == JsonValueKind.String ? cp.GetString() ?? "" : "";
+                                string reasoningText = msg.TryGetProperty("reasoning_content", out var rp) && rp.ValueKind == JsonValueKind.String ? rp.GetString() ?? "" : "";
+                                if (string.IsNullOrWhiteSpace(reasoningText) && msg.TryGetProperty("reasoning", out var rp2) && rp2.ValueKind == JsonValueKind.String)
+                                {
+                                    reasoningText = rp2.GetString() ?? "";
+                                }
+
+                                string rawOutput = !string.IsNullOrWhiteSpace(contentText) ? contentText.Trim() : reasoningText.Trim();
+
+                                if (string.IsNullOrWhiteSpace(rawOutput))
+                                {
+                                    email.Priority = 2;
+                                    return "(Empty response from LLM)";
+                                }
+
+                                var (cleanSummary, parsedPriority) = ParseLlmSummaryAndPriority(rawOutput);
+                                email.Priority = parsedPriority;
+                                return cleanSummary;
+                            }
+                        }
+
+                        email.Priority = 2;
+                        return "(No summary content found in LLM response)";
+                    }
+                    else
+                    {
+                        string errorText = await response.Content.ReadAsStringAsync(ct);
+                        
+                        // If model is still loading into VRAM / RAM (HTTP 503 or "loading model"), pause and retry!
+                        bool isModelLoading = (int)response.StatusCode == 503 ||
+                                              errorText.Contains("loading model", StringComparison.OrdinalIgnoreCase) ||
+                                              errorText.Contains("loading", StringComparison.OrdinalIgnoreCase);
+
+                        if (isModelLoading && attempt < maxRetries - 1)
+                        {
+                            await Task.Delay(1500, ct);
+                            continue;
+                        }
+
+                        string cleanError = ParseErrorMessage(errorText, response.StatusCode);
+                        return $"(LLM Error {response.StatusCode}: {cleanError})";
+                    }
                 }
-                else
+                catch (HttpRequestException ex)
                 {
-                    string errorText = await response.Content.ReadAsStringAsync(ct);
-                    string cleanError = ParseErrorMessage(errorText, response.StatusCode);
-                    return $"(LLM Error {response.StatusCode}: {cleanError})";
+                    // If connection refused during initial server launch warmup, wait and retry
+                    if (attempt < maxRetries - 1 && (ex.Message.Contains("actively refused") || ex.Message.Contains("No connection could be made")))
+                    {
+                        await Task.Delay(1500, ct);
+                        continue;
+                    }
+
+                    return $"(Could not reach LLM endpoint at {endpointUrl}. Ensure the AI service is running or check your network/API key: {ex.Message})";
+                }
+                catch (OperationCanceledException)
+                {
+                    return "(Summarization cancelled)";
+                }
+                catch (Exception ex)
+                {
+                    return $"(Error generating summary: {ex.Message})";
                 }
             }
-            catch (HttpRequestException ex)
-            {
-                return $"(Could not reach LLM endpoint at {endpointUrl}. Ensure the AI service is running or check your network/API key: {ex.Message})";
-            }
-            catch (OperationCanceledException)
-            {
-                return "(Summarization cancelled)";
-            }
-            catch (Exception ex)
-            {
-                return $"(Error generating summary: {ex.Message})";
-            }
+
+            return "(Failed to get summary: Model did not become ready in time)";
         }
 
         public static (string Summary, int Priority) ParseLlmSummaryAndPriority(string rawOutput)

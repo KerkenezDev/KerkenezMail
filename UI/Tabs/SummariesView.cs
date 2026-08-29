@@ -879,7 +879,10 @@ namespace EmailSummarizer.UI.Tabs
 
             DisplayEmail(email);
 
-            if (string.IsNullOrWhiteSpace(email.Summary))
+            if (string.IsNullOrWhiteSpace(email.Summary) || 
+                email.Summary.Contains("Loading model", StringComparison.OrdinalIgnoreCase) ||
+                email.Summary.StartsWith("(LLM Error", StringComparison.OrdinalIgnoreCase) ||
+                email.Summary.StartsWith("(Could not reach LLM", StringComparison.OrdinalIgnoreCase))
             {
                 _txtSummary.Text = "✨ Generating AI summary for this email...";
                 StatusUpdated?.Invoke($"Summarizing \"{email.Subject}\"...", "In Use (GPU)");

@@ -182,8 +182,24 @@ namespace EmailSummarizer.Services
         {
             try
             {
-                var response = await HttpClient.GetAsync($"http://{host}:{port}/health", ct);
-                return response.IsSuccessStatusCode;
+                using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                cts.CancelAfter(TimeSpan.FromSeconds(3));
+
+                var response = await HttpClient.GetAsync($"http://{host}:{port}/health", cts.Token);
+                if (!response.IsSuccessStatusCode)
+                {
+                    return false;
+                }
+
+                string content = await response.Content.ReadAsStringAsync(cts.Token);
+                if (content.Contains("loading model", StringComparison.OrdinalIgnoreCase) ||
+                    content.Contains("\"status\":\"loading", StringComparison.OrdinalIgnoreCase) ||
+                    content.Contains("\"status\":\"error", StringComparison.OrdinalIgnoreCase))
+                {
+                    return false;
+                }
+
+                return true;
             }
             catch
             {
