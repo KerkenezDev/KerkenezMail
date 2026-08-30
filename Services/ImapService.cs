@@ -99,6 +99,8 @@ namespace EmailSummarizer.Services
                         }
 
                         string cleanBody = ExtractAndCleanBody(message);
+                        bool isMailingList = DetectMailingListHeaders(message);
+                        bool hasNewsletterFooter = DetectNewsletterFooter(cleanBody) || DetectNewsletterFooter(message.HtmlBody);
 
                         var emailItem = new EmailItem
                         {
@@ -111,7 +113,9 @@ namespace EmailSummarizer.Services
                             RawBody = message.TextBody ?? message.HtmlBody ?? string.Empty,
                             CleanBody = cleanBody,
                             IsRead = isRead,
-                            Status = SummaryState.Pending
+                            Status = SummaryState.Pending,
+                            IsMailingList = isMailingList,
+                            HasNewsletterFooter = hasNewsletterFooter
                         };
 
                         emails.Add(emailItem);
@@ -393,6 +397,49 @@ namespace EmailSummarizer.Services
             html = Regex.Replace(html, @"<[^>]+>", " ");
             html = System.Net.WebUtility.HtmlDecode(html);
             return html;
+        }
+
+        private static bool DetectMailingListHeaders(MimeMessage message)
+        {
+            if (message.Headers == null) return false;
+
+            if (message.Headers.Contains(HeaderId.ListUnsubscribe) ||
+                message.Headers.Contains(HeaderId.ListId) ||
+                message.Headers.Contains(HeaderId.ListPost) ||
+                message.Headers.Contains("List-Unsubscribe") ||
+                message.Headers.Contains("List-ID") ||
+                message.Headers.Contains("List-Post") ||
+                message.Headers.Contains("Feedback-ID") ||
+                message.Headers.Contains("X-Campaign") ||
+                message.Headers.Contains("X-Mailgun-Tag") ||
+                message.Headers.Contains("X-SES-Outgoing"))
+            {
+                return true;
+            }
+
+            if (message.Headers.Contains(HeaderId.Precedence))
+            {
+                string prec = message.Headers[HeaderId.Precedence] ?? "";
+                if (prec.Contains("bulk", StringComparison.OrdinalIgnoreCase) ||
+                    prec.Contains("list", StringComparison.OrdinalIgnoreCase) ||
+                    prec.Contains("junk", StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        public static bool DetectNewsletterFooter(string? text)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return false;
+
+            return Regex.IsMatch(
+                text,
+                @"(?:unsubscribe|opt[\s\-]out|email\s+preferences|manage\s+(?:your\s+)?subscription|manage\s+preferences|view\s+(?:this\s+email\s+)?in\s+browser|view\s+online|all\s+rights\s+reserved|privacy\s+policy\s*[|•\/\-]\s*terms|to\s+stop\s+receiving\s+these\s+emails|you\s+are\s+receiving\s+this\s+email\s+because|click\s+here\s+to\s+unsubscribe)",
+                RegexOptions.IgnoreCase | RegexOptions.Multiline
+            );
         }
     }
 }

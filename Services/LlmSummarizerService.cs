@@ -33,9 +33,15 @@ namespace EmailSummarizer.Services
         {
             string emailContentForLlm = PrepareEmailBodyForSummary(email.CleanBody, settings.MaxSummaryEmailChars);
 
+            bool isLikelyNewsletter = email.IsMailingList || email.HasNewsletterFooter || ImapService.DetectNewsletterFooter(email.CleanBody) || ImapService.DetectNewsletterFooter(email.RawBody);
+            string metadataNotice = isLikelyNewsletter
+                ? "Message Type: Automated Mailing List / Newsletter (Unsubscribe or bulk mailing indicators detected).\r\n"
+                : "";
+
             var userContent = $"Analyze the following email, assign a Priority rank (1 = High/Urgent, 2 = Normal/Medium, 3 = Low/Newsletter), and provide a concise 1-3 sentence executive summary.\r\n\r\n" +
                               $"Subject: {email.Subject}\r\n" +
                               $"From: {email.Sender}\r\n" +
+                              metadataNotice +
                               $"Email Content:\r\n{emailContentForLlm}\r\n\r\n" +
                               $"Output strictly in this format:\r\n" +
                               $"Priority: [1/2/3]\r\n" +

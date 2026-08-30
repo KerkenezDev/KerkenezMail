@@ -34,6 +34,10 @@ namespace EmailSummarizer.Models
         // Priority ranking (1 = High / Urgent, 2 = Normal / Medium, 3 = Low / Newsletter, null = unranked)
         public int? Priority { get; set; } = null;
 
+        // Newsletter and mailing list detection flags
+        public bool IsMailingList { get; set; }
+        public bool HasNewsletterFooter { get; set; }
+
         public string DateString => Date.LocalDateTime.ToString("dd/MM/yyyy HH:mm");
         public string ShortDateString => Date.LocalDateTime.ToString("dd/MM HH:mm");
     }
