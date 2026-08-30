@@ -15,7 +15,6 @@ namespace EmailSummarizer.Services
         private bool _weStartedServer;
         private readonly SemaphoreSlim _lock = new SemaphoreSlim(1, 1);
         private readonly object _stateLock = new object();
-        private CancellationTokenSource? _startCts;
         private static readonly HttpClient HttpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(2) };
         private IntPtr _jobHandle = IntPtr.Zero;
 
@@ -216,21 +215,16 @@ namespace EmailSummarizer.Services
             IProgress<string>? logger = null,
             CancellationToken ct = default)
         {
-            CancellationTokenSource linkedCts;
-            lock (_stateLock)
+            // Fast-path: check if server is already running and responsive
+            if (await IsServerReadyAsync(host, port, ct))
             {
-                _startCts?.Cancel();
-                _startCts?.Dispose();
-                linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                _startCts = linkedCts;
+                return true;
             }
-
-            var effectiveCt = linkedCts.Token;
 
             // Thread-safe mutex lock: Prevent duplicate concurrent server launches
             try
             {
-                await _lock.WaitAsync(effectiveCt);
+                await _lock.WaitAsync(ct);
             }
             catch (OperationCanceledException)
             {
@@ -239,18 +233,9 @@ namespace EmailSummarizer.Services
 
             try
             {
-                // 1. If our process is already alive and running, simply wait for /health or return
-                lock (_stateLock)
+                // Re-check after acquiring lock in case another thread just initialized it
+                if (await IsServerReadyAsync(host, port, ct))
                 {
-                    if (_process != null && !_process.HasExited)
-                    {
-                        // Check health below outside lock
-                    }
-                }
-
-                if (await IsServerReadyAsync(host, port, effectiveCt))
-                {
-                    logger?.Report($"[✓] llama-server is active on http://{host}:{port}");
                     return true;
                 }
 
@@ -260,67 +245,89 @@ namespace EmailSummarizer.Services
                     return false;
                 }
 
-                if (effectiveCt.IsCancellationRequested)
+                if (ct.IsCancellationRequested)
                 {
                     return false;
                 }
 
-                string exePath = ResolveLlamaServerExecutable();
-                string modelName = Path.GetFileName(modelPath);
-                logger?.Report($"[*] Launching '{Path.GetFileName(exePath)}' with '{modelName}' on port {port} (GPU offload: {ngl} layers)...");
-
-                var psi = new ProcessStartInfo
-                {
-                    FileName = exePath,
-                    Arguments = $"-m \"{modelPath}\" --port {port} --host {host} -ngl {ngl} -c 4096 -lv 0",
-                    UseShellExecute = false,
-                    CreateNoWindow = true,
-                    RedirectStandardOutput = false,
-                    RedirectStandardError = false
-                };
-
-                Process? proc = null;
-                try
-                {
-                    proc = Process.Start(psi);
-                }
-                catch (Exception ex)
-                {
-                    logger?.Report($"[!] Failed to spawn llama-server process: {ex.Message}");
-                    return false;
-                }
-
-                if (proc == null)
-                {
-                    logger?.Report("[!] Failed to spawn llama-server process.");
-                    return false;
-                }
-
+                // If existing process exited or died, clean it up
                 lock (_stateLock)
                 {
-                    _process = proc;
-                    _weStartedServer = true;
+                    if (_process != null && _process.HasExited)
+                    {
+                        try { _process.Dispose(); } catch { }
+                        _process = null;
+                        _weStartedServer = false;
+                    }
                 }
 
-                // Bind child process to Windows Job Object for guaranteed cleanup on parent exit
-                AssignToJob(proc);
+                // If process is already started and alive, wait for it to become ready
+                Process? currentProc;
+                lock (_stateLock)
+                {
+                    currentProc = _process;
+                }
+
+                if (currentProc == null || currentProc.HasExited)
+                {
+                    string exePath = ResolveLlamaServerExecutable();
+                    string modelName = Path.GetFileName(modelPath);
+                    logger?.Report($"[*] Launching '{Path.GetFileName(exePath)}' with '{modelName}' on port {port} (GPU offload: {ngl} layers)...");
+
+                    var psi = new ProcessStartInfo
+                    {
+                        FileName = exePath,
+                        Arguments = $"-m \"{modelPath}\" --port {port} --host {host} -ngl {ngl} -c 4096 -lv 0",
+                        UseShellExecute = false,
+                        CreateNoWindow = true,
+                        RedirectStandardOutput = false,
+                        RedirectStandardError = false
+                    };
+
+                    Process? proc = null;
+                    try
+                    {
+                        proc = Process.Start(psi);
+                    }
+                    catch (Exception ex)
+                    {
+                        logger?.Report($"[!] Failed to spawn llama-server process: {ex.Message}");
+                        return false;
+                    }
+
+                    if (proc == null)
+                    {
+                        logger?.Report("[!] Failed to spawn llama-server process.");
+                        return false;
+                    }
+
+                    lock (_stateLock)
+                    {
+                        _process = proc;
+                        _weStartedServer = true;
+                        currentProc = proc;
+                    }
+
+                    // Bind child process to Windows Job Object for guaranteed cleanup on parent exit
+                    AssignToJob(proc);
+                }
 
                 // Wait for server to become responsive on /health
                 var startTime = DateTime.UtcNow;
                 while ((DateTime.UtcNow - startTime).TotalSeconds < waitTimeoutSeconds)
                 {
-                    if (effectiveCt.IsCancellationRequested)
+                    if (ct.IsCancellationRequested)
                     {
                         StopInternal(logger);
                         return false;
                     }
 
-                    if (proc.HasExited)
+                    if (currentProc.HasExited)
                     {
-                        logger?.Report($"[!] llama-server exited early with code {proc.ExitCode}");
+                        logger?.Report($"[!] llama-server exited early with code {currentProc.ExitCode}");
                         lock (_stateLock)
                         {
-                            if (_process == proc)
+                            if (_process == currentProc)
                             {
                                 _process = null;
                                 _weStartedServer = false;
@@ -329,13 +336,13 @@ namespace EmailSummarizer.Services
                         return false;
                     }
 
-                    if (await IsServerReadyAsync(host, port, effectiveCt))
+                    if (await IsServerReadyAsync(host, port, ct))
                     {
                         logger?.Report($"[✓] llama-server is ready and listening on http://{host}:{port}");
                         return true;
                     }
 
-                    await Task.Delay(400, effectiveCt);
+                    await Task.Delay(400, ct);
                 }
 
                 logger?.Report("[!] Timed out waiting for llama-server to initialize.");
@@ -355,29 +362,11 @@ namespace EmailSummarizer.Services
             finally
             {
                 _lock.Release();
-                lock (_stateLock)
-                {
-                    if (_startCts == linkedCts)
-                    {
-                        _startCts = null;
-                    }
-                }
             }
         }
 
         public void Stop(IProgress<string>? logger = null)
         {
-            // 1. Cancel any active StartAsync operations immediately
-            lock (_stateLock)
-            {
-                try
-                {
-                    _startCts?.Cancel();
-                }
-                catch { }
-            }
-
-            // 2. Kill the process immediately without blocking UI thread
             StopInternal(logger);
         }
 

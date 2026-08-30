@@ -21,6 +21,7 @@ namespace EmailSummarizer.UI.Tabs
         private readonly IProgress<string> _logger;
 
         private CancellationTokenSource? _cts;
+        private volatile bool _isBatchSyncing = false;
         private readonly List<EmailItem> _emails = new List<EmailItem>();
         private readonly List<EmailItem> _selectedEmailsOrder = new List<EmailItem>();
 
@@ -509,6 +510,7 @@ namespace EmailSummarizer.UI.Tabs
             _cts = new CancellationTokenSource();
             var ct = _cts.Token;
 
+            _isBatchSyncing = true;
             _btnRefresh.Enabled = false;
             _progressBar.Visible = true;
 
@@ -519,6 +521,7 @@ namespace EmailSummarizer.UI.Tabs
                 _logger.Report("\r\n" + new string('═', 60));
                 _logger.Report("[!] No email accounts configured. Please add an account in the Accounts tab.");
                 StatusUpdated?.Invoke("No accounts configured", "Ready");
+                _isBatchSyncing = false;
                 _btnRefresh.Enabled = true;
                 _progressBar.Visible = false;
                 return;
@@ -548,6 +551,8 @@ namespace EmailSummarizer.UI.Tabs
                 }
 
                 // 2. Concurrently fetch all IMAP accounts in parallel tasks, streaming emails to UI as they arrive!
+                var activeSummaryTasks = new System.Collections.Concurrent.ConcurrentBag<Task>();
+
                 var fetchTask = _imapService.FetchAllAccountsParallelAsync(
                     accounts,
                     settings,
@@ -569,26 +574,48 @@ namespace EmailSummarizer.UI.Tabs
                                 {
                                     _lvEmails.Items[0].Selected = true;
                                 }
-
-                                if (!emailItem.IsRead)
-                                {
-                                    _ = SummarizeUnreadEmailInBackgroundAsync(emailItem, settings, serverTask, ct);
-                                }
                             }));
                         }
                         catch { }
+
+                        if (!emailItem.IsRead)
+                        {
+                            activeSummaryTasks.Add(SummarizeUnreadEmailInBackgroundAsync(emailItem, settings, serverTask, ct));
+                        }
                     },
                     ct: ct);
 
                 await fetchTask;
                 if (serverTask != null) await serverTask;
 
+                if (!activeSummaryTasks.IsEmpty)
+                {
+                    await Task.WhenAll(activeSummaryTasks);
+                }
+
                 int unreadCount = _emails.Count(e => !e.IsRead);
                 _logger.Report($"[✓] Parallel sync complete. Loaded {_emails.Count} total email(s) ({unreadCount} unread).");
-                string backendMetric = string.Equals(settings.AiBackend, "LlamaCpp", StringComparison.OrdinalIgnoreCase) 
-                    ? "Model Loaded in VRAM" 
-                    : (string.Equals(settings.AiBackend, "Ollama", StringComparison.OrdinalIgnoreCase) ? "Ollama Active" : "Cloud Active");
-                StatusUpdated?.Invoke($"Ready • {_emails.Count} emails in inbox ({unreadCount} unread)", backendMetric);
+
+                // Handle Instant VRAM Unload setting after entire batch is fetched & summarized
+                if (string.Equals(settings.AiBackend, "LlamaCpp", StringComparison.OrdinalIgnoreCase) && settings.AutoStartLlamaServer)
+                {
+                    if (settings.InstantVramUnload)
+                    {
+                        _llamaManager.Stop(_logger);
+                        StatusUpdated?.Invoke($"Ready • {_emails.Count} emails in inbox ({unreadCount} unread)", "VRAM Free");
+                    }
+                    else
+                    {
+                        StatusUpdated?.Invoke($"Ready • {_emails.Count} emails in inbox ({unreadCount} unread)", "Model Loaded in VRAM");
+                    }
+                }
+                else
+                {
+                    string backendMetric = string.Equals(settings.AiBackend, "Ollama", StringComparison.OrdinalIgnoreCase) 
+                        ? "Ollama Active" 
+                        : "Cloud Active";
+                    StatusUpdated?.Invoke($"Ready • {_emails.Count} emails in inbox ({unreadCount} unread)", backendMetric);
+                }
             }
             catch (OperationCanceledException)
             {
@@ -602,6 +629,7 @@ namespace EmailSummarizer.UI.Tabs
             }
             finally
             {
+                _isBatchSyncing = false;
                 _btnRefresh.Enabled = true;
                 _progressBar.Visible = false;
             }
@@ -611,14 +639,19 @@ namespace EmailSummarizer.UI.Tabs
         {
             try
             {
+                email.Status = SummaryState.Summarizing;
+
                 if (serverTask != null)
                 {
                     await serverTask;
                 }
 
-                if (ct.IsCancellationRequested || this.IsDisposed) return;
+                if (ct.IsCancellationRequested || this.IsDisposed)
+                {
+                    email.Status = SummaryState.Pending;
+                    return;
+                }
 
-                email.Status = SummaryState.Summarizing;
                 string summary = await _llmService.SummarizeEmailAsync(email, settings, ct);
                 email.Summary = summary;
                 email.Status = SummaryState.Completed;
@@ -633,11 +666,15 @@ namespace EmailSummarizer.UI.Tabs
 
                     UpdateListViewItemForEmail(email);
 
-                    if (_lvEmails.SelectedItems.Count > 0 && _lvEmails.SelectedItems[0].Tag == email)
+                    if (_lvEmails.SelectedItems.Count > 0 && GetCurrentPreviewEmail() == email)
                     {
                         DisplayEmail(email);
                     }
                 }));
+            }
+            catch (OperationCanceledException)
+            {
+                email.Status = SummaryState.Pending;
             }
             catch
             {
@@ -879,6 +916,18 @@ namespace EmailSummarizer.UI.Tabs
 
             DisplayEmail(email);
 
+            // If this email is already summarizing in the background, do not start a duplicate task
+            if (email.Status == SummaryState.Summarizing)
+            {
+                return;
+            }
+
+            // If batch sync is actively running and this email is unread (queued for auto-summarization), let the batch task handle it
+            if (_isBatchSyncing && !email.IsRead && string.IsNullOrWhiteSpace(email.Summary))
+            {
+                return;
+            }
+
             if (string.IsNullOrWhiteSpace(email.Summary) || 
                 email.Summary.Contains("Loading model", StringComparison.OrdinalIgnoreCase) ||
                 email.Summary.StartsWith("(LLM Error", StringComparison.OrdinalIgnoreCase) ||
@@ -886,6 +935,9 @@ namespace EmailSummarizer.UI.Tabs
             {
                 _txtSummary.Text = "✨ Generating AI summary for this email...";
                 StatusUpdated?.Invoke($"Summarizing \"{email.Subject}\"...", "In Use (GPU)");
+
+                email.Status = SummaryState.Summarizing;
+                UpdateListViewItemForEmail(email);
 
                 var settings = _configService.Settings;
                 if (string.Equals(settings.AiBackend, "LlamaCpp", StringComparison.OrdinalIgnoreCase) && settings.AutoStartLlamaServer)
@@ -904,10 +956,26 @@ namespace EmailSummarizer.UI.Tabs
                     DisplayEmail(email);
                 }
 
-                string backendMetric = string.Equals(settings.AiBackend, "LlamaCpp", StringComparison.OrdinalIgnoreCase) 
-                    ? "Model Loaded in VRAM" 
-                    : (string.Equals(settings.AiBackend, "Ollama", StringComparison.OrdinalIgnoreCase) ? "Ollama Active" : "Cloud Active");
-                StatusUpdated?.Invoke("Summary ready", backendMetric);
+                // If InstantVramUnload is requested and we are using local llama.cpp, free VRAM now
+                if (string.Equals(settings.AiBackend, "LlamaCpp", StringComparison.OrdinalIgnoreCase) && settings.AutoStartLlamaServer)
+                {
+                    if (settings.InstantVramUnload && !_isBatchSyncing)
+                    {
+                        _llamaManager.Stop(_logger);
+                        StatusUpdated?.Invoke("Summary ready", "VRAM Free");
+                    }
+                    else
+                    {
+                        StatusUpdated?.Invoke("Summary ready", "Model Loaded in VRAM");
+                    }
+                }
+                else
+                {
+                    string backendMetric = string.Equals(settings.AiBackend, "Ollama", StringComparison.OrdinalIgnoreCase) 
+                        ? "Ollama Active" 
+                        : "Cloud Active";
+                    StatusUpdated?.Invoke("Summary ready", backendMetric);
+                }
             }
         }
 

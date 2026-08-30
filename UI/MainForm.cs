@@ -225,7 +225,7 @@ namespace EmailSummarizer.UI
             int enabledCount = _configService.GetAccounts().Count(a => a.IsEnabled);
             string backendType = _configService.Settings.AiBackend;
             string status = string.Equals(backendType, "LlamaCpp", StringComparison.OrdinalIgnoreCase) 
-                ? "Model Loaded in VRAM" 
+                ? (_configService.Settings.InstantVramUnload ? "On-Demand (VRAM Unload)" : "Model Loaded in VRAM") 
                 : (string.Equals(backendType, "Ollama", StringComparison.OrdinalIgnoreCase) ? "Ollama Active" : "Cloud Active");
             _lblMetrics.Text = $"Accounts: {enabledCount} | Backend: {status}";
         }
