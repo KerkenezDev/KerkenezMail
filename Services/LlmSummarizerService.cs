@@ -35,7 +35,7 @@ namespace EmailSummarizer.Services
 
             bool isLikelyNewsletter = email.IsMailingList || email.HasNewsletterFooter || ImapService.DetectNewsletterFooter(email.CleanBody) || ImapService.DetectNewsletterFooter(email.RawBody);
             string metadataNotice = isLikelyNewsletter
-                ? "Message Type: Automated Mailing List / Newsletter (Unsubscribe or bulk mailing indicators detected).\r\n"
+                ? "Classification Note: This email is an Automated Newsletter / Mailing List / Promotional update. Set Priority to 3.\r\n"
                 : "";
 
             var userContent = $"Analyze the following email, assign a Priority rank (1 = High/Urgent, 2 = Normal/Medium, 3 = Low/Newsletter), and provide a concise 1-3 sentence executive summary.\r\n\r\n" +
@@ -55,6 +55,10 @@ namespace EmailSummarizer.Services
             if (!systemPrompt.Contains("Priority", StringComparison.OrdinalIgnoreCase))
             {
                 systemPrompt += "\r\n\r\nRequired Output format:\r\nPriority: [1/2/3]\r\nSummary: [summary text]";
+            }
+            if (!systemPrompt.Contains("signals", StringComparison.OrdinalIgnoreCase))
+            {
+                systemPrompt += "\r\n* Note: Market digests, signals, promos, and newsletters must always be Priority 3 (Low).";
             }
 
             // Allocate a generous token limit (minimum 2048) to seamlessly accommodate thinking/reasoning models (e.g. DeepSeek-R1, QwQ)
