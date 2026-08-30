@@ -1,0 +1,17 @@
+name: Publish to WinGet
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  publish:
+    name: Submit to Windows Package Manager
+    runs-on: windows-latest
+    steps:
+      - name: Publish to Windows Package Manager Community Repository
+        uses: vedantmgoyal2014/winget-releaser@v2
+        with:
+          identifier: ismlEraslan.EmailSummarizer
+          token: ${{ secrets.WINGET_TOKEN }}
