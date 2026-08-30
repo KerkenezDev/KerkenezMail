@@ -4,6 +4,11 @@ on:
   release:
     types: [published, edited]
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release Version Tag (e.g. v0.4.1)'
+        required: false
+        default: 'v0.4.1'
 
 jobs:
   publish:
@@ -25,8 +30,10 @@ jobs:
 
       - name: Generate & Validate Manifests
         shell: pwsh
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
         run: |
-          $tag = if ($env:GITHUB_REF_NAME) { $env:GITHUB_REF_NAME } else { "v0.4.1" }
+          $tag = if ($env:INPUT_VERSION) { $env:INPUT_VERSION } elseif ($env:GITHUB_REF_NAME -and $env:GITHUB_REF_NAME.StartsWith("v")) { $env:GITHUB_REF_NAME } else { "v0.4.1" }
           $version = $tag.TrimStart('v')
           $manifestDir = "manifests/i/ismlEraslan/EmailSummarizer/$version"
           New-Item -ItemType Directory -Path $manifestDir -Force | Out-Null
@@ -105,8 +112,9 @@ ManifestVersion: 1.6.0
         shell: pwsh
         env:
           GITHUB_TOKEN: ${{ secrets.WINGET_TOKEN }}
+          INPUT_VERSION: ${{ inputs.version }}
         run: |
-          $tag = if ($env:GITHUB_REF_NAME) { $env:GITHUB_REF_NAME } else { "v0.4.1" }
+          $tag = if ($env:INPUT_VERSION) { $env:INPUT_VERSION } elseif ($env:GITHUB_REF_NAME -and $env:GITHUB_REF_NAME.StartsWith("v")) { $env:GITHUB_REF_NAME } else { "v0.4.1" }
           $version = $tag.TrimStart('v')
           $manifestDir = "manifests/i/ismlEraslan/EmailSummarizer/$version"
           wingetcreate submit $manifestDir --token $env:GITHUB_TOKEN
