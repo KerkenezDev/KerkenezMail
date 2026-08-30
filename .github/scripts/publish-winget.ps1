@@ -37,6 +37,9 @@ NestedInstallerFiles:
 Commands:
   - EmailSummarizer
 ReleaseDate: $(Get-Date -Format "yyyy-MM-dd")
+Dependencies:
+  PackageDependencies:
+    - PackageIdentifier: Microsoft.DotNet.DesktopRuntime.8
 Installers:
   - Architecture: x64
     InstallerUrl: $downloadUrl
