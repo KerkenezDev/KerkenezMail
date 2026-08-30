@@ -322,6 +322,9 @@ namespace EmailSummarizer.Services
                 }
                 catch { }
 
+                // Remove Desktop and Start Menu shortcuts
+                ShortcutService.DeleteShortcuts();
+
                 if (Directory.Exists(AppDataFolder))
                 {
                     Directory.Delete(AppDataFolder, true);

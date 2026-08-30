@@ -691,6 +691,30 @@ namespace EmailSummarizer.UI.Tabs
                 Margin = new Padding(0, 2, 0, 2)
             };
 
+            var btnCreateShortcuts = new Button
+            {
+                Text = "📌  Add Desktop & Start Menu Shortcuts",
+                UseMnemonic = false,
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                Padding = new Padding(10, 5, 10, 5),
+                Margin = new Padding(0, 8, 0, 2),
+                FlatStyle = FlatStyle.System,
+                Cursor = Cursors.Hand
+            };
+            btnCreateShortcuts.Click += (s, e) =>
+            {
+                bool ok = ShortcutService.CreateShortcuts();
+                if (ok)
+                {
+                    MessageBox.Show("Shortcuts for Email Summarizer were successfully added to your Desktop and Start Menu!", "Shortcuts Created", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+                else
+                {
+                    MessageBox.Show("Could not create shortcuts.", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                }
+            };
+
             pnlUiCard.Controls.Add(lblSecUi);
             pnlUiCard.Controls.Add(_chkCollapseSidebarByDefault);
             pnlUiCard.Controls.Add(lblScalingHeader);
@@ -698,6 +722,7 @@ namespace EmailSummarizer.UI.Tabs
             pnlUiCard.Controls.Add(rowScaleControls);
             pnlUiCard.Controls.Add(rowPresets);
             pnlUiCard.Controls.Add(_lblScalePreview);
+            pnlUiCard.Controls.Add(btnCreateShortcuts);
 
             // ==================== 4. System Tray Daemon & Notifications ====================
             var pnlTrayCard = CreateCardPanel(ContentW);

@@ -28,9 +28,13 @@ namespace EmailSummarizer.UI
         private SettingsView _settingsView = null!;
         private LogsView _logsView = null!;
 
+        private readonly bool _isFirstLaunch;
+
         public MainForm()
         {
             this.AutoScaleMode = AutoScaleMode.Dpi;
+
+            _isFirstLaunch = !File.Exists(ConfigService.ConfigFilePath);
 
             // Initialize Core Services
             _configService = new ConfigService();
@@ -46,6 +50,26 @@ namespace EmailSummarizer.UI
             this.Shown += async (s, e) =>
             {
                 await Task.Yield();
+
+                if (_isFirstLaunch && !ShortcutService.ShortcutsExist)
+                {
+                    try
+                    {
+                        var res = MessageBox.Show(
+                            this,
+                            "Welcome to Email Summarizer!\r\n\r\nWould you like to create shortcuts on your Desktop and Start Menu for easy access?",
+                            "Email Summarizer Shortcuts",
+                            MessageBoxButtons.YesNo,
+                            MessageBoxIcon.Question);
+
+                        if (res == DialogResult.Yes)
+                        {
+                            ShortcutService.CreateShortcuts();
+                        }
+                    }
+                    catch { }
+                }
+
                 await _summariesView.FetchAndAutoSummarizeAsync();
             };
         }
