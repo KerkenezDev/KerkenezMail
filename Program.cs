@@ -22,12 +22,27 @@ namespace EmailSummarizer
                                               a.Equals("/uninstall", StringComparison.OrdinalIgnoreCase) ||
                                               a.Equals("-uninstall", StringComparison.OrdinalIgnoreCase)))
             {
-                ApplicationConfiguration.Initialize();
-                Application.EnableVisualStyles();
-                Application.SetCompatibleTextRenderingDefault(false);
-                HandleUninstall();
+                bool isQuiet = args.Any(a => a.Equals("--quiet", StringComparison.OrdinalIgnoreCase) ||
+                                             a.Equals("/quiet", StringComparison.OrdinalIgnoreCase) ||
+                                             a.Equals("-quiet", StringComparison.OrdinalIgnoreCase) ||
+                                             a.Equals("--silent", StringComparison.OrdinalIgnoreCase) ||
+                                             a.Equals("/silent", StringComparison.OrdinalIgnoreCase) ||
+                                             a.Equals("-silent", StringComparison.OrdinalIgnoreCase) ||
+                                             a.Equals("-s", StringComparison.OrdinalIgnoreCase) ||
+                                             a.Equals("-q", StringComparison.OrdinalIgnoreCase));
+
+                if (!isQuiet)
+                {
+                    ApplicationConfiguration.Initialize();
+                    Application.EnableVisualStyles();
+                    Application.SetCompatibleTextRenderingDefault(false);
+                }
+                HandleUninstall(isQuiet);
                 return;
             }
+
+            // Always ensure application registration in HKCU Uninstall key is created/updated (e.g. if app moved)
+            UninstallRegistrationService.RegisterOrUpdate();
 
             // 2. Handle --daemon or --tray switch (Background System Tray Daemon)
             bool isDaemonMode = args != null && args.Any(a => a.Equals("--daemon", StringComparison.OrdinalIgnoreCase) ||
@@ -146,10 +161,20 @@ namespace EmailSummarizer
             }
         }
 
-        private static void HandleUninstall()
+        private static void HandleUninstall(bool isQuiet)
         {
+            if (isQuiet)
+            {
+                try
+                {
+                    ConfigService.Uninstall();
+                }
+                catch { }
+                return;
+            }
+
             var res = MessageBox.Show(
-                "Are you sure you want to uninstall Email Summarizer and delete all configuration from %APPDATA%\\EmailSummarizer?",
+                "Are you sure you want to uninstall Email Summarizer?\n\nThis will remove Desktop and Start Menu shortcuts, Windows startup entries, Add/Remove Programs registration, and delete all configuration and cached data from %APPDATA%\\EmailSummarizer.",
                 "Uninstall Email Summarizer",
                 MessageBoxButtons.YesNo,
                 MessageBoxIcon.Warning);
@@ -160,7 +185,7 @@ namespace EmailSummarizer
                 if (success)
                 {
                     MessageBox.Show(
-                        "Email Summarizer configuration and data have been successfully removed from %APPDATA%.",
+                        "Email Summarizer shortcuts, startup entries, Windows Add/Remove registration, configuration, and data have been successfully removed.",
                         "Uninstall Complete",
                         MessageBoxButtons.OK,
                         MessageBoxIcon.Information);
@@ -168,7 +193,7 @@ namespace EmailSummarizer
                 else
                 {
                     MessageBox.Show(
-                        "Failed to completely remove %APPDATA%\\EmailSummarizer folder.",
+                        "Failed to completely remove all configuration files or shortcuts.",
                         "Uninstall Warning",
                         MessageBoxButtons.OK,
                         MessageBoxIcon.Warning);

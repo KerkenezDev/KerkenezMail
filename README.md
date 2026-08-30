@@ -103,7 +103,8 @@ winget install ismlEraslan.EmailSummarizer
 | :--- | :--- |
 | `EmailSummarizer.exe` | Launches the main graphical interface. |
 | `EmailSummarizer.exe --daemon` *(or `--tray`)* | Launches the background system tray daemon directly. |
-| `EmailSummarizer.exe --uninstall` | Prompts to cleanly remove `%APPDATA%\EmailSummarizer` and startup registry keys. |
+| `EmailSummarizer.exe --uninstall` | Prompts to cleanly remove Desktop & Start Menu shortcuts, startup registry keys, Windows Add/Remove registration, and `%APPDATA%\EmailSummarizer`. |
+| `EmailSummarizer.exe --uninstall --quiet` *(or `--silent`)* | Performs a silent/unattended uninstall without dialog prompts. |
 
 ---
 

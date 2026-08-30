@@ -63,14 +63,46 @@ namespace EmailSummarizer.Services
             }
         }
 
-        public static void DeleteShortcuts()
+        public static void UpdateShortcutsIfMoved()
         {
             try
             {
-                if (File.Exists(StartMenuShortcutPath)) File.Delete(StartMenuShortcutPath);
-                if (File.Exists(DesktopShortcutPath)) File.Delete(DesktopShortcutPath);
+                bool hasStartMenu = File.Exists(StartMenuShortcutPath);
+                bool hasDesktop = File.Exists(DesktopShortcutPath);
+
+                if (hasStartMenu || hasDesktop)
+                {
+                    CreateShortcuts(createDesktop: hasDesktop, createStartMenu: hasStartMenu);
+                }
             }
             catch { }
+        }
+
+        public static void DeleteShortcuts()
+        {
+            var candidatePaths = new[]
+            {
+                StartMenuShortcutPath,
+                DesktopShortcutPath,
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), "Email Summarizer.lnk"),
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonPrograms), "Email Summarizer.lnk"),
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonDesktopDirectory), "Email Summarizer.lnk")
+            };
+
+            foreach (var path in candidatePaths)
+            {
+                try
+                {
+                    if (!string.IsNullOrWhiteSpace(path) && File.Exists(path))
+                    {
+                        File.Delete(path);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[ShortcutService] Error deleting shortcut at '{path}': {ex.Message}");
+                }
+            }
         }
     }
 }

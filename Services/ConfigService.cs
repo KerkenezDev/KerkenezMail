@@ -329,6 +329,9 @@ namespace EmailSummarizer.Services
                 }
                 catch { }
 
+                // Remove Windows Uninstall / Add-Remove Programs registration
+                UninstallRegistrationService.Unregister();
+
                 // Remove Desktop and Start Menu shortcuts
                 ShortcutService.DeleteShortcuts();
 
