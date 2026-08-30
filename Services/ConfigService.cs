@@ -138,6 +138,8 @@ namespace EmailSummarizer.Services
             // 5. Heal Global Inference settings
             if (s.MaxTokens <= 0) s.MaxTokens = 350;
             if (s.Temperature < 0.0 || s.Temperature > 2.0) s.Temperature = 0.2;
+            if (s.MaxSummaryEmailChars < 0) s.MaxSummaryEmailChars = 0;
+            else if (s.MaxSummaryEmailChars > 0 && s.MaxSummaryEmailChars < 500) s.MaxSummaryEmailChars = 500;
 
             // 6. Heal Email / System settings
             if (s.MaxEmailsPerAccount <= 0) s.MaxEmailsPerAccount = 15;

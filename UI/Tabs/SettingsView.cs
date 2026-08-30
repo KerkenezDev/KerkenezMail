@@ -46,6 +46,8 @@ namespace EmailSummarizer.UI.Tabs
         // 4. Global LLM controls
         private NumericUpDown _numTemperature = null!;
         private NumericUpDown _numMaxTokens = null!;
+        private NumericUpDown _numMaxSummaryChars = null!;
+        private CheckBox _chkUnlimitedEmailChars = null!;
 
         // Test LLM controls
         private Button _btnTestLlm = null!;
@@ -469,6 +471,108 @@ namespace EmailSummarizer.UI.Tabs
             pnlGlobalParams.Controls.Add(pnlTemp);
             pnlGlobalParams.Controls.Add(pnlMaxTokens);
 
+            // ------------------ 1E. Email Ingestion Length Limit ------------------
+            var pnlEmailLengthContainer = new FlowLayoutPanel
+            {
+                Width = ContentW - 28,
+                AutoSize = true,
+                FlowDirection = FlowDirection.TopDown,
+                WrapContents = false,
+                Margin = new Padding(0, 4, 0, 10)
+            };
+
+            var lblSummaryCharsHeader = new Label
+            {
+                Text = "Max Email Length Sent to AI (Character Context Limit):",
+                AutoSize = true,
+                Font = new Font("Segoe UI", 8.75F, FontStyle.Bold),
+                ForeColor = Color.FromArgb(40, 40, 40),
+                Margin = new Padding(0, 0, 0, 3)
+            };
+
+            var lblSummaryCharsDesc = new Label
+            {
+                Text = "Controls how many characters of the email body are sent to the AI for summarization. Full email text is always fetched and viewable in the app regardless of this limit.",
+                AutoSize = true,
+                Font = new Font("Segoe UI", 8.25F),
+                ForeColor = Color.FromArgb(110, 110, 110),
+                Margin = new Padding(0, 0, 0, 6)
+            };
+
+            var rowCharControls = new FlowLayoutPanel
+            {
+                Width = ContentW - 28,
+                AutoSize = true,
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = false,
+                Margin = new Padding(0, 0, 0, 6)
+            };
+
+            _numMaxSummaryChars = new NumericUpDown
+            {
+                Width = 150,
+                Height = 28,
+                Minimum = 500,
+                Maximum = 1000000,
+                Increment = 500,
+                Value = 4000,
+                Font = new Font("Segoe UI", 9.5F),
+                Margin = new Padding(0, 0, 14, 0)
+            };
+
+            _chkUnlimitedEmailChars = new CheckBox
+            {
+                Text = "♾️ Unlimited (Send entire email body to AI)",
+                AutoSize = true,
+                Font = new Font("Segoe UI", 9F, FontStyle.Bold),
+                ForeColor = Color.FromArgb(30, 41, 59),
+                Margin = new Padding(0, 4, 0, 0),
+                Cursor = Cursors.Hand
+            };
+            _chkUnlimitedEmailChars.CheckedChanged += (s, e) =>
+            {
+                _numMaxSummaryChars.Enabled = !_chkUnlimitedEmailChars.Checked;
+            };
+
+            rowCharControls.Controls.Add(_numMaxSummaryChars);
+            rowCharControls.Controls.Add(_chkUnlimitedEmailChars);
+
+            var rowCharPresets = new FlowLayoutPanel
+            {
+                Width = ContentW - 28,
+                AutoSize = true,
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = true,
+                Margin = new Padding(0, 0, 0, 4)
+            };
+
+            var lblCharPresets = new Label
+            {
+                Text = "Presets:",
+                AutoSize = true,
+                Margin = new Padding(0, 3, 6, 0),
+                Font = new Font("Segoe UI", 8.25F, FontStyle.Bold),
+                ForeColor = Color.FromArgb(80, 80, 80)
+            };
+
+            var btnPreset4k = CreateCharLimitPresetChip("4,000 chars (Default)", 4000);
+            var btnPreset8k = CreateCharLimitPresetChip("8,000 chars (Medium)", 8000);
+            var btnPreset16k = CreateCharLimitPresetChip("16,000 chars (Long)", 16000);
+            var btnPreset32k = CreateCharLimitPresetChip("32,000 chars (Very Long)", 32000);
+            var btnPresetInf = CreateCharLimitPresetChip("♾️ Unlimited", 0);
+
+            rowCharPresets.Controls.Add(lblCharPresets);
+            rowCharPresets.Controls.Add(btnPreset4k);
+            rowCharPresets.Controls.Add(btnPreset8k);
+            rowCharPresets.Controls.Add(btnPreset16k);
+            rowCharPresets.Controls.Add(btnPreset32k);
+            rowCharPresets.Controls.Add(btnPresetInf);
+
+            pnlEmailLengthContainer.Controls.Add(lblSummaryCharsHeader);
+            pnlEmailLengthContainer.Controls.Add(lblSummaryCharsDesc);
+            pnlEmailLengthContainer.Controls.Add(rowCharControls);
+            pnlEmailLengthContainer.Controls.Add(rowCharPresets);
+
             // ------------------ Test Connection Row ------------------
             var rowTestLlm = new FlowLayoutPanel
             {
@@ -510,6 +614,7 @@ namespace EmailSummarizer.UI.Tabs
             pnlLlmCard.Controls.Add(_pnlOllamaContainer);
             pnlLlmCard.Controls.Add(_pnlCloudContainer);
             pnlLlmCard.Controls.Add(pnlGlobalParams);
+            pnlLlmCard.Controls.Add(pnlEmailLengthContainer);
             pnlLlmCard.Controls.Add(rowTestLlm);
 
             // ==================== 2. Email Options Section ====================
@@ -984,6 +1089,18 @@ namespace EmailSummarizer.UI.Tabs
             // Global LLM settings
             _numTemperature.Value = Math.Max(_numTemperature.Minimum, Math.Min(_numTemperature.Maximum, (decimal)s.Temperature));
             _numMaxTokens.Value = Math.Max(_numMaxTokens.Minimum, Math.Min(_numMaxTokens.Maximum, s.MaxTokens > 0 ? s.MaxTokens : 350));
+            if (s.MaxSummaryEmailChars <= 0)
+            {
+                _chkUnlimitedEmailChars.Checked = true;
+                _numMaxSummaryChars.Value = 4000;
+                _numMaxSummaryChars.Enabled = false;
+            }
+            else
+            {
+                _chkUnlimitedEmailChars.Checked = false;
+                _numMaxSummaryChars.Value = Math.Max(_numMaxSummaryChars.Minimum, Math.Min(_numMaxSummaryChars.Maximum, s.MaxSummaryEmailChars));
+                _numMaxSummaryChars.Enabled = true;
+            }
 
             // Email settings
             _numMaxEmails.Value = Math.Max(_numMaxEmails.Minimum, Math.Min(_numMaxEmails.Maximum, s.MaxEmailsPerAccount));
@@ -1006,6 +1123,35 @@ namespace EmailSummarizer.UI.Tabs
             _chkStartWithWindows.Checked = s.StartWithWindows || IsStartupWithWindowsEnabled();
 
             _txtPrompt.Text = s.SystemPrompt;
+        }
+
+        private Button CreateCharLimitPresetChip(string text, int charLimit)
+        {
+            var btn = new Button
+            {
+                Text = text,
+                UseMnemonic = false,
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                Padding = new Padding(6, 2, 6, 2),
+                Margin = new Padding(0, 0, 6, 0),
+                FlatStyle = FlatStyle.System,
+                Cursor = Cursors.Hand,
+                Font = new Font("Segoe UI", 8.25F)
+            };
+            btn.Click += (s, e) =>
+            {
+                if (charLimit <= 0)
+                {
+                    _chkUnlimitedEmailChars.Checked = true;
+                }
+                else
+                {
+                    _chkUnlimitedEmailChars.Checked = false;
+                    _numMaxSummaryChars.Value = Math.Max(_numMaxSummaryChars.Minimum, Math.Min(_numMaxSummaryChars.Maximum, charLimit));
+                }
+            };
+            return btn;
         }
 
         private Button CreatePresetChip(string text, decimal widthVal, decimal heightVal)
@@ -1312,6 +1458,7 @@ namespace EmailSummarizer.UI.Tabs
             // Global LLM settings
             s.Temperature = (double)_numTemperature.Value;
             s.MaxTokens = (int)_numMaxTokens.Value;
+            s.MaxSummaryEmailChars = _chkUnlimitedEmailChars.Checked ? 0 : (int)_numMaxSummaryChars.Value;
 
             // Email settings
             s.MaxEmailsPerAccount = (int)_numMaxEmails.Value;

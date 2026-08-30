@@ -49,6 +49,13 @@ namespace EmailSummarizer.Models
         public double Temperature { get; set; } = 0.2;
         public int MaxTokens { get; set; } = 350;
 
+        /// <summary>
+        /// Maximum character length of the email body sent to the AI model for summarization.
+        /// 0 or negative = Unlimited (send entire email body).
+        /// Default is 4000 characters (~1000 tokens). Minimum configurable is 500 characters.
+        /// </summary>
+        public int MaxSummaryEmailChars { get; set; } = 4000;
+
         // Email Fetching Options
         public int MaxEmailsPerAccount { get; set; } = 15;
         public bool OnlyUnread { get; set; } = false; // Fetch all inbox emails by default

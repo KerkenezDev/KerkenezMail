@@ -376,12 +376,6 @@ namespace EmailSummarizer.Services
             raw = Regex.Replace(raw, @"\r\n|\r|\n", "\r\n");
             raw = Regex.Replace(raw, @"(\r\n){3,}", "\r\n\r\n");
 
-            // Cap at 4,000 chars for efficient model context ingestion
-            if (raw.Length > 4000)
-            {
-                raw = raw.Substring(0, 4000) + "\r\n... [email truncated for length]";
-            }
-
             return raw.Trim();
         }
 

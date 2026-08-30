@@ -14,15 +14,29 @@ namespace EmailSummarizer.Services
     {
         private static readonly HttpClient HttpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(120) };
 
+        public static string PrepareEmailBodyForSummary(string fullBody, int maxChars)
+        {
+            if (string.IsNullOrWhiteSpace(fullBody))
+                return "(No text content in this email)";
+
+            // 0 or negative indicates Unlimited (send entire email body)
+            if (maxChars <= 0 || fullBody.Length <= maxChars)
+                return fullBody;
+
+            return fullBody.Substring(0, maxChars) + "\r\n\r\n... [Remaining email content truncated for AI context length limit]";
+        }
+
         public async Task<string> SummarizeEmailAsync(
             EmailItem email,
             AppSettings settings,
             CancellationToken ct = default)
         {
+            string emailContentForLlm = PrepareEmailBodyForSummary(email.CleanBody, settings.MaxSummaryEmailChars);
+
             var userContent = $"Analyze the following email, assign a Priority rank (1 = High/Urgent, 2 = Normal/Medium, 3 = Low/Newsletter), and provide a concise 1-3 sentence executive summary.\r\n\r\n" +
                               $"Subject: {email.Subject}\r\n" +
                               $"From: {email.Sender}\r\n" +
-                              $"Email Content:\r\n{email.CleanBody}\r\n\r\n" +
+                              $"Email Content:\r\n{emailContentForLlm}\r\n\r\n" +
                               $"Output strictly in this format:\r\n" +
                               $"Priority: [1/2/3]\r\n" +
                               $"Summary: [summary text]";
