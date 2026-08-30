@@ -1,0 +1,888 @@
+========================================================================================================================
+KERKENEZ MAIL REBRANDING & TRANSITION MASTER PLAN
+Comprehensive Architectural Audit, Legacy Migration Engine, v0.5.0-Bridge Release, and v1.0.0 Brand Launch
+Target Project: Email Summarizer (Win32) -> Kerkenez Mail
+Author: DeepMind / Antigravity Engineering
+Target Date: 2026
+========================================================================================================================
+
+TABLE OF CONTENTS
+------------------------------------------------------------------------------------------------------------------------
+1. EXECUTIVE SUMMARY & REBRANDING STRATEGY
+2. COMPLETE CODEBASE FEATURE & ARCHITECTURAL INVENTORY
+   2.1. Core Application & Lifecycle Architecture
+   2.2. Data Persistence & DPAPI Cryptography Layer
+   2.3. Multi-Account IMAP Engine & MailKit Integration
+   2.4. Local & Cloud AI Inference Pipeline
+   2.5. Low-Footprint Win32 System Tray Daemon
+   2.6. Native Win32 Forms UI & Responsive Design System
+   2.7. Windows OS Shell Integrations (Registry, Startup, Shortcuts, Uninstaller)
+   2.8. CI/CD Pipeline & Windows Package Manager (WinGet) Distribution
+3. EXHAUSTIVE INVENTORY OF ALL LEGACY NAMES, IDENTIFIERS & PATHS
+   3.1. Filesystem Paths & Roaming User Data Directories
+   3.2. Windows Registry Keys & Value Names
+   3.3. Windows Kernel Objects (Mutexes, Events, Job Objects, Window Classes)
+   3.4. Cryptographic DPAPI Entropy Salts
+   3.5. Project Files, Namespaces & Assembly Metadata
+   3.6. Windows Shell Shortcuts & Link Targets
+   3.7. WinGet Manifests, Monikers & Package Identifiers
+   3.8. GitHub Workflows, Releases, Script Parameters & URLs
+   3.9. User Interface Labels, Titles, Status Strips, Dialogs & Tooltips
+   3.10. Documentation, Notices & License Headers
+4. STAGE 1: THE v0.5.0-BRIDGE TRANSITION VEHICLE
+   4.1. Bridge Objectives & Distribution Identity
+   4.2. Universal Migration Engine (MigrationService.cs)
+   4.3. DPAPI Credential & Secret Re-encryption Architecture
+   4.4. Roaming AppData Atomic Cutover & Verification Protocol
+   4.5. Windows Registry & Run Startup Key Seamless Migration
+   4.6. Windows Shortcut Relocation & Cleanup Logic
+   4.7. Persistent Rebranding Startup Notice & User Migration Modal
+   4.8. Bridge Clean Uninstaller Support
+   4.9. Bridge WinGet Manifests for ismlEraslan.EmailSummarizer (v0.5.0)
+5. STAGE 2: THE KERKENEZ MAIL v1.0.0 OFFICIAL RELEASE
+   5.1. Clean Codebase & Project Renaming Map
+   5.2. C# Namespace & Assembly Attribute Modernization
+   5.3. Embedded Icon & Resource Stream Synchronization
+   5.4. Permanent Legacy Auto-Import Safeguard in v1.0.0
+   5.5. New WinGet Package Manifest: ismlEraslan.KerkenezMail (v1.0.0)
+   5.6. GitHub Actions Workflows & Automated Multi-Asset Release Scripts
+   5.7. Full Documentation & Readme Overhaul
+6. STEP-BY-STEP IMPLEMENTATION ROADMAP (1-BY-1 ACTION PLAN)
+   6.1. Phase 1: Migration Engine & Cryptographic Bridge Development
+   6.2. Phase 2: Rebranding Warning UI & Startup Interceptor
+   6.3. Phase 3: Core Service & OS Integration Modernization
+   6.4. Phase 4: Bridge Build, Validation & WinGet Submission (v0.5.0)
+   6.5. Phase 5: Full Codebase Cutover to Kerkenez Mail v1.0.0
+   6.6. Phase 6: New WinGet Submission & Ecosystem Retirement
+7. EDGE CASES, SAFETY GUARDS & RECOVERY PROTOCOLS
+   7.1. Partial Migration Failure & Rollback Safeguards
+   7.2. Multi-Instance & Daemon Concurrency Collision Handling
+   7.3. Permission Elevation & Access Denied Mitigation
+   7.4. Corrupt Legacy Config Auto-Healing
+8. VERIFICATION, QUALITY ASSURANCE & TESTING MATRIX
+   8.1. Automated Unit & Integration Tests
+   8.2. Clean Install vs. In-Place Upgrade Matrix
+   8.3. WinGet CLI Upgrade Verification
+   8.4. Manual QA Checklist
+
+========================================================================================================================
+1. EXECUTIVE SUMMARY & REBRANDING STRATEGY
+========================================================================================================================
+
+The project "Email Summarizer (Win32)" (repository: `ismlEraslan/email-summarizer-win32`, WinGet package:
+`ismlEraslan.EmailSummarizer`) is undergoing a complete, permanent rebranding to:
+
+                       =============================================
+                                     KERKENEZ MAIL
+                       =============================================
+
+This rebranding encompasses:
+- Application Binary & Executable Name: `KerkenezMail.exe`
+- Application Title & Branding: `Kerkenez Mail (Win32)` / `Kerkenez Mail`
+- Roaming AppData Directory: `%APPDATA%\KerkenezMail`
+- DPAPI Cryptographic Entropies: `KerkenezMail.SecureAccounts.v1` & `KerkenezMail.SecureSecrets.v1`
+- Windows Registry Uninstall Key: `HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\KerkenezMail`
+- Windows Logon Startup Run Key: `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\KerkenezMailTray`
+- Windows Kernel Mutexes & Events: `Global\KerkenezMail_MainUI_Mutex`, `Global\KerkenezMail_TrayDaemon_Mutex`,
+  `Global\KerkenezMail_TrayDaemon_ExitEvent`
+- Windows Shell Shortcuts: `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Kerkenez Mail.lnk`,
+  `%USERPROFILE%\Desktop\Kerkenez Mail.lnk`
+- Windows Package Manager (WinGet): New package identifier `ismlEraslan.KerkenezMail`
+
+THE TWO-STAGE TRANSITION STRATEGY:
+Because existing users have installed the app via `winget install ismlEraslan.EmailSummarizer` or standalone zip downloads,
+a direct abrupt change of package name would strand all existing users on the old version without update notifications.
+Therefore, a strategic two-stage bridge transition is deployed:
+
+STAGE 1: Release `v0.5.0-bridge` under the OLD WinGet Identifier (`ismlEraslan.EmailSummarizer`)
+  - Target Version: `v0.5.0`
+  - WinGet Package ID: `ismlEraslan.EmailSummarizer`
+  - Role: The Heavy Transition Bridge. It embeds the comprehensive, fault-tolerant `MigrationService` that carries out
+    the entire migration on the user's machine automatically upon first boot.
+  - Core Operations in v0.5.0:
+    1. Detects existing `%APPDATA%\EmailSummarizer` configuration and encrypted accounts.
+    2. Initializes `%APPDATA%\KerkenezMail`.
+    3. Decrypts all accounts from old `accounts.dat` using legacy DPAPI entropy and re-encrypts them into the new
+       `%APPDATA%\KerkenezMail\accounts.dat` using new `KerkenezMail` DPAPI entropy.
+    4. Decrypts and re-encrypts Cloud API Keys in `config.json`, migrates general preferences, and writes to
+       `%APPDATA%\KerkenezMail\config.json`.
+    5. Validates file integrity and test-decrypts the new files.
+    6. Upon 100% verified success, completely cleans up and deletes `%APPDATA%\EmailSummarizer`.
+    7. Updates Windows Registry Uninstall key to `KerkenezMail` and deletes old `EmailSummarizer` uninstall key.
+    8. Updates Windows Startup Run key to `KerkenezMailTray` and removes old `EmailSummarizerTray` key.
+    9. Creates `Kerkenez Mail.lnk` shortcuts on Desktop/Start Menu and deletes old `Email Summarizer.lnk` shortcuts.
+    10. Displays a persistent, informative Rebranding Modal & Banner at startup informing users of the rebranding and
+        providing one-click instructions to switch their WinGet package to `ismlEraslan.KerkenezMail`.
+
+STAGE 2: Official Launch of `Kerkenez Mail v1.0.0`
+  - Target Version: `v1.0.0`
+  - WinGet Package ID: `ismlEraslan.KerkenezMail`
+  - Repository / Project: `KerkenezMail.csproj` -> `KerkenezMail.exe`
+  - Role: The clean, permanent product release.
+  - Safeguard: Contains an autonomous background migration check that runs silently on startup so that if any user
+    jumps directly from an old version (v0.1 - v0.4.1) directly to v1.0.0 without going through v0.5.0-bridge, their
+    data and registry entries are still 100% safely migrated to `KerkenezMail`.
+
+========================================================================================================================
+2. COMPLETE CODEBASE FEATURE & ARCHITECTURAL INVENTORY
+========================================================================================================================
+
+The current application is a high-performance, native Win32/Windows Forms desktop application built on .NET 8.0-windows,
+engineered for multi-account email retrieval, executive summary generation, and priority triage via local/cloud AI.
+
+2.1. Core Application & Lifecycle Architecture
+----------------------------------------------
+- `Program.cs`: Entry point containing CLI argument parsing and mode switching:
+  * `--uninstall` / `-uninstall` / `/uninstall` (with `--quiet` / `--silent` / `-s` / `-q`): Executes `HandleUninstall`,
+    calling `ConfigService.Uninstall()` to remove shortcuts, startup keys, uninstall registry entries, and `%APPDATA%`.
+  * `UninstallRegistrationService.RegisterOrUpdate()`: Self-registers application in `HKCU\...\Uninstall` and synchronizes
+    startup path if binary was relocated.
+  * `--daemon` / `--tray`: Enters headless Win32 system tray background daemon mode (`NativeTrayDaemon.Run()`), protected
+    by single-instance mutex `Global\EmailSummarizer_TrayDaemon_Mutex`.
+  * Normal GUI Mode: Acquires `Global\EmailSummarizer_MainUI_Mutex`. If another GUI instance is active, invokes
+    `NativeMethods.FocusMainWindow()` and exits. Launches `MainForm` with auto-start of daemon if `AlwaysKeepOn` is true.
+
+2.2. Data Persistence & DPAPI Cryptography Layer
+------------------------------------------------
+- `ConfigService.cs`:
+  * `AppDataFolder`: Points to `%APPDATA%\EmailSummarizer`.
+  * `ConfigFilePath`: `%APPDATA%\EmailSummarizer\config.json`.
+  * `AccountsFilePath`: `%APPDATA%\EmailSummarizer\accounts.dat`.
+  * `LoadConfig()` / `SaveConfig()`: JSON serializer for `AppSettings`. Includes backward-compatibility migration for
+    legacy plain-text accounts and plain-text API keys.
+  * `GetAccounts()` / `SaveAccounts()`: Interacts with `AccountCryptoService`.
+  * `Uninstall()`: Removes Windows Run key `EmailSummarizerTray`, unregisters from Uninstall registry, deletes shortcuts,
+    and wipes `%APPDATA%\EmailSummarizer`.
+- `AccountCryptoService.cs`:
+  * Windows DPAPI encryption (`ProtectedData.Protect` / `ProtectedData.Unprotect`) with `DataProtectionScope.CurrentUser`.
+  * `Entropy`: `Encoding.UTF8.GetBytes("EmailSummarizer.SecureAccounts.v1")` for binary account payload.
+  * `StringEntropy`: `Encoding.UTF8.GetBytes("EmailSummarizer.SecureSecrets.v1")` for Base64-encrypted Cloud API keys.
+  * Atomic file writes using temporary file swap (`.tmp` -> rename).
+- `AppSettings.cs`:
+  * Strongly typed configuration model containing AI backend selection (`LlamaCpp`, `Ollama`, `Cloud`), llama.cpp server
+    settings, Ollama parameters, encrypted `CloudApiKeyEncrypted` with in-memory `CloudApiKey`, global temperature,
+    token limits, context limits (`MaxSummaryEmailChars`), window scaling factors, and system prompts.
+
+2.3. Multi-Account IMAP Engine & MailKit Integration
+----------------------------------------------------
+- `ImapService.cs`:
+  * MailKit-powered asynchronous IMAP client (`ImapClient`).
+  * Supports SSL/TLS (`SecureSocketOptions.SslOnConnect` and `SecureSocketOptions.Auto`).
+  * `TestConnectionAsync()`: Validates credentials and counts unread messages without altering inbox state.
+  * `FetchEmailsFromAccountAsync()` & `FetchAllAccountsParallelAsync()`: Concurrently retrieves unread or all messages
+    across accounts, downloads MIME structures, extracts clean plaintext from HTML (`ConvertHtmlToPlainText`), strips
+    tracking URLs, detects mailing list headers (`List-Unsubscribe`, `List-ID`, `X-Campaign`, etc.), and detects newsletter
+    footers (`DetectNewsletterFooter`).
+  * Real-time streaming callback (`onEmailFetched`) pushes items into UI progressively during download.
+  * Batch triage operations (`DeleteEmailsBatchAsync`, `ArchiveEmailsBatchAsync`) with folder discovery (`Trash`,
+    `Archive`, `All Mail`).
+
+2.4. Local & Cloud AI Inference Pipeline
+----------------------------------------
+- `LlamaServerManager.cs`:
+  * Manages embedded local `llama-server.exe` child process for GGUF models.
+  * Windows Job Object Integration: Initializes `CreateJobObject` with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` (0x2000) and
+    assigns the process handle. Guarantees that `llama-server.exe` is instantly killed by the Windows kernel if the parent
+    crashes or closes.
+  * Server executable resolver: Locates `llama-server.exe` in local directory, WinGet packages directory, or system PATH.
+  * Health check probe (`/health`) with polling loop to wait until model is loaded into VRAM.
+  * On-demand GPU VRAM freeing (`Stop()`) for instant VRAM unloading.
+- `LlmSummarizerService.cs`:
+  * Multi-backend OpenAI-compatible REST client for local `llama-server.exe`, local Ollama (`localhost:11434`), and Cloud
+    providers (OpenAI, OpenRouter, Groq, DeepSeek).
+  * Context Length Management (`PrepareEmailBodyForSummary`): Configurable character limit with clean truncation notes.
+  * Newsletter & Marketing Heuristics: Automatic Priority 3 pre-classification notice injection into LLM prompt.
+  * Advanced CoT / Reasoning Model Support (`ParseLlmSummaryAndPriority`): Strips `<think>...</think>`, `[THINK]...[/THINK]`,
+    and orphaned tags from reasoning models (`DeepSeek-R1`, `QwQ`).
+  * Priority parsing (`Priority: 1|2|3`) and clean summary extraction.
+
+2.5. Low-Footprint Win32 System Tray Daemon
+-------------------------------------------
+- `NativeTrayDaemon.cs`:
+  * Headless, pure Win32 message loop utilizing `CreateWindowEx`, `RegisterClassEx`, and `Shell_NotifyIcon`.
+  * Zero Windows Forms control overhead; maintains working set memory `< 5 MB RAM`.
+  * Mutex: `Global\EmailSummarizer_TrayDaemon_Mutex`.
+  * Exit Event: `Global\EmailSummarizer_TrayDaemon_ExitEvent` registered with `ThreadPool.RegisterWaitForSingleObject`.
+  * Window Class: `EmailSummarizer_TrayMsgHost_` + GUID.
+  * Window Title: `EmailSummarizerTrayHost`.
+  * Tray Menu: "📬 Open Email Summarizer", "🔄 Check Emails Now", "🔔 Notifications: Enabled/Disabled", "❌ Exit Tray Daemon".
+  * Balloon notifications for newly discovered unread emails.
+- `TrayDaemonService.cs`:
+  * Background polling service with dynamic refresh timer (1–120 min).
+  * Concurrent lightweight envelope checks across enabled accounts.
+  * Memory trimming: Periodic `NativeMethods.TrimWorkingSet()` flushes GC generations and process working set.
+- `TrayIconHelper.cs`:
+  * Extracts embedded resource icon `EmailSummarizer.app.ico`.
+  * Dynamically creates 32x32 unread badge icons with high-DPI anti-aliased red indicator.
+
+2.6. Native Win32 Forms UI & Responsive Design System
+-----------------------------------------------------
+- `MainForm.cs`:
+  * Dynamic display scaling relative to active monitor's working area (default: 60% width × 56% height).
+  * Embedded icon loading from `EmailSummarizer.app.ico`.
+  * First-run shortcut prompt dialog ("Welcome to Email Summarizer!").
+  * Status strip with active LLM backend, account counts, and VRAM status.
+  * Asynchronous close flush: If emails are pending triage during window close, hides form instantly and completes
+    IMAP sync in background before exiting.
+- `SidebarNav.cs`:
+  * Custom rendered navigation panel supporting collapsed mode (60px) and expanded mode (195px).
+  * Micro-animated width transitions (~90ms cubic ease-out).
+  * Brand Header: "Email Summarizer" / "Win32 AI Assistant".
+  * Keyboard shortcut: `Ctrl + B`.
+- `SummariesView.cs`:
+  * SplitContainer with dual-pane layout: Left = Inbox ListView (Status, Priority, Subject, Sender, Account, Date);
+    Right = Top Summary card + Bottom Full Email plaintext viewer.
+  * Color-coded priority badges: Priority 1 = High/Urgent (Red), Priority 2 = Normal (Blue), Priority 3 = Low (Slate).
+  * Toolbar: Refresh (`Ctrl+R`), Copy Summary (`Ctrl+C`), Export (`Ctrl+S`), Archive (`Del` / button), Delete.
+  * Smooth, unclipped hover tooltips for inbox columns.
+- `AccountsView.cs`:
+  * Card-based account manager with provider presets (Gmail, Yahoo, iCloud, Custom IMAP).
+  * Live connection test and status indicators.
+- `SettingsView.cs`:
+  * Configuration cards for AI Engine, llama.cpp, Ollama, Cloud, Global Inference, Email fetching, Layout scaling,
+    and Windows Startup.
+  * Shortcut creation button: "📌 Add Desktop & Start Menu Shortcuts".
+- `LogsView.cs`:
+  * Live color-coded diagnostic console.
+- `AddAccountDialog.cs`:
+  * Dialog for creating and editing accounts with password masking and live IMAP test.
+
+2.7. Windows OS Shell Integrations
+----------------------------------
+- `UninstallRegistrationService.cs`:
+  * Registry key: `HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\EmailSummarizer`
+  * Values: `DisplayName` ("Email Summarizer"), `DisplayVersion`, `Publisher` ("ismlEraslan"), `UninstallString`
+    (`"exePath" --uninstall`), `QuietUninstallString` (`"exePath" --uninstall --quiet`), `InstallLocation`, `DisplayIcon`.
+  * Startup Run Key: `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` -> Value `EmailSummarizerTray` (and legacy
+    `EmailSummarizer`).
+- `ShortcutService.cs`:
+  * Start Menu: `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Email Summarizer.lnk`
+  * Desktop: `%USERPROFILE%\Desktop\Email Summarizer.lnk`
+  * COM WScript.Shell shortcut generator with description "Email Summarizer - AI Email Assistant".
+
+2.8. CI/CD Pipeline & Windows Package Manager (WinGet) Distribution
+-------------------------------------------------------------------
+- `.github/workflows/release.yml`:
+  * Triggers on tags `v*`.
+  * Publishes single-file executable `EmailSummarizer.exe` and archives to `EmailSummarizer.zip`.
+- `.github/workflows/winget.yml`:
+  * Submits release to `microsoft/winget-pkgs` via `wingetcreate`.
+- `.github/scripts/publish-winget.ps1`:
+  * Generates WinGet manifests for package `ismlEraslan.EmailSummarizer`.
+  * Manifest schema v1.6.0 with `NestedInstallerFiles` alias `EmailSummarizer`.
+
+========================================================================================================================
+3. EXHAUSTIVE INVENTORY OF ALL LEGACY NAMES, IDENTIFIERS & PATHS
+========================================================================================================================
+
+The following catalog identifies every exact occurrence in the codebase where names, paths, identifiers, or branding
+pass, categorized by subsystem:
+
+3.1. Filesystem Paths & Roaming User Data Directories
+-----------------------------------------------------
+1. `Services\ConfigService.cs` (Line 14):
+   - Legacy: `Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "EmailSummarizer")`
+   - Target: `Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "KerkenezMail")`
+2. `Program.cs` (Line 177):
+   - Legacy text: `%APPDATA%\EmailSummarizer`
+   - Target text: `%APPDATA%\KerkenezMail`
+3. `README.md` (Lines 69, 106, 149, 150):
+   - Legacy paths: `%APPDATA%\EmailSummarizer\config.json`, `%APPDATA%\EmailSummarizer\accounts.dat`
+   - Target paths: `%APPDATA%\KerkenezMail\config.json`, `%APPDATA%\KerkenezMail\accounts.dat`
+
+3.2. Windows Registry Keys & Value Names
+----------------------------------------
+1. `Services\UninstallRegistrationService.cs` (Line 10):
+   - Legacy Uninstall Key: `Software\Microsoft\Windows\CurrentVersion\Uninstall\EmailSummarizer`
+   - Target Uninstall Key: `Software\Microsoft\Windows\CurrentVersion\Uninstall\KerkenezMail`
+2. `Services\UninstallRegistrationService.cs` (Line 12, 13):
+   - Legacy Run Value: `EmailSummarizerTray`
+   - Legacy Fallback Value: `EmailSummarizer`
+   - Target Run Value: `KerkenezMailTray`
+3. `Services\ConfigService.cs` (Line 328):
+   - Legacy Delete Value: `key?.DeleteValue("EmailSummarizerTray", false);`
+   - Target Delete Value: `key?.DeleteValue("KerkenezMailTray", false);`
+4. `UI\Tabs\SettingsView.cs` (Lines 1400, 1420, 1423):
+   - Legacy Run Value: `"EmailSummarizerTray"`
+   - Target Run Value: `"KerkenezMailTray"`
+
+3.3. Windows Kernel Objects (Mutexes, Events, Job Objects, Window Classes)
+-------------------------------------------------------------------------
+1. `Program.cs` (Line 14):
+   - Legacy Mutex: `private const string TrayDaemonMutexName = @"Global\EmailSummarizer_TrayDaemon_Mutex";`
+   - Target Mutex: `private const string TrayDaemonMutexName = @"Global\KerkenezMail_TrayDaemon_Mutex";`
+2. `Program.cs` (Line 15):
+   - Legacy Mutex: `private const string MainUiMutexName = @"Global\EmailSummarizer_MainUI_Mutex";`
+   - Target Mutex: `private const string MainUiMutexName = @"Global\KerkenezMail_MainUI_Mutex";`
+3. `Services\NativeTrayDaemon.cs` (Line 15):
+   - Legacy Event: `public const string ExitEventName = @"Global\EmailSummarizer_TrayDaemon_ExitEvent";`
+   - Target Event: `public const string ExitEventName = @"Global\KerkenezMail_TrayDaemon_ExitEvent";`
+4. `Services\NativeTrayDaemon.cs` (Line 93):
+   - Legacy Window Class: `"EmailSummarizer_TrayMsgHost_" + Guid.NewGuid().ToString("N")`
+   - Target Window Class: `"KerkenezMail_TrayMsgHost_" + Guid.NewGuid().ToString("N")`
+5. `Services\NativeTrayDaemon.cs` (Line 109):
+   - Legacy Window Name: `"EmailSummarizerTrayHost"`
+   - Target Window Name: `"KerkenezMailTrayHost"`
+6. `UI\Tabs\SettingsView.cs` (Line 1370):
+   - Legacy Mutex Check: `Mutex.TryOpenExisting(@"Global\EmailSummarizer_TrayDaemon_Mutex", ...)`
+   - Target Mutex Check: `Mutex.TryOpenExisting(@"Global\KerkenezMail_TrayDaemon_Mutex", ...)`
+
+3.4. Cryptographic DPAPI Entropy Salts
+--------------------------------------
+1. `Services\AccountCryptoService.cs` (Line 14):
+   - Legacy Accounts Entropy: `Encoding.UTF8.GetBytes("EmailSummarizer.SecureAccounts.v1")`
+   - Target Accounts Entropy: `Encoding.UTF8.GetBytes("KerkenezMail.SecureAccounts.v1")`
+2. `Services\AccountCryptoService.cs` (Line 15):
+   - Legacy Secrets Entropy: `Encoding.UTF8.GetBytes("EmailSummarizer.SecureSecrets.v1")`
+   - Target Secrets Entropy: `Encoding.UTF8.GetBytes("KerkenezMail.SecureSecrets.v1")`
+
+3.5. Project Files, Namespaces & Assembly Metadata
+--------------------------------------------------
+1. `EmailSummarizer.csproj`:
+   - Target Project Name: `KerkenezMail.csproj`
+   - Line 12: `<Title>Email Summarizer (Win32)</Title>` -> `<Title>Kerkenez Mail (Win32)</Title>`
+   - Line 13: `<Product>Email Summarizer</Product>` -> `<Product>Kerkenez Mail</Product>`
+   - Line 14: `<Description>Local AI-Powered IMAP Email Summarizer with llama.cpp</Description>` ->
+     `<Description>Local AI-Powered IMAP Email Assistant with llama.cpp & Ollama</Description>`
+   - Line 32-34: `<Compile Remove="source\**;EmailSummarizer_terminal\**" />` -> `<Compile Remove="source\**" />`
+2. C# Namespaces across all 15 source files:
+   - `namespace EmailSummarizer` -> `namespace KerkenezMail`
+   - `namespace EmailSummarizer.Models` -> `namespace KerkenezMail.Models`
+   - `namespace EmailSummarizer.Services` -> `namespace KerkenezMail.Services`
+   - `namespace EmailSummarizer.UI` -> `namespace KerkenezMail.UI`
+   - `namespace EmailSummarizer.UI.Controls` -> `namespace KerkenezMail.UI.Controls`
+   - `namespace EmailSummarizer.UI.Tabs` -> `namespace KerkenezMail.UI.Tabs`
+3. Embedded Resource Name:
+   - `MainForm.cs` (Line 84): `"EmailSummarizer.app.ico"` -> `"KerkenezMail.app.ico"`
+   - `AddAccountDialog.cs` (Line 57): `"EmailSummarizer.app.ico"` -> `"KerkenezMail.app.ico"`
+   - `TrayIconHelper.cs` (Line 47): `"EmailSummarizer.app.ico"` -> `"KerkenezMail.app.ico"`
+
+3.6. Windows Shell Shortcuts & Link Targets
+-------------------------------------------
+1. `Services\ShortcutService.cs` (Lines 11, 15, 87, 88, 89):
+   - Legacy Link Filename: `"Email Summarizer.lnk"`
+   - Target Link Filename: `"Kerkenez Mail.lnk"`
+2. `Services\ShortcutService.cs` (Lines 39, 52):
+   - Legacy Description: `"Email Summarizer - AI Email Assistant"`
+   - Target Description: `"Kerkenez Mail - AI Email Assistant"`
+
+3.7. WinGet Manifests, Monikers & Package Identifiers
+-----------------------------------------------------
+1. `.github\scripts\publish-winget.ps1`:
+   - PackageIdentifier: `ismlEraslan.EmailSummarizer` -> `ismlEraslan.KerkenezMail`
+   - PackageName: `Email Summarizer` -> `Kerkenez Mail`
+   - Moniker: `emailsummarizer` -> `kerkenezmail`
+   - Commands / Aliases: `EmailSummarizer` -> `KerkenezMail`
+   - RelativeFilePath: `EmailSummarizer.exe` -> `KerkenezMail.exe`
+
+3.8. GitHub Workflows, Releases & URLs
+--------------------------------------
+1. `.github\workflows\release.yml` (Lines 32, 37):
+   - Legacy Archive: `./publish/EmailSummarizer.exe` -> `./publish/EmailSummarizer.zip`
+   - Target Archive (v1.0.0): `./publish/KerkenezMail.exe` -> `./publish/KerkenezMail.zip`
+   - Note: For v0.5.0-bridge, the release artifact remains `EmailSummarizer.zip` so the existing WinGet installer URL
+     resolves properly.
+2. `Services\UninstallRegistrationService.cs` (Lines 17, 18):
+   - Legacy URLs: `https://github.com/ismlEraslan/EmailSummarizer`
+   - Target URLs: `https://github.com/ismlEraslan/email-summarizer-win32` (or updated repo URL)
+
+3.9. User Interface Labels, Titles & Messages
+---------------------------------------------
+1. `UI\MainForm.cs`:
+   - Window Title (Line 79): `"Email Summarizer (Win32)"` -> `"Kerkenez Mail (Win32)"`
+   - Welcome Dialog (Lines 60, 61): `"Welcome to Email Summarizer!"`, `"Email Summarizer Shortcuts"` ->
+     `"Welcome to Kerkenez Mail!"`, `"Kerkenez Mail Shortcuts"`
+2. `UI\Controls\SidebarNav.cs` (Line 313):
+   - Title Brand: `"Email Summarizer"` -> `"Kerkenez Mail"`
+   - Subtitle: `"Win32 AI Assistant"`
+3. `UI\TrayDaemonContext.cs`:
+   - Tray Tooltip (Line 32): `"Email Summarizer"` -> `"Kerkenez Mail"`
+   - Context Menu Item (Line 65): `"📬  Open Email Summarizer"` -> `"📬  Open Kerkenez Mail"`
+   - Status Tooltips (Lines 74, 115, 120): `"Email Summarizer: X unread"` -> `"Kerkenez Mail: X unread"`
+4. `Services\NativeTrayDaemon.cs`:
+   - Tray Tooltip (Line 128): `"Email Summarizer"` -> `"Kerkenez Mail"`
+   - Context Menu Item (Line 173): `"📬  Open Email Summarizer"` -> `"📬  Open Kerkenez Mail"`
+   - Status Tooltips (Lines 210, 238, 239): `"Email Summarizer: X unread"` -> `"Kerkenez Mail: X unread"`
+5. `UI\Tabs\SettingsView.cs`:
+   - Shortcut Created Message (Line 825): `"Shortcuts for Email Summarizer were successfully added..."` ->
+     `"Shortcuts for Kerkenez Mail were successfully added..."`
+6. `Program.cs`:
+   - Uninstall Dialog (Lines 177, 178, 188): `"Uninstall Email Summarizer"` -> `"Uninstall Kerkenez Mail"`
+
+3.10. Documentation, Notices & License Headers
+----------------------------------------------
+1. `README.md`: Title, Badges, WinGet commands, Quick Start, command line switches, storage paths.
+2. `NOTICES`: Header text "used by Email Summarizer" -> "used by Kerkenez Mail".
+3. `LICENSE`: Copyright holder.
+
+========================================================================================================================
+4. STAGE 1: THE v0.5.0-BRIDGE TRANSITION VEHICLE
+========================================================================================================================
+
+4.1. Bridge Objectives & Distribution Identity
+----------------------------------------------
+The `v0.5.0-bridge` release serves as the automated transition conduit for existing users.
+- Compiled Binary: `EmailSummarizer.exe` (packaged in `EmailSummarizer.zip`)
+- Target WinGet Package: `ismlEraslan.EmailSummarizer` (Version `0.5.0`)
+- Release Tag: `v0.5.0`
+- Role: It is deliberately "heavier" because it bundles the complete `MigrationService` containing legacy DPAPI
+  decryption, legacy directory scanners, registry patchers, shortcut converters, and the interactive rebranding UI.
+
+4.2. Universal Migration Engine (MigrationService.cs)
+-----------------------------------------------------
+A dedicated service `MigrationService` is introduced in `KerkenezMail.Services` (or `EmailSummarizer.Services` for bridge)
+executing on application boot BEFORE normal `ConfigService` initialization:
+
+```csharp
+public static class MigrationService
+{
+    private static readonly string LegacyAppDataFolder = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+        "EmailSummarizer");
+
+    private static readonly string NewAppDataFolder = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+        "KerkenezMail");
+
+    private static readonly byte[] LegacyAccountsEntropy = Encoding.UTF8.GetBytes("EmailSummarizer.SecureAccounts.v1");
+    private static readonly byte[] LegacySecretsEntropy = Encoding.UTF8.GetBytes("EmailSummarizer.SecureSecrets.v1");
+
+    private static readonly byte[] NewAccountsEntropy = Encoding.UTF8.GetBytes("KerkenezMail.SecureAccounts.v1");
+    private static readonly byte[] NewSecretsEntropy = Encoding.UTF8.GetBytes("KerkenezMail.SecureSecrets.v1");
+
+    /// <summary>
+    /// Executes atomic migration from EmailSummarizer to KerkenezMail.
+    /// Returns MigrationResult with status, log messages, and whether migration occurred.
+    /// </summary>
+    public static MigrationResult ExecuteMigrationIfNeeded()
+    {
+        var result = new MigrationResult();
+
+        // 1. Check if legacy AppData exists and new AppData has not been fully established
+        bool hasLegacyAppData = Directory.Exists(LegacyAppDataFolder);
+        bool hasNewAppData = Directory.Exists(NewAppDataFolder);
+
+        if (hasLegacyAppData)
+        {
+            MigrateAppData(result);
+        }
+
+        // 2. Check and migrate Windows Registry keys
+        MigrateRegistryEntries(result);
+
+        // 3. Check and migrate Shortcuts
+        MigrateShortcuts(result);
+
+        return result;
+    }
+}
+```
+
+4.3. DPAPI Credential & Secret Re-encryption Architecture
+---------------------------------------------------------
+The cryptographic migration follows an atomic decrypt-then-re-encrypt flow:
+
+1. Accounts Migration (`accounts.dat`):
+   - Step A: Read raw bytes from `%APPDATA%\EmailSummarizer\accounts.dat`.
+   - Step B: Decrypt using DPAPI `ProtectedData.Unprotect(rawBytes, LegacyAccountsEntropy, DataProtectionScope.CurrentUser)`.
+   - Step C: Deserialize to `List<EmailAccount>` to validate JSON integrity.
+   - Step D: Serialize back to JSON and encrypt using new entropy:
+     `ProtectedData.Protect(newBytes, NewAccountsEntropy, DataProtectionScope.CurrentUser)`.
+   - Step E: Write atomically to `%APPDATA%\KerkenezMail\accounts.dat.tmp` and move to `accounts.dat`.
+
+2. Config & Cloud API Key Migration (`config.json`):
+   - Step A: Read text from `%APPDATA%\EmailSummarizer\config.json`.
+   - Step B: Parse JSON. If `CloudApiKeyEncrypted` is present:
+     * Decrypt Base64 string using `LegacySecretsEntropy`.
+     * If decryption succeeds, store plaintext in memory.
+     * Re-encrypt plaintext using `NewSecretsEntropy`.
+   - Step C: Write updated `AppSettings` JSON to `%APPDATA%\KerkenezMail\config.json`.
+
+4.4. Roaming AppData Atomic Cutover & Verification Protocol
+-----------------------------------------------------------
+Safety Verification Steps before deleting the legacy folder:
+1. Verify `%APPDATA%\KerkenezMail\config.json` exists, is valid JSON, and contains valid settings.
+2. If legacy `accounts.dat` existed, verify `%APPDATA%\KerkenezMail\accounts.dat` exists and can be successfully
+   decrypted with `NewAccountsEntropy`.
+3. If both verifications pass:
+   - Perform a clean recursive delete of `%APPDATA%\EmailSummarizer`.
+   - Record in `%APPDATA%\KerkenezMail\migration.log`: `[SUCCESS] Legacy AppData migrated and removed cleanly.`
+4. If verification fails:
+   - Abort deletion of `%APPDATA%\EmailSummarizer`.
+   - Log diagnostic error to `%APPDATA%\KerkenezMail\migration_error.log`.
+   - Retain legacy data so no user data is ever lost.
+
+4.5. Windows Registry & Run Startup Key Seamless Migration
+-----------------------------------------------------------
+1. Uninstall Registry Migration:
+   - Read existing properties from `HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\EmailSummarizer` (InstallDate,
+     EstimatedSize, InstallLocation).
+   - Create new key `HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\KerkenezMail`.
+   - Set `DisplayName` = `"Kerkenez Mail"`.
+   - Set `UninstallString` = `"\"exePath\" --uninstall"`.
+   - Set `QuietUninstallString` = `"\"exePath\" --uninstall --quiet"`.
+   - Delete old key `HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\EmailSummarizer`.
+
+2. Startup Run Key Migration:
+   - Check `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`.
+   - If value `EmailSummarizerTray` or `EmailSummarizer` exists:
+     * Create value `KerkenezMailTray` = `"\"exePath\" --daemon"`.
+     * Delete values `EmailSummarizerTray` and `EmailSummarizer`.
+
+4.6. Windows Shortcut Relocation & Cleanup Logic
+------------------------------------------------
+1. Scan for existing legacy shortcuts:
+   - `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Email Summarizer.lnk`
+   - `%USERPROFILE%\Desktop\Email Summarizer.lnk`
+   - `%PUBLIC%\Desktop\Email Summarizer.lnk`
+   - `%PROGRAMDATA%\Microsoft\Windows\Start Menu\Programs\Email Summarizer.lnk`
+2. If any legacy shortcut exists:
+   - Create corresponding `"Kerkenez Mail.lnk"` pointing to current `exePath` with Description `"Kerkenez Mail - AI Email Assistant"`.
+   - Delete all legacy `"Email Summarizer.lnk"` files.
+
+4.7. Persistent Rebranding Startup Notice & User Migration Modal
+----------------------------------------------------------------
+In `v0.5.0-bridge`, when running in GUI mode, `MainForm` displays a dedicated, non-blocking but prominent Rebranding Warning
+banner and modal dialog:
+
+1. Startup Banner / Toast:
+   - Position: Top of `MainForm` (or styled dialog on first launch).
+   - Content:
+     -------------------------------------------------------------------------------------------------------
+     ⚠️ REBRANDING NOTICE: Email Summarizer is now Kerkenez Mail!
+     All your accounts, settings, and encryption keys have been safely migrated to Kerkenez Mail.
+     To continue receiving future updates, please install the official Kerkenez Mail package:
+     👉 WinGet: winget install ismlEraslan.KerkenezMail
+     -------------------------------------------------------------------------------------------------------
+   - Action Buttons:
+     * `📋 Copy WinGet Command`: Copies `winget install ismlEraslan.KerkenezMail` to clipboard.
+     * `🌐 Download v1.0.0`: Opens default browser to `https://github.com/ismlEraslan/email-summarizer-win32/releases/latest`.
+     * `Dismiss`: Closes the banner for the current session.
+
+4.8. Bridge Clean Uninstaller Support
+-------------------------------------
+If a user runs `--uninstall` on `v0.5.0-bridge`:
+- Removes both old (`EmailSummarizer`) and new (`KerkenezMail`) Windows Uninstall registry keys.
+- Removes both `EmailSummarizerTray` and `KerkenezMailTray` Run startup registry keys.
+- Deletes both `Email Summarizer.lnk` and `Kerkenez Mail.lnk` shortcuts.
+- Deletes both `%APPDATA%\EmailSummarizer` and `%APPDATA%\KerkenezMail` directories.
+- Displays: "Kerkenez Mail (and legacy Email Summarizer) data and shortcuts have been successfully removed."
+
+4.9. Bridge WinGet Manifests for ismlEraslan.EmailSummarizer (v0.5.0)
+---------------------------------------------------------------------
+The WinGet manifest for `v0.5.0` will be generated using the existing package identifier so all existing users are updated:
+- PackageIdentifier: `ismlEraslan.EmailSummarizer`
+- PackageVersion: `0.5.0`
+- ShortDescription: `[Rebranded to Kerkenez Mail] Local AI-powered IMAP email summarizer with llama.cpp, priority triage, and tray daemon.`
+- Description: `Email Summarizer has rebranded to Kerkenez Mail. Version 0.5.0 is the transition bridge release that automatically migrates your encrypted accounts, settings, and shortcuts to Kerkenez Mail. After this update, please install 'ismlEraslan.KerkenezMail'.`
+
+========================================================================================================================
+5. STAGE 2: THE KERKENEZ MAIL v1.0.0 OFFICIAL RELEASE
+========================================================================================================================
+
+5.1. Clean Codebase & Project Renaming Map
+------------------------------------------
+For `v1.0.0`, all project assets are renamed to the final brand:
+
+| Original File / Directory Path              | New File / Directory Path                    | Purpose                                 |
+| :------------------------------------------ | :------------------------------------------- | :-------------------------------------- |
+| `EmailSummarizer.csproj`                    | `KerkenezMail.csproj`                        | .NET 8 Project Definition               |
+| `EmailSummarizer.csproj.user`               | `KerkenezMail.csproj.user`                   | Visual Studio user options (cleaned)   |
+| `app.ico`                                   | `app.ico` (or `kerkenez.ico`)                | Native multi-resolution application icon|
+| `Program.cs`                                | `Program.cs`                                 | Entry point in `KerkenezMail` namespace |
+| `Models\AppSettings.cs`                    | `Models\AppSettings.cs`                      | Settings model                          |
+| `Models\EmailAccount.cs`                    | `Models\EmailAccount.cs`                     | IMAP account model                      |
+| `Models\EmailItem.cs`                       | `Models\EmailItem.cs`                        | Email item model                        |
+| `Services\ConfigService.cs`                 | `Services\ConfigService.cs`                  | Config persistence (`%APPDATA%\KerkenezMail`) |
+| `Services\AccountCryptoService.cs`          | `Services\AccountCryptoService.cs`           | DPAPI Crypto (`KerkenezMail.Secure*`)   |
+| `Services\MigrationService.cs`              | `Services\MigrationService.cs`               | Background legacy migration safeguard   |
+| `Services\ImapService.cs`                   | `Services\ImapService.cs`                    | MailKit engine                          |
+| `Services\LlamaServerManager.cs`            | `Services\LlamaServerManager.cs`             | llama-server process manager            |
+| `Services\LlmSummarizerService.cs`          | `Services\LlmSummarizerService.cs`           | Multi-backend LLM client                |
+| `Services\NativeMethods.cs`                 | `Services\NativeMethods.cs`                  | Win32 P/Invoke declarations             |
+| `Services\NativeTrayDaemon.cs`              | `Services\NativeTrayDaemon.cs`               | Win32 system tray daemon                |
+| `Services\ShortcutService.cs`               | `Services\ShortcutService.cs`                | Windows shell shortcut manager          |
+| `Services\TrayDaemonService.cs`             | `Services\TrayDaemonService.cs`              | Background unread checker               |
+| `Services\TrayIconHelper.cs`                | `Services\TrayIconHelper.cs`                 | Dynamic icon builder                    |
+| `Services\UninstallRegistrationService.cs`  | `Services\UninstallRegistrationService.cs`   | HKCU Uninstall manager                  |
+| `UI\MainForm.cs`                            | `UI\MainForm.cs`                             | Main GUI Window                         |
+| `UI\AddAccountDialog.cs`                    | `UI\AddAccountDialog.cs`                     | Account configuration dialog            |
+| `UI\TrayDaemonContext.cs`                   | `UI\TrayDaemonContext.cs`                    | Fallback Forms Tray context             |
+| `UI\Controls\SidebarNav.cs`                 | `UI\Controls\SidebarNav.cs`                  | Collapsible side navigation rail        |
+| `UI\Tabs\SummariesView.cs`                  | `UI\Tabs\SummariesView.cs`                   | Dual-pane inbox & AI triage view        |
+| `UI\Tabs\AccountsView.cs`                   | `UI\Tabs\AccountsView.cs`                    | Account management view                 |
+| `UI\Tabs\SettingsView.cs`                   | `UI\Tabs\SettingsView.cs`                    | Settings & options view                 |
+| `UI\Tabs\LogsView.cs`                       | `UI\Tabs\LogsView.cs`                        | Live activity console                   |
+
+5.2. C# Namespace & Assembly Attribute Modernization
+----------------------------------------------------
+`KerkenezMail.csproj` PropertyGroup:
+```xml
+<PropertyGroup>
+  <OutputType>WinExe</OutputType>
+  <TargetFramework>net8.0-windows</TargetFramework>
+  <Nullable>enable</Nullable>
+  <UseWindowsForms>true</UseWindowsForms>
+  <ImplicitUsings>enable</ImplicitUsings>
+  <ApplicationIcon>app.ico</ApplicationIcon>
+  <AssemblyName>KerkenezMail</AssemblyName>
+  <RootNamespace>KerkenezMail</RootNamespace>
+  
+  <!-- Assembly Metadata -->
+  <Title>Kerkenez Mail (Win32)</Title>
+  <Product>Kerkenez Mail</Product>
+  <Description>Local AI-Powered IMAP Email Assistant with llama.cpp, Ollama &amp; Cloud LLMs</Description>
+  <Version>1.0.0</Version>
+  <FileVersion>1.0.0.0</FileVersion>
+  <AssemblyVersion>1.0.0.0</AssemblyVersion>
+
+  <!-- Strip local machine path metadata from published binaries -->
+  <Deterministic>true</Deterministic>
+  <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+  <PathMap>$(MSBuildProjectDirectory)=/_</PathMap>
+
+  <!-- GC & Low-Memory Runtime Optimization -->
+  <ServerGarbageCollection>false</ServerGarbageCollection>
+  <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
+  <RetainVMGarbageCollection>false</RetainVMGarbageCollection>
+  <TieredCompilation>true</TieredCompilation>
+</PropertyGroup>
+```
+
+5.3. Embedded Icon & Resource Stream Synchronization
+----------------------------------------------------
+Update resource manifest streams in all files to `"KerkenezMail.app.ico"`:
+- `typeof(MainForm).Assembly.GetManifestResourceStream("KerkenezMail.app.ico")`
+- `typeof(TrayIconHelper).Assembly.GetManifestResourceStream("KerkenezMail.app.ico")`
+- `typeof(AddAccountDialog).Assembly.GetManifestResourceStream("KerkenezMail.app.ico")`
+
+5.4. Permanent Legacy Auto-Import Safeguard in v1.0.0
+----------------------------------------------------
+In `Kerkenez Mail v1.0.0`, `MigrationService.ExecuteMigrationIfNeeded()` remains active.
+If a user downloads v1.0.0 standalone or via WinGet without ever running v0.5.0-bridge:
+- v1.0.0 detects `%APPDATA%\EmailSummarizer`.
+- Silently performs the complete DPAPI re-encryption and migration into `%APPDATA%\KerkenezMail`.
+- Safely removes `%APPDATA%\EmailSummarizer` and legacy registry keys.
+- Appends to the Live Log console: `[✓] Legacy Email Summarizer data successfully imported into Kerkenez Mail.`
+
+5.5. New WinGet Package Manifest: ismlEraslan.KerkenezMail (v1.0.0)
+-------------------------------------------------------------------
+- Manifest Directory: `manifests/i/ismlEraslan/KerkenezMail/1.0.0`
+- Version YAML:
+  * PackageIdentifier: `ismlEraslan.KerkenezMail`
+  * PackageVersion: `1.0.0`
+- Installer YAML:
+  * NestedInstallerFiles: `RelativeFilePath: KerkenezMail.exe`, `PortableCommandAlias: KerkenezMail`
+  * Commands: `KerkenezMail`
+  * Architecture: `x64`
+  * Dependencies: `Microsoft.DotNet.DesktopRuntime.8`
+- Locale YAML:
+  * PackageName: `Kerkenez Mail`
+  * Publisher: `ismlEraslan`
+  * Moniker: `kerkenezmail`
+  * ShortDescription: `Local AI-powered IMAP email summarizer and assistant with llama.cpp, priority triage, and tray daemon.`
+  * Tags: `email`, `imap`, `ai`, `summarizer`, `llama-cpp`, `ollama`, `kerkenez`, `win32`
+
+5.6. GitHub Actions Workflows & Automated Multi-Asset Release Scripts
+---------------------------------------------------------------------
+1. Update `.github/workflows/release.yml`:
+   ```yaml
+   - name: Compile Single-File Executable
+     run: |
+       dotnet publish -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o ./publish
+
+   - name: Package Release ZIP
+     shell: pwsh
+     run: |
+       Compress-Archive -Path ./publish/KerkenezMail.exe -DestinationPath ./publish/KerkenezMail.zip -Force
+
+   - name: Create GitHub Release & Upload Binaries
+     uses: softprops/action-gh-release@v2
+     with:
+       files: ./publish/KerkenezMail.zip
+       name: Release ${{ github.ref_name }}
+   ```
+
+2. Update `.github/scripts/publish-winget.ps1`:
+   - Configurable package ID parameter (`ismlEraslan.EmailSummarizer` for bridge vs. `ismlEraslan.KerkenezMail` for v1.0.0+).
+
+========================================================================================================================
+6. STEP-BY-STEP IMPLEMENTATION ROADMAP (1-BY-1 ACTION PLAN)
+========================================================================================================================
+
+The following sequential roadmap breaks down every exact code change and execution step:
+
+------------------------------------------------------------------------------------------------------------------------
+PHASE 1: MIGRATION ENGINE & CRYPTOGRAPHIC BRIDGE DEVELOPMENT (v0.5.0-bridge)
+------------------------------------------------------------------------------------------------------------------------
+[Step 1.1] Create `Services\MigrationService.cs`:
+  - Implement `ExecuteMigrationIfNeeded()`.
+  - Implement `MigrateAppData()`, `MigrateRegistryEntries()`, `MigrateShortcuts()`.
+  - Implement DPAPI re-encryption using `LegacyAccountsEntropy` / `NewAccountsEntropy` and `LegacySecretsEntropy` /
+    `NewSecretsEntropy`.
+  - Implement verification routines that test-decrypt newly saved files before removing legacy files.
+  - Implement thorough atomic error handling with fallback logging.
+
+[Step 1.2] Update `Services\ConfigService.cs`:
+  - Update `AppDataFolder` to point to `KerkenezMail` with fallback detection of `EmailSummarizer`.
+  - Call `MigrationService.ExecuteMigrationIfNeeded()` inside static constructor or directory initialization.
+  - Update uninstaller to clean both new and legacy directories.
+
+[Step 1.3] Update `Services\AccountCryptoService.cs`:
+  - Set default entropy constants to `KerkenezMail.SecureAccounts.v1` and `KerkenezMail.SecureSecrets.v1`.
+  - Provide fallback decryption methods that attempt new entropy first; if decryption fails, attempt legacy entropy.
+
+[Step 1.4] Update `Services\UninstallRegistrationService.cs`:
+  - Update `UninstallKeyPath` to `Software\Microsoft\Windows\CurrentVersion\Uninstall\KerkenezMail`.
+  - Update `DisplayName` to `"Kerkenez Mail"`.
+  - Update `RunValueName` to `"KerkenezMailTray"`.
+  - In `RegisterOrUpdate()`, explicitly delete old `Uninstall\EmailSummarizer` key and old `Run\EmailSummarizerTray` value.
+  - In `Unregister()`, delete both `Uninstall\KerkenezMail` and `Uninstall\EmailSummarizer`.
+
+[Step 1.5] Update `Services\ShortcutService.cs`:
+  - Update shortcut file names to `"Kerkenez Mail.lnk"`.
+  - Update description to `"Kerkenez Mail - AI Email Assistant"`.
+  - In `DeleteShortcuts()`, include paths for both `"Kerkenez Mail.lnk"` and `"Email Summarizer.lnk"`.
+
+------------------------------------------------------------------------------------------------------------------------
+PHASE 2: REBRANDING WARNING UI & STARTUP INTERCEPTOR (v0.5.0-bridge)
+------------------------------------------------------------------------------------------------------------------------
+[Step 2.1] Create `UI\Controls\RebrandingBanner.cs` / Update `UI\MainForm.cs`:
+  - Design a stylish, modern dismissible banner card at the top of `MainForm`.
+  - Text: "📢 Rebranding Announcement: Email Summarizer is becoming Kerkenez Mail. All settings have been safely migrated to %APPDATA%\KerkenezMail."
+  - Buttons: "Copy WinGet Command (winget install ismlEraslan.KerkenezMail)", "Open Releases Page", "Dismiss".
+  - In `MainForm.Shown`, if running as `v0.5.0-bridge`, display an informative dialog explaining the transition and
+    providing the WinGet switch command.
+
+[Step 2.2] Update Window Titles & Navigation Branding:
+  - `MainForm.Text` = `"Kerkenez Mail (Win32) [Bridge v0.5.0]"`.
+  - `SidebarNav.cs` title = `"Kerkenez Mail"`.
+  - `NativeTrayDaemon.cs` tooltip = `"Kerkenez Mail"`, menu item = `"📬 Open Kerkenez Mail"`.
+  - `TrayDaemonContext.cs` tooltip = `"Kerkenez Mail"`, menu item = `"📬 Open Kerkenez Mail"`.
+
+[Step 2.3] Update Mutexes & Named Events in `Program.cs` and `NativeTrayDaemon.cs`:
+  - `TrayDaemonMutexName` = `@"Global\KerkenezMail_TrayDaemon_Mutex"` (with check/close of old `Global\EmailSummarizer_TrayDaemon_Mutex`).
+  - `MainUiMutexName` = `@"Global\KerkenezMail_MainUI_Mutex"` (with check/focus of old `Global\EmailSummarizer_MainUI_Mutex`).
+  - `ExitEventName` = `@"Global\KerkenezMail_TrayDaemon_ExitEvent"`.
+
+------------------------------------------------------------------------------------------------------------------------
+PHASE 3: v0.5.0-BRIDGE BUILD, TESTING & WINGET SUBMISSION
+------------------------------------------------------------------------------------------------------------------------
+[Step 3.1] Update `EmailSummarizer.csproj` Assembly Metadata for v0.5.0:
+  - `<Version>0.5.0</Version>`
+  - `<FileVersion>0.5.0.0</FileVersion>`
+  - `<AssemblyVersion>0.5.0.0</AssemblyVersion>`
+  - `<Title>Kerkenez Mail (Bridge v0.5.0)</Title>`
+  - `<Product>Kerkenez Mail</Product>`
+
+[Step 3.2] Compile and Package `v0.5.0`:
+  - Run `dotnet publish -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true -o ./publish`.
+  - Compress `EmailSummarizer.exe` -> `EmailSummarizer.zip`.
+
+[Step 3.3] Prepare WinGet Manifests for `ismlEraslan.EmailSummarizer` (Version 0.5.0):
+  - Generate YAMLs under `manifests/i/ismlEraslan/EmailSummarizer/0.5.0`.
+  - Add deprecation / rebranding notice in `Description`.
+  - Submit to `microsoft/winget-pkgs`.
+
+------------------------------------------------------------------------------------------------------------------------
+PHASE 4: FULL CODEBASE CUTOVER TO KERKENEZ MAIL v1.0.0
+------------------------------------------------------------------------------------------------------------------------
+[Step 4.1] Rename Project File & Namespace Overhaul:
+  - Rename `EmailSummarizer.csproj` -> `KerkenezMail.csproj`.
+  - Replace all `namespace EmailSummarizer...` occurrences with `namespace KerkenezMail...`.
+  - Replace all `using EmailSummarizer...` with `using KerkenezMail...`.
+  - Set `<AssemblyName>KerkenezMail</AssemblyName>` and `<RootNamespace>KerkenezMail</RootNamespace>`.
+  - Set `<Version>1.0.0</Version>`.
+
+[Step 4.2] Synchronize Embedded Resources:
+  - Update `KerkenezMail.csproj` resource include.
+  - Update all `GetManifestResourceStream` calls to `"KerkenezMail.app.ico"`.
+
+[Step 4.3] Update CI/CD Workflows:
+  - Update `.github/workflows/release.yml` to package `KerkenezMail.exe` into `KerkenezMail.zip`.
+  - Update `.github/scripts/publish-winget.ps1` to publish package `ismlEraslan.KerkenezMail`.
+
+[Step 4.4] Update Documentation & Legal Files:
+  - Rewrite `README.md` for Kerkenez Mail.
+  - Update WinGet badges to `ismlEraslan.KerkenezMail`.
+  - Update `NOTICES` and `LICENSE`.
+
+------------------------------------------------------------------------------------------------------------------------
+PHASE 5: NEW WINGET PACKAGE SUBMISSION (ismlEraslan.KerkenezMail v1.0.0)
+------------------------------------------------------------------------------------------------------------------------
+[Step 5.1] Create and Validate WinGet Manifests for `ismlEraslan.KerkenezMail` v1.0.0:
+  - Generate `ismlEraslan.KerkenezMail.yaml`, `ismlEraslan.KerkenezMail.installer.yaml`, `ismlEraslan.KerkenezMail.locale.en-US.yaml`.
+  - Validate with `winget validate --manifest ...`.
+  - Submit to `microsoft/winget-pkgs`.
+
+========================================================================================================================
+7. EDGE CASES, SAFETY GUARDS & RECOVERY PROTOCOLS
+========================================================================================================================
+
+7.1. Partial Migration Failure & Rollback Safeguards
+----------------------------------------------------
+- Principle of Zero Data Loss: Under no circumstances should legacy files be deleted unless the new files have been
+  written, verified by file size, and successfully test-decrypted in the same process.
+- If DPAPI decryption of `accounts.dat` fails due to user profile corruption, the original `accounts.dat` is preserved in
+  `%APPDATA%\EmailSummarizer` and copied as-is to `%APPDATA%\KerkenezMail\accounts.dat.bak`.
+
+7.2. Multi-Instance & Daemon Concurrency Collision Handling
+-----------------------------------------------------------
+- When `v0.5.0-bridge` or `v1.0.0` launches, an active background daemon from an older version might still be running in
+  memory with the old mutex `Global\EmailSummarizer_TrayDaemon_Mutex`.
+- Migration step:
+  1. Signal the old exit event: `EventWaitHandle.OpenExisting(@"Global\EmailSummarizer_TrayDaemon_ExitEvent").Set()`.
+  2. Wait up to 1000ms for graceful daemon termination.
+  3. If old daemon was running as a process named `EmailSummarizer`, terminate cleanly.
+  4. Acquire new mutex `Global\KerkenezMail_TrayDaemon_Mutex` and start the modernized daemon.
+
+7.3. Permission Elevation & Access Denied Mitigation
+----------------------------------------------------
+- All registry writes target `HKEY_CURRENT_USER` (HKCU). This guarantees zero UAC elevation prompts for normal users.
+- Shortcut creation in `%APPDATA%\Microsoft\Windows\Start Menu\Programs` and `%USERPROFILE%\Desktop` requires no admin rights.
+
+7.4. Corrupt Legacy Config Auto-Healing
+---------------------------------------
+- If legacy `config.json` is missing or corrupted, `ConfigService.HealAndNormalizeSettings()` generates clean default
+  settings while preserving any salvageable `AccountIds` and model paths.
+
+========================================================================================================================
+8. VERIFICATION, QUALITY ASSURANCE & TESTING MATRIX
+========================================================================================================================
+
+8.1. Clean Install vs. In-Place Upgrade Matrix
+----------------------------------------------
+Test Case 1: Fresh Install of v1.0.0 (No prior versions)
+  - Verify `%APPDATA%\KerkenezMail` is created.
+  - Verify no `%APPDATA%\EmailSummarizer` is created.
+  - Verify HKCU Uninstall key is `KerkenezMail`.
+  - Verify shortcuts created are `Kerkenez Mail.lnk`.
+
+Test Case 2: Upgrade from v0.4.1 -> v0.5.0-bridge -> v1.0.0
+  - Precondition: v0.4.1 installed with 2 configured IMAP accounts, custom LLM system prompt, and startup enabled.
+  - Action: Run `v0.5.0-bridge`.
+  - Expected:
+    * Rebranding modal appears with WinGet migration guidance.
+    * `%APPDATA%\KerkenezMail` contains valid `config.json` and `accounts.dat`.
+    * Accounts test connection succeeds with decrypted passwords.
+    * `%APPDATA%\EmailSummarizer` is deleted.
+    * HKCU Uninstall key is `KerkenezMail`.
+    * Run startup key is `KerkenezMailTray`.
+    * Start Menu and Desktop shortcuts renamed to `Kerkenez Mail.lnk`.
+  - Action: Install v1.0.0.
+  - Expected: Seamless operation without prompts or data loss.
+
+Test Case 3: Direct Upgrade from v0.4.1 -> v1.0.0 (Skipping bridge)
+  - Precondition: v0.4.1 data in `%APPDATA%\EmailSummarizer`.
+  - Action: Run `v1.0.0`.
+  - Expected: Autonomous migration fires on boot, imports accounts and config into `%APPDATA%\KerkenezMail`, cleans old
+    folder, and operates seamlessly.
+
+Test Case 4: Uninstaller Verification
+  - Action: Run `KerkenezMail.exe --uninstall` (and `--uninstall --quiet`).
+  - Expected: Removes all registry keys (`Uninstall\KerkenezMail`, `Run\KerkenezMailTray`), removes all shortcuts, and
+    deletes `%APPDATA%\KerkenezMail`.
+
+========================================================================================================================
+END OF KERKENEZ MAIL REBRANDING & TRANSITION MASTER PLAN
+========================================================================================================================
