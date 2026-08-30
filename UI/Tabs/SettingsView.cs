@@ -461,7 +461,7 @@ namespace EmailSummarizer.UI.Tabs
                 Width = 150,
                 Height = 28,
                 Minimum = 16,
-                Maximum = 4096,
+                Maximum = 8192,
                 Value = 350,
                 Font = new Font("Segoe UI", 9.5F)
             };
@@ -470,6 +470,15 @@ namespace EmailSummarizer.UI.Tabs
 
             pnlGlobalParams.Controls.Add(pnlTemp);
             pnlGlobalParams.Controls.Add(pnlMaxTokens);
+
+            var lblTokenTip = new Label
+            {
+                Text = "💡 Tip: For reasoning/thinking models (e.g. DeepSeek-R1, QwQ), set at least 2,048 tokens to prevent thought truncation. Standard models operate efficiently at 350.",
+                AutoSize = true,
+                Font = new Font("Segoe UI", 8.25F),
+                ForeColor = Color.FromArgb(100, 100, 100),
+                Margin = new Padding(0, 0, 0, 6)
+            };
 
             // ------------------ 1E. Email Ingestion Length Limit ------------------
             var pnlEmailLengthContainer = new FlowLayoutPanel
@@ -614,6 +623,7 @@ namespace EmailSummarizer.UI.Tabs
             pnlLlmCard.Controls.Add(_pnlOllamaContainer);
             pnlLlmCard.Controls.Add(_pnlCloudContainer);
             pnlLlmCard.Controls.Add(pnlGlobalParams);
+            pnlLlmCard.Controls.Add(lblTokenTip);
             pnlLlmCard.Controls.Add(pnlEmailLengthContainer);
             pnlLlmCard.Controls.Add(rowTestLlm);
 

@@ -61,8 +61,8 @@ namespace EmailSummarizer.Services
                 systemPrompt += "\r\n* Note: Market digests, signals, promos, and newsletters must always be Priority 3 (Low).";
             }
 
-            // Allocate a generous token limit (minimum 2048) to seamlessly accommodate thinking/reasoning models (e.g. DeepSeek-R1, QwQ)
-            int tokenBudget = Math.Max(settings.MaxTokens > 0 ? settings.MaxTokens : 350, 2048);
+            // Strict user preference: respect configured token limit without forced overrides
+            int tokenBudget = settings.MaxTokens > 0 ? settings.MaxTokens : 350;
 
             var requestBody = new
             {
