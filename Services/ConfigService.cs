@@ -22,6 +22,11 @@ namespace EmailSummarizer.Services
             PropertyNameCaseInsensitive = true
         };
 
+        /// <summary>
+        /// True if config.json did not exist when this application process booted.
+        /// </summary>
+        public static bool IsFirstInstallation { get; } = !File.Exists(ConfigFilePath);
+
         public AppSettings Settings { get; private set; }
 
         public event Action? SettingsChanged;

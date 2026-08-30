@@ -30,14 +30,14 @@ namespace EmailSummarizer.UI
 
         private readonly bool _isFirstLaunch;
 
-        public MainForm()
+        public MainForm(ConfigService? configService = null)
         {
             this.AutoScaleMode = AutoScaleMode.Dpi;
 
-            _isFirstLaunch = !File.Exists(ConfigService.ConfigFilePath);
+            _isFirstLaunch = ConfigService.IsFirstInstallation;
 
             // Initialize Core Services
-            _configService = new ConfigService();
+            _configService = configService ?? new ConfigService();
             _imapService = new ImapService();
             _llamaManager = new LlamaServerManager();
             _llmService = new LlmSummarizerService();
