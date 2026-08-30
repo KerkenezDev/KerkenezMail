@@ -57,6 +57,15 @@ namespace EmailSummarizer.UI.Tabs
         private int _inboxPanelWidth = 440;
         private bool _isInitialSplitSet = false;
 
+        // Inbox Cell Hover ToolTip
+        private ToolTip _inboxCellToolTip = null!;
+        private System.Windows.Forms.Timer? _inboxHoverTimer;
+        private ListViewItem? _lastHoverItem;
+        private int _lastHoverColumn = -1;
+        private ListViewItem? _lastActiveTooltipItem;
+        private bool _isToolTipActive = false;
+        private DateTime _lastToolTipShownTime = DateTime.MinValue;
+
         public event Action<string, string>? StatusUpdated;
 
         public SummariesView(
@@ -444,6 +453,22 @@ namespace EmailSummarizer.UI.Tabs
             _lvEmails.ItemSelectionChanged += OnEmailItemSelectionChanged;
             _lvEmails.SelectedIndexChanged += OnEmailSelected;
 
+            _inboxCellToolTip = new ToolTip
+            {
+                ShowAlways = true,
+                UseAnimation = true,
+                UseFading = true
+            };
+
+            _inboxHoverTimer = new System.Windows.Forms.Timer();
+            _inboxHoverTimer.Tick += OnInboxHoverTimerTick;
+
+            _lvEmails.MouseMove += OnListViewMouseMove;
+            _lvEmails.MouseLeave += OnListViewMouseLeave;
+            _lvEmails.MouseDown += (s, e) => ResetInboxToolTip();
+            _lvEmails.MouseWheel += (s, e) => ResetInboxToolTip();
+            _lvEmails.KeyDown += (s, e) => ResetInboxToolTip();
+
             rightListPanel.Controls.Add(_lvEmails);
             rightListPanel.Controls.Add(_lblInboxHeader);
             _mainSplit.Panel2.Controls.Add(rightListPanel);
@@ -812,6 +837,7 @@ namespace EmailSummarizer.UI.Tabs
                 return;
             }
 
+            ResetInboxToolTip();
             _lvEmails.BeginUpdate();
             _lvEmails.Items.Clear();
             _lvEmails.Groups.Clear();
@@ -1004,6 +1030,13 @@ namespace EmailSummarizer.UI.Tabs
             _lblEmailSubject.Text = $"Subject: {email.Subject}";
             _lblEmailMeta.Text = $"From: {email.Sender}   •   Date: {email.DateString}   •   Account: {email.AccountName}{priTag}   •   {readTag}";
 
+            try
+            {
+                _inboxCellToolTip?.SetToolTip(_lblEmailSubject, email.Subject);
+                _inboxCellToolTip?.SetToolTip(_lblEmailMeta, $"From: {email.Sender}\r\nDate: {GetDateToolTipText(email)}\r\nAccount: {GetAccountToolTipText(email)}");
+            }
+            catch { }
+
             string summaryText = string.IsNullOrWhiteSpace(email.Summary) 
                 ? "✨ Generating AI summary for this email..." 
                 : email.Summary;
@@ -1126,6 +1159,7 @@ namespace EmailSummarizer.UI.Tabs
             var selected = GetSelectedEmailItems();
             if (selected.Count == 0) return;
 
+            ResetInboxToolTip();
             _lvEmails.BeginUpdate();
             foreach (var email in selected)
             {
@@ -1410,8 +1444,238 @@ namespace EmailSummarizer.UI.Tabs
                     _debounceTriageTimer?.Dispose();
                     _debounceTriageTimer = null;
                 }
+                _inboxHoverTimer?.Stop();
+                _inboxHoverTimer?.Dispose();
+                _inboxHoverTimer = null;
+                _inboxCellToolTip?.Dispose();
             }
             base.Dispose(disposing);
         }
+
+        #region Inbox Hover ToolTips
+
+        private void OnListViewMouseMove(object? sender, MouseEventArgs e)
+        {
+            if (_lvEmails.Items.Count == 0)
+            {
+                ResetInboxToolTip();
+                return;
+            }
+
+            var hit = _lvEmails.HitTest(e.Location);
+            var item = hit.Item;
+            int colIndex = -1;
+
+            if (item != null)
+            {
+                colIndex = GetColumnIndexAt(e.Location, item);
+            }
+
+            if (item == null || colIndex < 0 || !(item.Tag is EmailItem))
+            {
+                // Cursor is over empty space, headers, or borders
+                ResetInboxToolTip();
+                return;
+            }
+
+            // Check if cursor is still within the exact same cell
+            if (item == _lastHoverItem && colIndex == _lastHoverColumn)
+            {
+                // If tooltip is not yet visible, restart timer on active mouse motion so it only appears when mouse rests
+                if (!_isToolTipActive)
+                {
+                    _inboxHoverTimer?.Stop();
+                    if (_inboxHoverTimer != null)
+                    {
+                        bool isSameMailAsActive = _lastActiveTooltipItem == item && (DateTime.UtcNow - _lastToolTipShownTime).TotalMilliseconds < 1500;
+                        _inboxHoverTimer.Interval = isSameMailAsActive ? 220 : 380;
+                        _inboxHoverTimer.Start();
+                    }
+                }
+                return;
+            }
+
+            // User moved to a new cell: immediately dismiss previous tooltip so there is no lingering popup while traversing
+            if (_isToolTipActive)
+            {
+                try
+                {
+                    _inboxCellToolTip?.Hide(_lvEmails);
+                }
+                catch { }
+                _isToolTipActive = false;
+            }
+
+            // Determine if moving between columns of the SAME email or a DIFFERENT email
+            bool isSameMailTransition = (_lastHoverItem == item) || (_lastActiveTooltipItem == item && (DateTime.UtcNow - _lastToolTipShownTime).TotalMilliseconds < 1500);
+
+            _lastHoverItem = item;
+            _lastHoverColumn = colIndex;
+
+            _inboxHoverTimer?.Stop();
+
+            if (_inboxHoverTimer != null)
+            {
+                // Same email column transition: gentle 220ms delay (prevents flashing when passing across Account to Sender)
+                // Different email row transition: deliberate 380ms recount per email (prevents the inbox from feeling like a minefield)
+                _inboxHoverTimer.Interval = isSameMailTransition ? 220 : 380;
+                _inboxHoverTimer.Start();
+            }
+        }
+
+        private void OnInboxHoverTimerTick(object? sender, EventArgs e)
+        {
+            _inboxHoverTimer?.Stop();
+
+            if (this.IsDisposed || _lvEmails.IsDisposed || _lastHoverItem == null || _lastHoverColumn < 0)
+            {
+                ResetInboxToolTip();
+                return;
+            }
+
+            var clientPt = _lvEmails.PointToClient(Cursor.Position);
+            if (!_lvEmails.ClientRectangle.Contains(clientPt))
+            {
+                ResetInboxToolTip();
+                return;
+            }
+
+            var hit = _lvEmails.HitTest(clientPt);
+            if (hit.Item == null || hit.Item != _lastHoverItem)
+            {
+                ResetInboxToolTip();
+                return;
+            }
+
+            int colIndex = GetColumnIndexAt(clientPt, hit.Item);
+            if (colIndex != _lastHoverColumn)
+            {
+                ResetInboxToolTip();
+                return;
+            }
+
+            if (_lastHoverItem.Tag is EmailItem email)
+            {
+                string tipText = GetToolTipTextForCell(email, _lastHoverColumn);
+                if (!string.IsNullOrWhiteSpace(tipText))
+                {
+                    int tipX = clientPt.X + 16;
+                    int tipY = clientPt.Y + 22;
+
+                    _inboxCellToolTip.Show(tipText, _lvEmails, tipX, tipY, 10000);
+                    _isToolTipActive = true;
+                    _lastActiveTooltipItem = _lastHoverItem;
+                    _lastToolTipShownTime = DateTime.UtcNow;
+                }
+                else
+                {
+                    ResetInboxToolTip();
+                }
+            }
+        }
+
+        private void OnListViewMouseLeave(object? sender, EventArgs e)
+        {
+            ResetInboxToolTip();
+        }
+
+        private void ResetInboxToolTip()
+        {
+            _inboxHoverTimer?.Stop();
+            _lastHoverItem = null;
+            _lastHoverColumn = -1;
+            _lastActiveTooltipItem = null;
+            _isToolTipActive = false;
+            try
+            {
+                if (_inboxCellToolTip != null && _lvEmails != null && !_lvEmails.IsDisposed)
+                {
+                    _inboxCellToolTip.Hide(_lvEmails);
+                }
+            }
+            catch { }
+        }
+
+        private int GetColumnIndexAt(Point pt, ListViewItem item)
+        {
+            var hit = _lvEmails.HitTest(pt);
+            if (hit.Item == item && hit.SubItem != null)
+            {
+                int idx = item.SubItems.IndexOf(hit.SubItem);
+                if (idx >= 0) return idx;
+            }
+
+            for (int i = 0; i < item.SubItems.Count; i++)
+            {
+                var bounds = item.SubItems[i].Bounds;
+                if (bounds.Contains(pt))
+                {
+                    return i;
+                }
+            }
+
+            return -1;
+        }
+
+        private string GetToolTipTextForCell(EmailItem email, int colIndex)
+        {
+            return colIndex switch
+            {
+                0 => GetPriorityToolTipText(email),
+                1 => string.IsNullOrWhiteSpace(email.Subject) ? "(No Subject)" : email.Subject.Trim(),
+                2 => GetAccountToolTipText(email),
+                3 => string.IsNullOrWhiteSpace(email.Sender) ? "(Unknown Sender)" : email.Sender.Trim(),
+                4 => GetDateToolTipText(email),
+                _ => string.Empty
+            };
+        }
+
+        private static string GetPriorityToolTipText(EmailItem email)
+        {
+            if (email.Priority.HasValue)
+            {
+                return email.Priority.Value switch
+                {
+                    1 => "⚡ Priority 1 (High / Urgent)",
+                    2 => "⚡ Priority 2 (Normal)",
+                    3 => "⚡ Priority 3 (Low / Newsletter)",
+                    _ => $"⚡ Priority {email.Priority.Value}"
+                };
+            }
+
+            if (email.Status == SummaryState.Summarizing)
+            {
+                return "⏳ Summarizing: Generating AI summary...";
+            }
+
+            return "Priority: Not evaluated";
+        }
+
+        private static string GetAccountToolTipText(EmailItem email)
+        {
+            string name = email.AccountName?.Trim() ?? string.Empty;
+            string addr = email.AccountEmail?.Trim() ?? string.Empty;
+
+            if (!string.IsNullOrEmpty(name) && !string.IsNullOrEmpty(addr) && !string.Equals(name, addr, StringComparison.OrdinalIgnoreCase))
+            {
+                return $"📬 {name} ({addr})";
+            }
+
+            return !string.IsNullOrEmpty(name) ? $"📬 {name}" : (!string.IsNullOrEmpty(addr) ? $"📬 {addr}" : "Default Account");
+        }
+
+        private static string GetDateToolTipText(EmailItem email)
+        {
+            try
+            {
+                return $"📅 {email.Date.LocalDateTime:dddd, MMMM d, yyyy  HH:mm:ss}";
+            }
+            catch
+            {
+                return $"📅 {email.DateString}";
+            }
+        }
+
+        #endregion
     }
 }
