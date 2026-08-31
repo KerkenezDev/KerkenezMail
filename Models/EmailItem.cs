@@ -21,6 +21,8 @@ namespace EmailSummarizer.Models
         public DateTimeOffset Date { get; set; }
         public string RawBody { get; set; } = string.Empty;
         public string CleanBody { get; set; } = string.Empty;
+        public string DisplayBody { get; set; } = string.Empty;
+        public string? DisplayRtf { get; set; }
         public string Summary { get; set; } = string.Empty;
         public SummaryState Status { get; set; } = SummaryState.Pending;
         public string? ErrorMessage { get; set; }
@@ -38,7 +40,16 @@ namespace EmailSummarizer.Models
         public bool IsMailingList { get; set; }
         public bool HasNewsletterFooter { get; set; }
 
+        // Extracted hyperlinks for hover tooltips and actions
+        public List<EmailLink> ExtractedLinks { get; set; } = new List<EmailLink>();
+
         public string DateString => Date.LocalDateTime.ToString("dd/MM/yyyy HH:mm");
         public string ShortDateString => Date.LocalDateTime.ToString("dd/MM HH:mm");
+    }
+
+    public class EmailLink
+    {
+        public string Text { get; set; } = string.Empty;
+        public string Url { get; set; } = string.Empty;
     }
 }

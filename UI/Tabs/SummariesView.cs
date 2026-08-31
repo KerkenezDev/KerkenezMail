@@ -48,7 +48,7 @@ namespace EmailSummarizer.UI.Tabs
         private TextBox _txtSearch = null!;
         private ListView _lvEmails = null!;
         private TextBox _txtSummary = null!;
-        private TextBox _txtEmailBody = null!;
+        private RichTextBox _rtbEmailBody = null!;
         private Label _lblEmailMeta = null!;
         private Label _lblEmailSubject = null!;
         private Label _lblInboxHeader = null!;
@@ -65,6 +65,11 @@ namespace EmailSummarizer.UI.Tabs
         private ListViewItem? _lastActiveTooltipItem;
         private bool _isToolTipActive = false;
         private DateTime _lastToolTipShownTime = DateTime.MinValue;
+
+        // Link Hover ToolTip
+        private readonly List<(int Start, int Length, string Url)> _currentEmailLinkSpans = new List<(int Start, int Length, string Url)>();
+        private string? _lastHoverLinkUrl;
+        private System.Windows.Forms.Timer? _linkHoverTimer;
 
         public event Action<string, string>? StatusUpdated;
 
@@ -338,19 +343,25 @@ namespace EmailSummarizer.UI.Tabs
             metaHeader.Controls.Add(_lblEmailMeta);
             metaHeader.Controls.Add(_lblEmailSubject);
 
-            _txtEmailBody = new TextBox
+            _rtbEmailBody = new RichTextBox
             {
                 Dock = DockStyle.Fill,
-                Multiline = true,
                 ReadOnly = true,
-                ScrollBars = ScrollBars.Vertical,
+                DetectUrls = true,
+                ScrollBars = RichTextBoxScrollBars.Vertical,
                 BackColor = Color.White,
                 BorderStyle = BorderStyle.None,
-                Font = new Font("Segoe UI", 9.75F),
-                PlaceholderText = "Select an email from the inbox list on the right to view its content."
+                Font = new Font("Segoe UI", 9.75F)
             };
+            _rtbEmailBody.LinkClicked += OnEmailLinkClicked;
+            _rtbEmailBody.MouseMove += OnEmailBodyMouseMove;
+            _rtbEmailBody.MouseLeave += OnEmailBodyMouseLeave;
+            _rtbEmailBody.MouseDown += (s, e) => ResetLinkToolTip();
 
-            emailViewerPanel.Controls.Add(_txtEmailBody);
+            _linkHoverTimer = new System.Windows.Forms.Timer { Interval = 250 };
+            _linkHoverTimer.Tick += OnLinkHoverTimerTick;
+
+            emailViewerPanel.Controls.Add(_rtbEmailBody);
             emailViewerPanel.Controls.Add(metaHeader);
             middleSplit.Panel1.Controls.Add(emailViewerPanel);
 
@@ -892,7 +903,9 @@ namespace EmailSummarizer.UI.Tabs
             else
             {
                 _txtSummary.Clear();
-                _txtEmailBody.Clear();
+                _rtbEmailBody.Clear();
+                ResetLinkToolTip();
+                _currentEmailLinkSpans.Clear();
                 _lblEmailSubject.Text = "Subject: (No email selected)";
                 _lblEmailMeta.Text = "From: -   •   Date: -   •   Account: -";
             }
@@ -925,7 +938,9 @@ namespace EmailSummarizer.UI.Tabs
             {
                 _selectedEmailsOrder.Clear();
                 _txtSummary.Clear();
-                _txtEmailBody.Clear();
+                _rtbEmailBody.Clear();
+                ResetLinkToolTip();
+                _currentEmailLinkSpans.Clear();
                 _lblEmailSubject.Text = "Subject: (No email selected)";
                 _lblEmailMeta.Text = "From: -   •   Date: -   •   Account: -";
                 return;
@@ -1047,7 +1062,61 @@ namespace EmailSummarizer.UI.Tabs
             }
 
             _txtSummary.Text = summaryText;
-            _txtEmailBody.Text = email.CleanBody;
+
+            if (!string.IsNullOrWhiteSpace(email.DisplayRtf))
+            {
+                try
+                {
+                    _rtbEmailBody.Rtf = email.DisplayRtf;
+                }
+                catch
+                {
+                    _rtbEmailBody.Text = !string.IsNullOrWhiteSpace(email.DisplayBody) ? email.DisplayBody : email.CleanBody;
+                }
+            }
+            else
+            {
+                _rtbEmailBody.Text = !string.IsNullOrWhiteSpace(email.DisplayBody) ? email.DisplayBody : email.CleanBody;
+            }
+
+            UpdateEmailLinkSpans(email);
+        }
+
+        private void OnEmailLinkClicked(object? sender, LinkClickedEventArgs e)
+        {
+            if (string.IsNullOrWhiteSpace(e.LinkText)) return;
+
+            try
+            {
+                string url = e.LinkText.Trim();
+
+                // Check and launch valid http, https, mailto URLs
+                if (Uri.TryCreate(url, UriKind.Absolute, out var uri) &&
+                    (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps || uri.Scheme == Uri.UriSchemeMailto))
+                {
+                    var psi = new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = uri.AbsoluteUri,
+                        UseShellExecute = true
+                    };
+                    System.Diagnostics.Process.Start(psi);
+                }
+                else if (url.StartsWith("www.", StringComparison.OrdinalIgnoreCase) &&
+                         Uri.TryCreate("https://" + url, UriKind.Absolute, out var wwwUri) &&
+                         wwwUri.Scheme == Uri.UriSchemeHttps)
+                {
+                    var psi = new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = wwwUri.AbsoluteUri,
+                        UseShellExecute = true
+                    };
+                    System.Diagnostics.Process.Start(psi);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.Report($"[!] Failed to open link: {ex.Message}");
+            }
         }
 
         private void UpdateListViewItemForEmail(EmailItem email)
@@ -1203,7 +1272,9 @@ namespace EmailSummarizer.UI.Tabs
             else
             {
                 _txtSummary.Clear();
-                _txtEmailBody.Clear();
+                _rtbEmailBody.Clear();
+                ResetLinkToolTip();
+                _currentEmailLinkSpans.Clear();
                 _lblEmailSubject.Text = "Subject: (No email selected)";
                 _lblEmailMeta.Text = "From: -   •   Date: -   •   Account: -";
             }
@@ -1405,7 +1476,7 @@ namespace EmailSummarizer.UI.Tabs
                         sb.AppendLine("<details><summary>View Original Email Body</summary>");
                         sb.AppendLine();
                         sb.AppendLine("```text");
-                        sb.AppendLine(email.CleanBody);
+                        sb.AppendLine(!string.IsNullOrWhiteSpace(email.DisplayBody) ? email.DisplayBody : email.CleanBody);
                         sb.AppendLine("```");
                         sb.AppendLine("</details>");
                         sb.AppendLine();
@@ -1447,6 +1518,9 @@ namespace EmailSummarizer.UI.Tabs
                 _inboxHoverTimer?.Stop();
                 _inboxHoverTimer?.Dispose();
                 _inboxHoverTimer = null;
+                _linkHoverTimer?.Stop();
+                _linkHoverTimer?.Dispose();
+                _linkHoverTimer = null;
                 _inboxCellToolTip?.Dispose();
             }
             base.Dispose(disposing);
@@ -1556,11 +1630,19 @@ namespace EmailSummarizer.UI.Tabs
 
             if (_lastHoverItem.Tag is EmailItem email)
             {
-                string tipText = GetToolTipTextForCell(email, _lastHoverColumn);
+                var screen = Screen.FromControl(_lvEmails);
+                string tipText = GetToolTipTextForCell(email, _lastHoverColumn, screen.WorkingArea.Width);
                 if (!string.IsNullOrWhiteSpace(tipText))
                 {
                     int tipX = clientPt.X + 16;
                     int tipY = clientPt.Y + 22;
+
+                    Point screenPt = Cursor.Position;
+                    int maxTipWidth = Math.Clamp((int)(screen.WorkingArea.Width * 0.40), 300, 600);
+                    if (screenPt.X + maxTipWidth > screen.WorkingArea.Right)
+                    {
+                        tipX = Math.Max(10, clientPt.X - maxTipWidth + 30);
+                    }
 
                     _inboxCellToolTip.Show(tipText, _lvEmails, tipX, tipY, 10000);
                     _isToolTipActive = true;
@@ -1617,9 +1699,9 @@ namespace EmailSummarizer.UI.Tabs
             return -1;
         }
 
-        private string GetToolTipTextForCell(EmailItem email, int colIndex)
+        private string GetToolTipTextForCell(EmailItem email, int colIndex, int screenWidth)
         {
-            return colIndex switch
+            string raw = colIndex switch
             {
                 0 => GetPriorityToolTipText(email),
                 1 => string.IsNullOrWhiteSpace(email.Subject) ? "(No Subject)" : email.Subject.Trim(),
@@ -1628,6 +1710,36 @@ namespace EmailSummarizer.UI.Tabs
                 4 => GetDateToolTipText(email),
                 _ => string.Empty
             };
+            return WrapTextForToolTip(raw, screenWidth);
+        }
+
+        private static string WrapTextForToolTip(string text, int screenWidth)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return string.Empty;
+            int maxLineLength = Math.Clamp((int)(screenWidth * 0.048), 45, 85);
+            if (text.Length <= maxLineLength || text.Contains('\n')) return text;
+
+            var words = text.Split(' ');
+            var sb = new StringBuilder();
+            int currentLineLen = 0;
+
+            foreach (var word in words)
+            {
+                if (currentLineLen + word.Length + 1 > maxLineLength)
+                {
+                    sb.AppendLine();
+                    currentLineLen = 0;
+                }
+                else if (currentLineLen > 0)
+                {
+                    sb.Append(' ');
+                    currentLineLen++;
+                }
+                sb.Append(word);
+                currentLineLen += word.Length;
+            }
+
+            return sb.ToString();
         }
 
         private static string GetPriorityToolTipText(EmailItem email)
@@ -1674,6 +1786,195 @@ namespace EmailSummarizer.UI.Tabs
             {
                 return $"📅 {email.DateString}";
             }
+        }
+
+        #endregion
+
+        #region Link Hover ToolTips
+
+        private void UpdateEmailLinkSpans(EmailItem email)
+        {
+            _currentEmailLinkSpans.Clear();
+            string visibleText = _rtbEmailBody.Text;
+            if (string.IsNullOrEmpty(visibleText)) return;
+
+            if (email.ExtractedLinks != null)
+            {
+                foreach (var link in email.ExtractedLinks)
+                {
+                    if (string.IsNullOrWhiteSpace(link.Text) || string.IsNullOrWhiteSpace(link.Url)) continue;
+                    int pos = 0;
+                    while (pos < visibleText.Length)
+                    {
+                        int found = visibleText.IndexOf(link.Text, pos, StringComparison.OrdinalIgnoreCase);
+                        if (found < 0) break;
+                        _currentEmailLinkSpans.Add((found, link.Text.Length, link.Url));
+                        pos = found + Math.Max(1, link.Text.Length);
+                    }
+                }
+            }
+
+            var urlMatches = System.Text.RegularExpressions.Regex.Matches(visibleText, @"https?://[^\s<>""'{}|\^\[\]`]+", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            foreach (System.Text.RegularExpressions.Match m in urlMatches)
+            {
+                if (!_currentEmailLinkSpans.Any(s => s.Start == m.Index && s.Length == m.Length))
+                {
+                    _currentEmailLinkSpans.Add((m.Index, m.Length, m.Value));
+                }
+            }
+        }
+
+        private void OnEmailBodyMouseMove(object? sender, MouseEventArgs e)
+        {
+            if (_currentEmailLinkSpans.Count == 0 || string.IsNullOrEmpty(_rtbEmailBody.Text))
+            {
+                ResetLinkToolTip();
+                return;
+            }
+
+            int charIndex = _rtbEmailBody.GetCharIndexFromPosition(e.Location);
+            if (charIndex < 0 || charIndex >= _rtbEmailBody.TextLength)
+            {
+                ResetLinkToolTip();
+                return;
+            }
+
+            Point charPt = _rtbEmailBody.GetPositionFromCharIndex(charIndex);
+            if (Math.Abs(e.Location.Y - charPt.Y) > 24 || e.Location.X < charPt.X - 15)
+            {
+                ResetLinkToolTip();
+                return;
+            }
+
+            var span = _currentEmailLinkSpans.FirstOrDefault(s => charIndex >= s.Start && charIndex < s.Start + s.Length);
+            if (span.Length > 0 && !string.IsNullOrWhiteSpace(span.Url))
+            {
+                if (span.Url == _lastHoverLinkUrl)
+                {
+                    return;
+                }
+
+                _lastHoverLinkUrl = span.Url;
+                _linkHoverTimer?.Stop();
+                if (_linkHoverTimer != null)
+                {
+                    _linkHoverTimer.Interval = 250;
+                    _linkHoverTimer.Start();
+                }
+            }
+            else
+            {
+                ResetLinkToolTip();
+            }
+        }
+
+        private void OnLinkHoverTimerTick(object? sender, EventArgs e)
+        {
+            _linkHoverTimer?.Stop();
+            if (string.IsNullOrWhiteSpace(_lastHoverLinkUrl) || this.IsDisposed || _rtbEmailBody.IsDisposed)
+            {
+                ResetLinkToolTip();
+                return;
+            }
+
+            var clientPt = _rtbEmailBody.PointToClient(Cursor.Position);
+            if (!_rtbEmailBody.ClientRectangle.Contains(clientPt))
+            {
+                ResetLinkToolTip();
+                return;
+            }
+
+            var screen = Screen.FromControl(_rtbEmailBody);
+            string formattedTip = FormatUrlForToolTip(_lastHoverLinkUrl, screen.WorkingArea.Width);
+
+            int tipX = clientPt.X + 16;
+            int tipY = clientPt.Y + 22;
+
+            Point screenPt = Cursor.Position;
+            int maxTipWidth = Math.Clamp((int)(screen.WorkingArea.Width * 0.42), 320, 620);
+            if (screenPt.X + maxTipWidth > screen.WorkingArea.Right)
+            {
+                tipX = Math.Max(10, clientPt.X - maxTipWidth + 30);
+            }
+
+            _inboxCellToolTip.Show(formattedTip, _rtbEmailBody, tipX, tipY, 10000);
+        }
+
+        private static string FormatUrlForToolTip(string url, int screenWidth)
+        {
+            if (string.IsNullOrWhiteSpace(url)) return string.Empty;
+
+            // Dynamically calculate max characters per line proportional to screen width (45 to 80 chars)
+            int maxLineLength = Math.Clamp((int)(screenWidth * 0.042), 45, 80);
+            if (url.Length <= maxLineLength)
+            {
+                return "🔗 " + url;
+            }
+
+            var lines = new List<string>();
+            string remaining = url;
+
+            while (remaining.Length > maxLineLength)
+            {
+                int minSplit = Math.Max(18, maxLineLength - 25);
+                int breakIdx = -1;
+
+                char[] delimiters = new[] { '&', '?', '/', '#', '=', ';' };
+                foreach (char d in delimiters)
+                {
+                    int idx = remaining.LastIndexOf(d, maxLineLength, maxLineLength - minSplit);
+                    if (idx > minSplit)
+                    {
+                        if (d == '&' || d == '?')
+                        {
+                            breakIdx = idx; // Break before '&' or '?' so it starts next line
+                        }
+                        else
+                        {
+                            breakIdx = idx + 1; // Include '/' or '=' in current line
+                        }
+                        break;
+                    }
+                }
+
+                if (breakIdx <= 0)
+                {
+                    breakIdx = maxLineLength;
+                }
+
+                string part = remaining.Substring(0, breakIdx).TrimEnd();
+                lines.Add(lines.Count == 0 ? "🔗 " + part : "   " + part);
+                remaining = remaining.Substring(breakIdx).TrimStart();
+            }
+
+            if (remaining.Length > 0)
+            {
+                lines.Add(lines.Count == 0 ? "🔗 " + remaining : "   " + remaining);
+            }
+
+            return string.Join(Environment.NewLine, lines);
+        }
+
+        private void ResetLinkToolTip()
+        {
+            _linkHoverTimer?.Stop();
+            if (_lastHoverLinkUrl != null)
+            {
+                _lastHoverLinkUrl = null;
+                try
+                {
+                    if (_inboxCellToolTip != null && _rtbEmailBody != null && !_rtbEmailBody.IsDisposed)
+                    {
+                        _inboxCellToolTip.Hide(_rtbEmailBody);
+                    }
+                }
+                catch { }
+            }
+        }
+
+        private void OnEmailBodyMouseLeave(object? sender, EventArgs e)
+        {
+            ResetLinkToolTip();
         }
 
         #endregion

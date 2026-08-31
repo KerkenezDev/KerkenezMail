@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -99,6 +100,7 @@ namespace EmailSummarizer.Services
                         }
 
                         string cleanBody = ExtractAndCleanBody(message);
+                        var (displayText, displayRtf, extractedLinks) = ExtractDisplayContent(message);
                         bool isMailingList = DetectMailingListHeaders(message);
                         bool hasNewsletterFooter = DetectNewsletterFooter(cleanBody) || DetectNewsletterFooter(message.HtmlBody);
 
@@ -112,6 +114,9 @@ namespace EmailSummarizer.Services
                             Date = message.Date,
                             RawBody = message.TextBody ?? message.HtmlBody ?? string.Empty,
                             CleanBody = cleanBody,
+                            DisplayBody = displayText,
+                            DisplayRtf = displayRtf,
+                            ExtractedLinks = extractedLinks,
                             IsRead = isRead,
                             Status = SummaryState.Pending,
                             IsMailingList = isMailingList,
@@ -367,7 +372,7 @@ namespace EmailSummarizer.Services
 
             if (string.IsNullOrWhiteSpace(raw) && !string.IsNullOrWhiteSpace(message.HtmlBody))
             {
-                raw = ConvertHtmlToPlainText(message.HtmlBody);
+                raw = ConvertHtmlToDisplayText(message.HtmlBody);
             }
 
             if (string.IsNullOrWhiteSpace(raw))
@@ -383,20 +388,242 @@ namespace EmailSummarizer.Services
             return raw.Trim();
         }
 
-        private static string ConvertHtmlToPlainText(string html)
+        public static (string DisplayText, string? DisplayRtf, List<EmailLink> Links) ExtractDisplayContent(MimeMessage message)
         {
+            string html = message.HtmlBody ?? string.Empty;
+            string text = message.TextBody ?? string.Empty;
+            var links = new List<EmailLink>();
+
+            if (!string.IsNullOrWhiteSpace(html))
+            {
+                try
+                {
+                    string rtf = ConvertHtmlToRtf(html, links);
+                    string displayText = ConvertHtmlToDisplayText(html);
+                    return (displayText, rtf, links);
+                }
+                catch
+                {
+                    // Fallback to text if RTF generation has any issue
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(text))
+            {
+                try
+                {
+                    string rtf = ConvertPlainTextToRtf(text, links);
+                    return (text.Trim(), rtf, links);
+                }
+                catch
+                {
+                    return (text.Trim(), null, links);
+                }
+            }
+
+            return ("(No text content in this email)", null, links);
+        }
+
+        private static string ConvertHtmlToRtf(string html, List<EmailLink>? links = null)
+        {
+            if (string.IsNullOrWhiteSpace(html)) return string.Empty;
+
+            // Remove scripts, styles, head, xml metadata
             html = Regex.Replace(html, @"<style[^>]*>.*?</style>", "", RegexOptions.Singleline | RegexOptions.IgnoreCase);
             html = Regex.Replace(html, @"<script[^>]*>.*?</script>", "", RegexOptions.Singleline | RegexOptions.IgnoreCase);
+            html = Regex.Replace(html, @"<head[^>]*>.*?</head>", "", RegexOptions.Singleline | RegexOptions.IgnoreCase);
+            html = Regex.Replace(html, @"<xml[^>]*>.*?</xml>", "", RegexOptions.Singleline | RegexOptions.IgnoreCase);
+
+            // Replace anchor tags with RTF hyperlink field markers
+            html = Regex.Replace(html, @"<a\s+[^>]*href=(?:""([^""]*)""|'([^']*)'|([^\s>]+))[^>]*>(.*?)</a>", m =>
+            {
+                string href = m.Groups[1].Value;
+                if (string.IsNullOrEmpty(href)) href = m.Groups[2].Value;
+                if (string.IsNullOrEmpty(href)) href = m.Groups[3].Value;
+                string innerHtml = m.Groups[4].Value;
+
+                string innerText = Regex.Replace(innerHtml, @"<[^>]+>", " ");
+                innerText = System.Net.WebUtility.HtmlDecode(innerText).Trim();
+                href = System.Net.WebUtility.HtmlDecode(href).Trim();
+
+                if (string.IsNullOrWhiteSpace(innerText)) innerText = href;
+                if (string.IsNullOrWhiteSpace(innerText)) innerText = "Link";
+
+                if (links != null && !string.IsNullOrWhiteSpace(href) && !links.Any(l => l.Text == innerText && l.Url == href))
+                {
+                    links.Add(new EmailLink { Text = innerText, Url = href });
+                }
+
+                string rtfHref = EscapeRtfUrl(href);
+                string rtfText = EscapeRtf(innerText);
+
+                return $@"@@RTFLINK_START@@{{\field{{\*\fldinst{{HYPERLINK ""{rtfHref}""}}}}{{\fldrslt{{\cf1\ul {rtfText}}}}}}}@@RTFLINK_END@@";
+            }, RegexOptions.Singleline | RegexOptions.IgnoreCase);
+
+            // Structural tags
+            html = Regex.Replace(html, @"<h[1-3][^>]*>", "\r\n\r\n", RegexOptions.IgnoreCase);
+            html = Regex.Replace(html, @"</h[1-3]>", "\r\n\r\n", RegexOptions.IgnoreCase);
+            html = Regex.Replace(html, @"<h[4-6][^>]*>", "\r\n", RegexOptions.IgnoreCase);
+            html = Regex.Replace(html, @"</h[4-6]>", "\r\n", RegexOptions.IgnoreCase);
+            html = Regex.Replace(html, @"<br\s*/?>", "\r\n", RegexOptions.IgnoreCase);
+            html = Regex.Replace(html, @"</p>", "\r\n\r\n", RegexOptions.IgnoreCase);
+            html = Regex.Replace(html, @"</div>", "\r\n", RegexOptions.IgnoreCase);
+            html = Regex.Replace(html, @"</tr>", "\r\n", RegexOptions.IgnoreCase);
+            html = Regex.Replace(html, @"<li[^>]*>", "\r\n• ", RegexOptions.IgnoreCase);
+            html = Regex.Replace(html, @"</li>", "", RegexOptions.IgnoreCase);
+            html = Regex.Replace(html, @"<hr\s*/?>", "\r\n---\r\n", RegexOptions.IgnoreCase);
+
+            // Strip remaining HTML tags
+            html = Regex.Replace(html, @"<[^>]+>", " ");
+
+            // Process text segments while preserving @@RTFLINK markers
+            var chunks = Regex.Split(html, @"(@@RTFLINK_START@@.*?@@RTFLINK_END@@)", RegexOptions.Singleline);
+            var bodySb = new StringBuilder();
+
+            foreach (var chunk in chunks)
+            {
+                if (chunk.StartsWith("@@RTFLINK_START@@") && chunk.EndsWith("@@RTFLINK_END@@"))
+                {
+                    string linkField = chunk.Substring("@@RTFLINK_START@@".Length, chunk.Length - "@@RTFLINK_START@@".Length - "@@RTFLINK_END@@".Length);
+                    bodySb.Append(linkField);
+                }
+                else
+                {
+                    string decoded = System.Net.WebUtility.HtmlDecode(chunk);
+                    bodySb.Append(EscapeRtf(decoded));
+                }
+            }
+
+            string rtfBody = bodySb.ToString();
+            // Normalize multiple paragraphs
+            rtfBody = Regex.Replace(rtfBody, @"(\\par\s*){3,}", @"\par\par " + Environment.NewLine);
+
+            var fullRtf = new StringBuilder();
+            fullRtf.AppendLine(@"{\rtf1\ansi\ansicpg1252\deff0\nouicompat\deflang1033{\fonttbl{\f0\fnil\fcharset0 Segoe UI;}}");
+            fullRtf.AppendLine(@"{\colortbl ;\red0\green102\blue204;\red30\green30\blue30;}");
+            fullRtf.AppendLine(@"\viewkind4\uc1 ");
+            fullRtf.AppendLine(@"\pard\cf2\f0\fs20 ");
+            fullRtf.Append(rtfBody.Trim());
+            fullRtf.AppendLine(@"\par");
+            fullRtf.AppendLine(@"}");
+
+            return fullRtf.ToString();
+        }
+
+        private static string ConvertPlainTextToRtf(string text, List<EmailLink>? links = null)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return string.Empty;
+
+            var chunks = Regex.Split(text, @"(https?://[^\s<>""'{}|\^\[\]`]+)");
+            var bodySb = new StringBuilder();
+
+            foreach (var chunk in chunks)
+            {
+                if (Regex.IsMatch(chunk, @"^https?://", RegexOptions.IgnoreCase))
+                {
+                    if (links != null && !links.Any(l => l.Url == chunk))
+                    {
+                        links.Add(new EmailLink { Text = chunk, Url = chunk });
+                    }
+                    string rtfHref = EscapeRtfUrl(chunk);
+                    string rtfText = EscapeRtf(chunk);
+                    bodySb.Append($@"{{\field{{\*\fldinst{{HYPERLINK ""{rtfHref}""}}}}{{\fldrslt{{\cf1\ul {rtfText}}}}}}}");
+                }
+                else
+                {
+                    bodySb.Append(EscapeRtf(chunk));
+                }
+            }
+
+            var fullRtf = new StringBuilder();
+            fullRtf.AppendLine(@"{\rtf1\ansi\ansicpg1252\deff0\nouicompat\deflang1033{\fonttbl{\f0\fnil\fcharset0 Segoe UI;}}");
+            fullRtf.AppendLine(@"{\colortbl ;\red0\green102\blue204;\red30\green30\blue30;}");
+            fullRtf.AppendLine(@"\viewkind4\uc1 ");
+            fullRtf.AppendLine(@"\pard\cf2\f0\fs20 ");
+            fullRtf.Append(bodySb.ToString().Trim());
+            fullRtf.AppendLine(@"\par");
+            fullRtf.AppendLine(@"}");
+
+            return fullRtf.ToString();
+        }
+
+        private static string ConvertHtmlToDisplayText(string html)
+        {
+            if (string.IsNullOrWhiteSpace(html)) return string.Empty;
+
+            html = Regex.Replace(html, @"<style[^>]*>.*?</style>", "", RegexOptions.Singleline | RegexOptions.IgnoreCase);
+            html = Regex.Replace(html, @"<script[^>]*>.*?</script>", "", RegexOptions.Singleline | RegexOptions.IgnoreCase);
+            html = Regex.Replace(html, @"<head[^>]*>.*?</head>", "", RegexOptions.Singleline | RegexOptions.IgnoreCase);
+
+            // Turn anchor tags into "Text (URL)" or just "URL"
+            html = Regex.Replace(html, @"<a\s+[^>]*href=(?:""([^""]*)""|'([^']*)'|([^\s>]+))[^>]*>(.*?)</a>", m =>
+            {
+                string href = m.Groups[1].Value;
+                if (string.IsNullOrEmpty(href)) href = m.Groups[2].Value;
+                if (string.IsNullOrEmpty(href)) href = m.Groups[3].Value;
+                string innerHtml = m.Groups[4].Value;
+
+                string innerText = Regex.Replace(innerHtml, @"<[^>]+>", " ");
+                innerText = System.Net.WebUtility.HtmlDecode(innerText).Trim();
+                href = System.Net.WebUtility.HtmlDecode(href).Trim();
+
+                if (string.IsNullOrWhiteSpace(innerText) || string.Equals(innerText, href, StringComparison.OrdinalIgnoreCase))
+                {
+                    return href;
+                }
+                return $"{innerText} ({href})";
+            }, RegexOptions.Singleline | RegexOptions.IgnoreCase);
 
             html = Regex.Replace(html, @"<br\s*/?>", "\r\n", RegexOptions.IgnoreCase);
             html = Regex.Replace(html, @"</p>", "\r\n\r\n", RegexOptions.IgnoreCase);
             html = Regex.Replace(html, @"</div>", "\r\n", RegexOptions.IgnoreCase);
             html = Regex.Replace(html, @"</tr>", "\r\n", RegexOptions.IgnoreCase);
-            html = Regex.Replace(html, @"</li>", "\r\n", RegexOptions.IgnoreCase);
+            html = Regex.Replace(html, @"<li[^>]*>", "\r\n• ", RegexOptions.IgnoreCase);
+            html = Regex.Replace(html, @"</li>", "", RegexOptions.IgnoreCase);
 
             html = Regex.Replace(html, @"<[^>]+>", " ");
             html = System.Net.WebUtility.HtmlDecode(html);
-            return html;
+            html = Regex.Replace(html, @"\r\n|\r|\n", "\r\n");
+            html = Regex.Replace(html, @"(\r\n){3,}", "\r\n\r\n");
+            return html.Trim();
+        }
+
+        private static string EscapeRtf(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return string.Empty;
+            var sb = new StringBuilder(text.Length * 2);
+            foreach (char c in text)
+            {
+                switch (c)
+                {
+                    case '\\': sb.Append(@"\\"); break;
+                    case '{': sb.Append(@"\{"); break;
+                    case '}': sb.Append(@"\}"); break;
+                    case '\r': break;
+                    case '\n': sb.Append(@"\par" + Environment.NewLine); break;
+                    case '\t': sb.Append(@"\tab "); break;
+                    default:
+                        if (c > 127)
+                        {
+                            sb.Append(@"\u").Append((short)c).Append('?');
+                        }
+                        else
+                        {
+                            sb.Append(c);
+                        }
+                        break;
+                }
+            }
+            return sb.ToString();
+        }
+
+        private static string EscapeRtfUrl(string url)
+        {
+            if (string.IsNullOrEmpty(url)) return string.Empty;
+            return url.Replace(@"\", @"\\")
+                      .Replace(@"""", @"\""")
+                      .Replace("{", @"\{")
+                      .Replace("}", @"\}");
         }
 
         private static bool DetectMailingListHeaders(MimeMessage message)
