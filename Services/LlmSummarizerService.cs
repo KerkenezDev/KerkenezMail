@@ -26,19 +26,37 @@ namespace EmailSummarizer.Services
             return fullBody.Substring(0, maxChars) + "\r\n\r\n... [Remaining email content truncated for AI context length limit]";
         }
 
+        private static string GetEmailContextNotice(EmailItem email)
+        {
+            bool isThreadOrReply = email.Subject.StartsWith("Re:", StringComparison.OrdinalIgnoreCase) ||
+                                   email.Subject.StartsWith("Fwd:", StringComparison.OrdinalIgnoreCase) ||
+                                   (email.Subject.Contains("[") && email.Subject.Contains("]"));
+
+            bool hasNewsletterSignature = email.HasNewsletterFooter || 
+                                          ImapService.DetectNewsletterFooter(email.RawBody) || 
+                                          ImapService.DetectNewsletterFooter(email.CleanBody);
+
+            if (email.IsMailingList && hasNewsletterSignature && !isThreadOrReply)
+            {
+                return "Context Note: Mass mailing list / newsletter format detected.\r\n";
+            }
+            else if (email.IsMailingList || isThreadOrReply)
+            {
+                return "Context Note: Automated notification or discussion thread.\r\n";
+            }
+
+            return string.Empty;
+        }
+
         public async Task<string> SummarizeEmailAsync(
             EmailItem email,
             AppSettings settings,
             CancellationToken ct = default)
         {
             string emailContentForLlm = PrepareEmailBodyForSummary(email.CleanBody, settings.MaxSummaryEmailChars);
+            string metadataNotice = GetEmailContextNotice(email);
 
-            bool isLikelyNewsletter = email.IsMailingList || email.HasNewsletterFooter || ImapService.DetectNewsletterFooter(email.CleanBody) || ImapService.DetectNewsletterFooter(email.RawBody);
-            string metadataNotice = isLikelyNewsletter
-                ? "Classification Note: This email is an Automated Newsletter / Mailing List / Promotional update. Set Priority to 3.\r\n"
-                : "";
-
-            var userContent = $"Analyze the following email, assign a Priority rank (1 = High/Urgent, 2 = Normal/Medium, 3 = Low/Newsletter), and provide a concise 1-3 sentence executive summary.\r\n\r\n" +
+            var userContent = $"Analyze the following email, assign an accurate Priority rank (1 = High/Urgent/Action Required/Errors, 2 = Normal/Medium/Informational, 3 = Low/Newsletters/Marketing), and provide a concise 1-3 sentence executive brief.\r\n\r\n" +
                               $"Subject: {email.Subject}\r\n" +
                               $"From: {email.Sender}\r\n" +
                               metadataNotice +
@@ -56,9 +74,9 @@ namespace EmailSummarizer.Services
             {
                 systemPrompt += "\r\n\r\nRequired Output format:\r\nPriority: [1/2/3]\r\nSummary: [summary text]";
             }
-            if (!systemPrompt.Contains("signals", StringComparison.OrdinalIgnoreCase))
+            if (!systemPrompt.Contains("validation failure", StringComparison.OrdinalIgnoreCase) && !systemPrompt.Contains("signals", StringComparison.OrdinalIgnoreCase))
             {
-                systemPrompt += "\r\n* Note: Market digests, signals, promos, and newsletters must always be Priority 3 (Low).";
+                systemPrompt += "\r\n* Note: Errors, validation failures, and action requests are Priority 1. Marketing promos and bulk digests are Priority 3 (Low).";
             }
 
             // Strict user preference: respect configured token limit without forced overrides
