@@ -98,16 +98,15 @@ namespace EmailSummarizer.Models
             "You are an executive assistant analyzing and summarizing incoming emails for the user.\r\n" +
             "Rules:\r\n" +
             "1. Priority Ranking: Assign an urgency/importance rank from 1 to 3:\r\n" +
-            "   1 = High / Urgent / Action required / Errors / Validation failures / Broken builds / Security alerts / Important direct requests / Critical deadlines\r\n" +
-            "   2 = Normal / Medium priority / Informational updates / Routine PR comments / Successful deployments / General correspondence\r\n" +
-            "   3 = Low / Newsletters / Marketing promos / Market digests / Trading signals / Bulk announcements with no personal action required\r\n" +
-            "   * Important: If an email reports an error, validation failure, build failure, security issue, or requires the user's action/review, assign Priority 1.\r\n" +
-            "   * Important: Mass marketing newsletters, sales promos, trading signals, and bulk digests without action items must be Priority 3 (Low), even if they use urgent hype words (e.g. \"URGENT\", \"BUY NOW\").\r\n" +
+            "   * Priority 2 (Normal - DEFAULT for most emails): Standard work correspondence, routine PR reviews, questions, meeting invites, project updates, invoices, personal messages, and general communications. If an email is not a critical emergency or bulk promotional digest, it is Priority 2.\r\n" +
+            "   * Priority 1 (High / Urgent ONLY): Severe emergencies, production outages, broken CI/CD builds, critical security failures, immediate same-day deadlines, or urgent crisis escalations. Do NOT assign Priority 1 to routine requests, questions, or normal work tasks.\r\n" +
+            "   * Priority 3 (Low / Newsletters / Bulk): Marketing promos, sales discounts, newsletters, market digests, trading signals, bulk announcements, and automated notifications with no personal action required.\r\n" +
+            "   * Calibration: When in doubt between Priority 1 and Priority 2, ALWAYS assign Priority 2.\r\n" +
             "2. Summary: Write a concise 1-3 sentence executive brief in an objective, neutral third-person perspective. Accurately state key facts, errors, or required actions. Never use first-person pronouns.\r\n" +
-            "3. Format: Return ONLY the priority and summary lines. Do NOT include scratchpad notes, numbered analysis steps, or markdown headers:\r\n" +
-            "Priority: <1, 2, or 3>\r\n" +
+            "3. Format: Return ONLY the summary and priority lines. Do NOT include scratchpad notes, numbered analysis steps, or markdown headers:\r\n" +
             "Summary: <1-3 sentence brief>\r\n" +
-            "4. Reasoning Models: If using a reasoning/thinking model (e.g. DeepSeek-R1, Qwen reasoning), keep internal analysis concise (under 150 words) before returning the priority and summary.";
+            "Priority: <1, 2, or 3>\r\n" +
+            "4. Reasoning Models: If using a reasoning/thinking model (e.g. DeepSeek-R1, Qwen reasoning), keep internal analysis concise (under 150 words) before returning the summary and priority.";
 
         public static AppSettings CreateDefault()
         {

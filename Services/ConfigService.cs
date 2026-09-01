@@ -144,7 +144,12 @@ namespace EmailSummarizer.Services
             // 6. Heal Email / System settings
             if (s.MaxEmailsPerAccount <= 0) s.MaxEmailsPerAccount = 15;
             if (s.TrayRefreshIntervalMinutes <= 0) s.TrayRefreshIntervalMinutes = 5;
-            if (string.IsNullOrWhiteSpace(s.SystemPrompt)) s.SystemPrompt = AppSettings.CreateDefault().SystemPrompt;
+            if (string.IsNullOrWhiteSpace(s.SystemPrompt) || 
+                !s.SystemPrompt.Contains("Priority", StringComparison.OrdinalIgnoreCase) ||
+                (s.SystemPrompt.Contains("Action required", StringComparison.OrdinalIgnoreCase) && !s.SystemPrompt.Contains("Priority 2 (Normal - DEFAULT", StringComparison.OrdinalIgnoreCase)))
+            {
+                s.SystemPrompt = AppSettings.CreateDefault().SystemPrompt;
+            }
             if (s.AccountIds == null) s.AccountIds = new List<string>();
 
             return s;
