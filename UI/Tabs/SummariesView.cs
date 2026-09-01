@@ -1090,6 +1090,25 @@ namespace EmailSummarizer.UI.Tabs
             {
                 string url = e.LinkText.Trim();
 
+                // If LinkText is an anchor label (like "[Remote Content]" or "Click Here"), resolve target URL from link spans
+                if (!url.StartsWith("http://", StringComparison.OrdinalIgnoreCase) &&
+                    !url.StartsWith("https://", StringComparison.OrdinalIgnoreCase) &&
+                    !url.StartsWith("mailto:", StringComparison.OrdinalIgnoreCase) &&
+                    !url.StartsWith("www.", StringComparison.OrdinalIgnoreCase))
+                {
+                    Point mousePos = _rtbEmailBody.PointToClient(Cursor.Position);
+                    int charIdx = _rtbEmailBody.GetCharIndexFromPosition(mousePos);
+                    var span = _currentEmailLinkSpans.FirstOrDefault(s => charIdx >= s.Start - 2 && charIdx <= s.Start + s.Length + 2);
+                    if (!string.IsNullOrEmpty(span.Url))
+                    {
+                        url = span.Url;
+                    }
+                    else if (!string.IsNullOrEmpty(_lastHoverLinkUrl))
+                    {
+                        url = _lastHoverLinkUrl;
+                    }
+                }
+
                 // Check and launch valid http, https, mailto URLs
                 if (Uri.TryCreate(url, UriKind.Absolute, out var uri) &&
                     (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps || uri.Scheme == Uri.UriSchemeMailto))
@@ -1800,16 +1819,24 @@ namespace EmailSummarizer.UI.Tabs
 
             if (email.ExtractedLinks != null)
             {
+                int searchStart = 0;
                 foreach (var link in email.ExtractedLinks)
                 {
                     if (string.IsNullOrWhiteSpace(link.Text) || string.IsNullOrWhiteSpace(link.Url)) continue;
-                    int pos = 0;
-                    while (pos < visibleText.Length)
+
+                    int found = visibleText.IndexOf(link.Text, searchStart, StringComparison.OrdinalIgnoreCase);
+                    if (found >= 0)
                     {
-                        int found = visibleText.IndexOf(link.Text, pos, StringComparison.OrdinalIgnoreCase);
-                        if (found < 0) break;
                         _currentEmailLinkSpans.Add((found, link.Text.Length, link.Url));
-                        pos = found + Math.Max(1, link.Text.Length);
+                        searchStart = found + Math.Max(1, link.Text.Length);
+                    }
+                    else
+                    {
+                        int fallback = visibleText.IndexOf(link.Text, 0, StringComparison.OrdinalIgnoreCase);
+                        if (fallback >= 0 && !_currentEmailLinkSpans.Any(s => s.Start == fallback && s.Length == link.Text.Length))
+                        {
+                            _currentEmailLinkSpans.Add((fallback, link.Text.Length, link.Url));
+                        }
                     }
                 }
             }

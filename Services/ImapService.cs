@@ -442,20 +442,74 @@ namespace EmailSummarizer.Services
                 if (string.IsNullOrEmpty(href)) href = m.Groups[3].Value;
                 string innerHtml = m.Groups[4].Value;
 
+                bool hasMedia = Regex.IsMatch(innerHtml, @"<(?:img|svg|picture|figure|video)\b", RegexOptions.IgnoreCase);
+                if (hasMedia && IsTrackingPixel(innerHtml))
+                {
+                    return "";
+                }
+
                 string innerText = Regex.Replace(innerHtml, @"<[^>]+>", " ");
                 innerText = System.Net.WebUtility.HtmlDecode(innerText).Trim();
                 href = System.Net.WebUtility.HtmlDecode(href).Trim();
 
-                if (string.IsNullOrWhiteSpace(innerText)) innerText = href;
-                if (string.IsNullOrWhiteSpace(innerText)) innerText = "Link";
+                if (string.IsNullOrWhiteSpace(href)) return innerText;
 
-                if (links != null && !string.IsNullOrWhiteSpace(href) && !links.Any(l => l.Text == innerText && l.Url == href))
+                string altText = hasMedia ? GetCleanAltText(innerHtml) : "";
+                string label;
+
+                if (hasMedia && string.IsNullOrWhiteSpace(innerText))
                 {
-                    links.Add(new EmailLink { Text = innerText, Url = href });
+                    label = !string.IsNullOrWhiteSpace(altText) ? $"[Remote Content: {altText}]" : "[Remote Content]";
+                }
+                else if (!string.IsNullOrWhiteSpace(innerText))
+                {
+                    label = innerText;
+                }
+                else
+                {
+                    label = "[Remote Content]";
+                }
+
+                if (links != null && !links.Any(l => l.Text == label && l.Url == href))
+                {
+                    links.Add(new EmailLink { Text = label, Url = href });
                 }
 
                 string rtfHref = EscapeRtfUrl(href);
-                string rtfText = EscapeRtf(innerText);
+                string rtfText = EscapeRtf(label);
+
+                return $@"@@RTFLINK_START@@{{\field{{\*\fldinst{{HYPERLINK ""{rtfHref}""}}}}{{\fldrslt{{\cf1\ul {rtfText}}}}}}}@@RTFLINK_END@@";
+            }, RegexOptions.Singleline | RegexOptions.IgnoreCase);
+
+            // Replace standalone <img> tags with [Remote Content] hyperlink pointing to src
+            html = Regex.Replace(html, @"<img\s+[^>]*src=(?:""([^""]*)""|'([^']*)'|([^\s>]+))[^>]*>", m =>
+            {
+                string fullTag = m.Value;
+                if (IsTrackingPixel(fullTag))
+                {
+                    return "";
+                }
+
+                string src = m.Groups[1].Value;
+                if (string.IsNullOrEmpty(src)) src = m.Groups[2].Value;
+                if (string.IsNullOrEmpty(src)) src = m.Groups[3].Value;
+                src = System.Net.WebUtility.HtmlDecode(src).Trim();
+
+                if (string.IsNullOrWhiteSpace(src) || src.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
+                {
+                    return "";
+                }
+
+                string altText = GetCleanAltText(fullTag);
+                string label = !string.IsNullOrWhiteSpace(altText) ? $"[Remote Content: {altText}]" : "[Remote Content]";
+
+                if (links != null && !links.Any(l => l.Text == label && l.Url == src))
+                {
+                    links.Add(new EmailLink { Text = label, Url = src });
+                }
+
+                string rtfHref = EscapeRtfUrl(src);
+                string rtfText = EscapeRtf(label);
 
                 return $@"@@RTFLINK_START@@{{\field{{\*\fldinst{{HYPERLINK ""{rtfHref}""}}}}{{\fldrslt{{\cf1\ul {rtfText}}}}}}}@@RTFLINK_END@@";
             }, RegexOptions.Singleline | RegexOptions.IgnoreCase);
@@ -555,7 +609,7 @@ namespace EmailSummarizer.Services
             html = Regex.Replace(html, @"<script[^>]*>.*?</script>", "", RegexOptions.Singleline | RegexOptions.IgnoreCase);
             html = Regex.Replace(html, @"<head[^>]*>.*?</head>", "", RegexOptions.Singleline | RegexOptions.IgnoreCase);
 
-            // Turn anchor tags into "Text (URL)" or just "URL"
+            // 1. Turn anchor tags into Text or [Remote Content]
             html = Regex.Replace(html, @"<a\s+[^>]*href=(?:""([^""]*)""|'([^']*)'|([^\s>]+))[^>]*>(.*?)</a>", m =>
             {
                 string href = m.Groups[1].Value;
@@ -563,15 +617,33 @@ namespace EmailSummarizer.Services
                 if (string.IsNullOrEmpty(href)) href = m.Groups[3].Value;
                 string innerHtml = m.Groups[4].Value;
 
+                bool hasMedia = Regex.IsMatch(innerHtml, @"<(?:img|svg|picture|figure|video)\b", RegexOptions.IgnoreCase);
+                if (hasMedia && IsTrackingPixel(innerHtml)) return "";
+
                 string innerText = Regex.Replace(innerHtml, @"<[^>]+>", " ");
                 innerText = System.Net.WebUtility.HtmlDecode(innerText).Trim();
                 href = System.Net.WebUtility.HtmlDecode(href).Trim();
 
+                if (hasMedia && string.IsNullOrWhiteSpace(innerText))
+                {
+                    string alt = GetCleanAltText(innerHtml);
+                    return !string.IsNullOrWhiteSpace(alt) ? $"[Remote Content: {alt}]" : "[Remote Content]";
+                }
+
                 if (string.IsNullOrWhiteSpace(innerText) || string.Equals(innerText, href, StringComparison.OrdinalIgnoreCase))
                 {
-                    return href;
+                    return "[Remote Content]";
                 }
-                return $"{innerText} ({href})";
+                return innerText;
+            }, RegexOptions.Singleline | RegexOptions.IgnoreCase);
+
+            // 2. Turn standalone <img> into [Remote Content]
+            html = Regex.Replace(html, @"<img\s+[^>]*src=(?:""([^""]*)""|'([^']*)'|([^\s>]+))[^>]*>", m =>
+            {
+                if (IsTrackingPixel(m.Value)) return "";
+
+                string alt = GetCleanAltText(m.Value);
+                return !string.IsNullOrWhiteSpace(alt) ? $"[Remote Content: {alt}]" : "[Remote Content]";
             }, RegexOptions.Singleline | RegexOptions.IgnoreCase);
 
             html = Regex.Replace(html, @"<br\s*/?>", "\r\n", RegexOptions.IgnoreCase);
@@ -667,6 +739,58 @@ namespace EmailSummarizer.Services
                 @"(?:unsubscribe|opt[\s\-]out|email\s+preferences|manage\s+(?:your\s+)?subscription|manage\s+preferences|view\s+(?:this\s+email\s+)?in\s+browser|view\s+online|all\s+rights\s+reserved|privacy\s+policy\s*[|•\/\-]\s*terms|to\s+stop\s+receiving\s+these\s+emails|you\s+are\s+receiving\s+this\s+email\s+because|click\s+here\s+to\s+unsubscribe)",
                 RegexOptions.IgnoreCase | RegexOptions.Multiline
             );
+        }
+
+        private static bool IsTrackingPixel(string tagOrHtml)
+        {
+            if (string.IsNullOrWhiteSpace(tagOrHtml)) return false;
+
+            // Dimensions: width="0", width="1", height="0", height="1"
+            if (Regex.IsMatch(tagOrHtml, @"\b(?:width|height)\s*=\s*[""']?[01](?:px)?[""']?", RegexOptions.IgnoreCase))
+            {
+                return true;
+            }
+
+            // Inline styles: display:none, width:0px, width:1px, height:0px, height:1px
+            if (Regex.IsMatch(tagOrHtml, @"style\s*=\s*[""'][^""']*(?:display\s*:\s*none|width\s*:\s*[01]px|height\s*:\s*[01]px)", RegexOptions.IgnoreCase))
+            {
+                return true;
+            }
+
+            // Common tracking keywords in img source/tag
+            if (Regex.IsMatch(tagOrHtml, @"(?:/pixel\b|/trk\b|/open\b|spacer\.gif|blank\.gif|clear\.gif)", RegexOptions.IgnoreCase))
+            {
+                return true;
+            }
+
+            return false;
+        }
+
+        private static string GetCleanAltText(string tagOrHtml)
+        {
+            if (string.IsNullOrWhiteSpace(tagOrHtml)) return string.Empty;
+
+            var match = Regex.Match(tagOrHtml, @"alt=(?:""([^""]*)""|'([^']*)'|([^\s>]+))", RegexOptions.IgnoreCase);
+            if (!match.Success) return string.Empty;
+
+            string alt = match.Groups[1].Value;
+            if (string.IsNullOrEmpty(alt)) alt = match.Groups[2].Value;
+            if (string.IsNullOrEmpty(alt)) alt = match.Groups[3].Value;
+
+            alt = System.Net.WebUtility.HtmlDecode(alt).Trim();
+
+            // Ignore generic placeholders or excessively long alt texts
+            if (string.IsNullOrWhiteSpace(alt) || 
+                alt.Equals("image", StringComparison.OrdinalIgnoreCase) ||
+                alt.Equals("spacer", StringComparison.OrdinalIgnoreCase) ||
+                alt.Equals("blank", StringComparison.OrdinalIgnoreCase) ||
+                alt.Equals("picture", StringComparison.OrdinalIgnoreCase) ||
+                alt.Length > 40)
+            {
+                return string.Empty;
+            }
+
+            return alt;
         }
     }
 }
