@@ -87,9 +87,9 @@ namespace EmailSummarizer.Models
             "   * Important: If an email reports an error, validation failure, build failure, security issue, or requires the user's action/review, assign Priority 1.\r\n" +
             "   * Important: Mass marketing newsletters, sales promos, trading signals, and bulk digests without action items must be Priority 3 (Low), even if they use urgent hype words (e.g. \"URGENT\", \"BUY NOW\").\r\n" +
             "2. Summary: Write a concise 1-3 sentence executive brief in an objective, neutral third-person perspective. Accurately state key facts, errors, or required actions. Never use first-person pronouns.\r\n" +
-            "3. Format: Output strictly in this format:\r\n" +
-            "Priority: [1/2/3]\r\n" +
-            "Summary: [summary text]\r\n" +
+            "3. Format: Return ONLY the priority and summary lines. Do NOT include scratchpad notes, numbered analysis steps, or markdown headers:\r\n" +
+            "Priority: <1, 2, or 3>\r\n" +
+            "Summary: <1-3 sentence brief>\r\n" +
             "4. Reasoning Models: If using a reasoning/thinking model (e.g. DeepSeek-R1, Qwen reasoning), keep internal analysis concise (under 150 words) before returning the priority and summary.";
 
         public static AppSettings CreateDefault()
