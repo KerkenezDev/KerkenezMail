@@ -24,7 +24,22 @@ namespace EmailSummarizer.UI.Tabs
         private CancellationTokenSource? _cts;
         private volatile bool _isBatchSyncing = false;
         private MailFolderType _currentFolder = MailFolderType.Inbox;
-        private readonly Dictionary<MailFolderType, List<EmailItem>> _folderCache = new();
+        private readonly Dictionary<MailFolderType, List<EmailItem>> _folderStorage = new()
+        {
+            { MailFolderType.Inbox, new List<EmailItem>() },
+            { MailFolderType.Sent, new List<EmailItem>() },
+            { MailFolderType.Archive, new List<EmailItem>() },
+            { MailFolderType.Spam, new List<EmailItem>() },
+            { MailFolderType.Trash, new List<EmailItem>() }
+        };
+        private readonly Dictionary<MailFolderType, bool> _folderFetchedOnce = new()
+        {
+            { MailFolderType.Inbox, false },
+            { MailFolderType.Sent, false },
+            { MailFolderType.Archive, false },
+            { MailFolderType.Spam, false },
+            { MailFolderType.Trash, false }
+        };
         private readonly List<EmailItem> _emails = new List<EmailItem>();
         private readonly List<EmailItem> _selectedEmailsOrder = new List<EmailItem>();
 
@@ -696,68 +711,76 @@ namespace EmailSummarizer.UI.Tabs
 
         public async Task SwitchToFolderAsync(MailFolderType folder, bool forceRefresh = false)
         {
-            if (_currentFolder == folder && !forceRefresh)
+            if (_currentFolder == folder && !forceRefresh && _emails.Count > 0)
             {
                 return;
             }
 
-            // Save previous emails into cache if any
-            if (_emails.Count > 0)
+            // 1. Cancel any active folder sync immediately to stop previous folder network traffic
+            try
             {
-                _folderCache[_currentFolder] = new List<EmailItem>(_emails);
+                _cts?.Cancel();
             }
+            catch { }
 
+            _isBatchSyncing = false;
             _currentFolder = folder;
+
+            // 2. Update UI controls for this folder
+            _btnRefresh.Enabled = true;
+            _progressBar.Visible = false;
             _btnRefresh.Text = (folder == MailFolderType.Inbox)
                 ? "🔄 Refresh Inbox"
                 : $"🔄 Refresh {folder.GetDisplayName()}";
 
             _topBarToolTip.SetToolTip(_btnRefresh, $"Refresh {folder.GetDisplayName()}: Fetch messages for this folder from configured accounts");
 
-            if (_folderCache.TryGetValue(folder, out var cached) && !forceRefresh)
+            // 3. Load exclusively from this folder's dedicated storage
+            lock (_folderStorage)
             {
                 _emails.Clear();
-                _emails.AddRange(cached);
-                PopulateListView();
-
-                int unreadCount = _emails.Count(e => !e.IsRead);
-                string backendType = _configService.Settings.AiBackend;
-                string status = string.Equals(backendType, "LlamaCpp", StringComparison.OrdinalIgnoreCase) 
-                    ? (_configService.Settings.InstantVramUnload ? "VRAM Free" : "Model Loaded in VRAM") 
-                    : (string.Equals(backendType, "Ollama", StringComparison.OrdinalIgnoreCase) ? "Ollama Active" : "Cloud Active");
-
-                string metric = folder == MailFolderType.Inbox
-                    ? $"Ready • {_emails.Count} emails in inbox ({unreadCount} unread)"
-                    : $"Ready • {_emails.Count} emails in {folder.GetDisplayName()}";
-                StatusUpdated?.Invoke(metric, status);
-
-                if (_lvEmails.Items.Count > 0)
-                {
-                    _lvEmails.Items[0].Selected = true;
-                }
-                else
-                {
-                    ResetEmailPreview();
-                }
-
-                return;
+                _emails.AddRange(_folderStorage[folder]);
             }
 
-            // Not cached yet or forced refresh: fetch on-demand only now!
-            await FetchAndAutoSummarizeAsync(folder);
+            PopulateListView();
+
+            int unreadCount = _emails.Count(e => !e.IsRead);
+            string backendType = _configService.Settings.AiBackend;
+            string status = string.Equals(backendType, "LlamaCpp", StringComparison.OrdinalIgnoreCase) 
+                ? (_configService.Settings.InstantVramUnload ? "VRAM Free" : "Model Loaded in VRAM") 
+                : (string.Equals(backendType, "Ollama", StringComparison.OrdinalIgnoreCase) ? "Ollama Active" : "Cloud Active");
+
+            string metric = folder == MailFolderType.Inbox
+                ? $"Ready • {_emails.Count} emails in inbox ({unreadCount} unread)"
+                : $"Ready • {_emails.Count} emails in {folder.GetDisplayName()}";
+            StatusUpdated?.Invoke(metric, status);
+
+            if (_lvEmails.Items.Count > 0)
+            {
+                _lvEmails.Items[0].Selected = true;
+            }
+            else
+            {
+                ResetEmailPreview();
+            }
+
+            // 4. If this folder was never fetched from IMAP yet or forceRefresh is true, fetch it now!
+            if (!_folderFetchedOnce[folder] || forceRefresh)
+            {
+                await FetchAndAutoSummarizeAsync(folder);
+            }
         }
 
         public async Task FetchAndAutoSummarizeAsync(MailFolderType? targetFolder = null)
         {
-            if (_btnRefresh.Enabled == false) return;
+            var folderToFetch = targetFolder ?? _currentFolder;
 
-            if (targetFolder.HasValue)
+            // Cancel any previous sync before starting a new one
+            try
             {
-                _currentFolder = targetFolder.Value;
-                _btnRefresh.Text = (_currentFolder == MailFolderType.Inbox)
-                    ? "🔄 Refresh Inbox"
-                    : $"🔄 Refresh {_currentFolder.GetDisplayName()}";
+                _cts?.Cancel();
             }
+            catch { }
 
             _cts = new CancellationTokenSource();
             var ct = _cts.Token;
@@ -765,6 +788,19 @@ namespace EmailSummarizer.UI.Tabs
             _isBatchSyncing = true;
             _btnRefresh.Enabled = false;
             _progressBar.Visible = true;
+
+            // Reset this folder's dedicated storage for a clean fresh fetch
+            lock (_folderStorage)
+            {
+                _folderStorage[folderToFetch].Clear();
+            }
+
+            if (_currentFolder == folderToFetch)
+            {
+                _emails.Clear();
+                PopulateListView();
+                ResetEmailPreview();
+            }
 
             var settings = _configService.Settings;
             var accounts = _configService.GetAccounts();
@@ -780,14 +816,14 @@ namespace EmailSummarizer.UI.Tabs
             }
 
             string backendName = settings.GetBackendDisplayName();
-            string folderName = _currentFolder.GetDisplayName();
+            string folderName = folderToFetch.GetDisplayName();
 
-            StatusUpdated?.Invoke($"Syncing {folderName}...", "Active");
+            if (_currentFolder == folderToFetch)
+            {
+                StatusUpdated?.Invoke($"Syncing {folderName}...", "Active");
+            }
             _logger.Report("\r\n" + new string('═', 60));
             _logger.Report($"[*] Fast-syncing all accounts for [{folderName}] with AI backend [{backendName}]...");
-
-            _emails.Clear();
-            PopulateListView();
 
             try
             {
@@ -813,32 +849,62 @@ namespace EmailSummarizer.UI.Tabs
                     _logger,
                     onEmailFetched: emailItem =>
                     {
-                        if (this.IsDisposed || !this.IsHandleCreated) return;
+                        if (ct.IsCancellationRequested) return;
 
-                        try
+                        // Ensure folder tag is accurate
+                        emailItem.Folder = folderToFetch;
+
+                        // Store in this folder's dedicated storage
+                        lock (_folderStorage)
                         {
-                            this.BeginInvoke(new Action(() =>
+                            var targetStorage = _folderStorage[folderToFetch];
+                            bool exists = emailItem.UniqueId > 0
+                                ? targetStorage.Any(e => e.UniqueId == emailItem.UniqueId && string.Equals(e.AccountName, emailItem.AccountName, StringComparison.OrdinalIgnoreCase))
+                                : targetStorage.Contains(emailItem);
+
+                            if (!exists)
                             {
-                                if (this.IsDisposed || !this.IsHandleCreated) return;
-
-                                _emails.Add(emailItem);
-                                AddEmailItemToListView(emailItem);
-
-                                if (_lvEmails.SelectedItems.Count == 0 && _lvEmails.Items.Count > 0)
-                                {
-                                    _lvEmails.Items[0].Selected = true;
-                                }
-                            }));
+                                targetStorage.Add(emailItem);
+                            }
                         }
-                        catch { }
 
-                        if (!emailItem.IsRead && _currentFolder == MailFolderType.Inbox)
+                        // STRICT FOLDER ISOLATION: Only update active UI if user is STILL viewing THIS folder!
+                        if (_currentFolder == folderToFetch)
                         {
-                            activeSummaryTasks.Add(SummarizeUnreadEmailInBackgroundAsync(emailItem, settings, serverTask, ct));
+                            if (this.IsDisposed || !this.IsHandleCreated) return;
+
+                            try
+                            {
+                                this.BeginInvoke(new Action(() =>
+                                {
+                                    if (this.IsDisposed || !this.IsHandleCreated || _currentFolder != folderToFetch) return;
+
+                                    bool alreadyInList = emailItem.UniqueId > 0
+                                        ? _emails.Any(e => e.UniqueId == emailItem.UniqueId && string.Equals(e.AccountName, emailItem.AccountName, StringComparison.OrdinalIgnoreCase))
+                                        : _emails.Contains(emailItem);
+
+                                    if (!alreadyInList)
+                                    {
+                                        _emails.Add(emailItem);
+                                        AddEmailItemToListView(emailItem);
+
+                                        if (_lvEmails.SelectedItems.Count == 0 && _lvEmails.Items.Count > 0)
+                                        {
+                                            _lvEmails.Items[0].Selected = true;
+                                        }
+                                    }
+                                }));
+                            }
+                            catch { }
+
+                            if (!emailItem.IsRead && folderToFetch == MailFolderType.Inbox)
+                            {
+                                activeSummaryTasks.Add(SummarizeUnreadEmailInBackgroundAsync(emailItem, settings, serverTask, ct));
+                            }
                         }
                     },
                     ct: ct,
-                    folderType: _currentFolder);
+                    folderType: folderToFetch);
 
                 await fetchTask;
                 if (serverTask != null) await serverTask;
@@ -848,51 +914,55 @@ namespace EmailSummarizer.UI.Tabs
                     await Task.WhenAll(activeSummaryTasks);
                 }
 
-                _folderCache[_currentFolder] = new List<EmailItem>(_emails);
+                _folderFetchedOnce[folderToFetch] = true;
 
-                int unreadCount = _emails.Count(e => !e.IsRead);
-                _logger.Report($"[✓] {folderName} sync complete. Loaded {_emails.Count} total email(s) ({unreadCount} unread).");
-
-                string metricMsg = (_currentFolder == MailFolderType.Inbox)
-                    ? $"Ready • {_emails.Count} emails in inbox ({unreadCount} unread)"
-                    : $"Ready • {_emails.Count} emails in {folderName}";
-
-                // Handle Instant VRAM Unload setting after entire batch is fetched & summarized
-                if (string.Equals(settings.AiBackend, "LlamaCpp", StringComparison.OrdinalIgnoreCase) && settings.AutoStartLlamaServer)
+                if (_currentFolder == folderToFetch)
                 {
-                    if (settings.InstantVramUnload)
+                    int unreadCount = _emails.Count(e => !e.IsRead);
+                    _logger.Report($"[✓] {folderName} sync complete. Loaded {_emails.Count} total email(s) ({unreadCount} unread).");
+
+                    string metricMsg = (folderToFetch == MailFolderType.Inbox)
+                        ? $"Ready • {_emails.Count} emails in inbox ({unreadCount} unread)"
+                        : $"Ready • {_emails.Count} emails in {folderName}";
+
+                    // Handle Instant VRAM Unload setting after entire batch is fetched & summarized
+                    if (string.Equals(settings.AiBackend, "LlamaCpp", StringComparison.OrdinalIgnoreCase) && settings.AutoStartLlamaServer)
                     {
-                        _llamaManager.Stop(_logger);
-                        StatusUpdated?.Invoke(metricMsg, "VRAM Free");
+                        if (settings.InstantVramUnload)
+                        {
+                            _llamaManager.Stop(_logger);
+                            StatusUpdated?.Invoke(metricMsg, "VRAM Free");
+                        }
+                        else
+                        {
+                            StatusUpdated?.Invoke(metricMsg, "Model Loaded in VRAM");
+                        }
                     }
                     else
                     {
-                        StatusUpdated?.Invoke(metricMsg, "Model Loaded in VRAM");
+                        string backendMetric = string.Equals(settings.AiBackend, "Ollama", StringComparison.OrdinalIgnoreCase) 
+                            ? "Ollama Active" 
+                            : "Cloud Active";
+                        StatusUpdated?.Invoke(metricMsg, backendMetric);
                     }
-                }
-                else
-                {
-                    string backendMetric = string.Equals(settings.AiBackend, "Ollama", StringComparison.OrdinalIgnoreCase) 
-                        ? "Ollama Active" 
-                        : "Cloud Active";
-                    StatusUpdated?.Invoke(metricMsg, backendMetric);
                 }
             }
             catch (OperationCanceledException)
             {
-                StatusUpdated?.Invoke("Operation cancelled", "Ready");
                 _logger.Report($"[!] {folderName} sync cancelled.");
             }
             catch (Exception ex)
             {
-                StatusUpdated?.Invoke($"Error: {ex.Message}", "Error");
-                _logger.Report($"[!] Sync error: {ex.Message}");
+                _logger.Report($"[!] {folderName} sync error: {ex.Message}");
             }
             finally
             {
-                _isBatchSyncing = false;
-                _btnRefresh.Enabled = true;
-                _progressBar.Visible = false;
+                if (_currentFolder == folderToFetch)
+                {
+                    _isBatchSyncing = false;
+                    _btnRefresh.Enabled = true;
+                    _progressBar.Visible = false;
+                }
             }
         }
 
@@ -1054,6 +1124,8 @@ namespace EmailSummarizer.UI.Tabs
 
         private void AddEmailItemToListView(EmailItem email)
         {
+            if (email.Folder != _currentFolder) return;
+
             var filterAccount = _cboAccountFilter.SelectedItem?.ToString()?.Trim();
             string search = _txtSearch.Text.Trim();
 
@@ -1144,6 +1216,8 @@ namespace EmailSummarizer.UI.Tabs
 
             var visibleEmails = _emails.Where(e =>
             {
+                if (e.Folder != _currentFolder) return false;
+
                 if (!string.IsNullOrEmpty(filterAccount) && 
                     !string.Equals(filterAccount, "All Accounts", StringComparison.OrdinalIgnoreCase) && 
                     !string.Equals(e.AccountName?.Trim(), filterAccount, StringComparison.OrdinalIgnoreCase))
@@ -1552,6 +1626,23 @@ namespace EmailSummarizer.UI.Tabs
             {
                 email.IsArchived = true;
                 UpdateListViewItemForEmail(email);
+
+                lock (_folderStorage)
+                {
+                    if (_folderStorage.TryGetValue(MailFolderType.Archive, out var archList))
+                    {
+                        bool exists = email.UniqueId > 0
+                            ? archList.Any(e => e.UniqueId == email.UniqueId && string.Equals(e.AccountName, email.AccountName, StringComparison.OrdinalIgnoreCase))
+                            : archList.Contains(email);
+
+                        if (!exists)
+                        {
+                            var archCopy = email;
+                            archCopy.Folder = MailFolderType.Archive;
+                            archList.Add(archCopy);
+                        }
+                    }
+                }
             }
 
             var previewEmail = GetCurrentPreviewEmail();
@@ -1582,6 +1673,24 @@ namespace EmailSummarizer.UI.Tabs
             {
                 _emails.Remove(email);
                 _selectedEmailsOrder.Remove(email);
+
+                lock (_folderStorage)
+                {
+                    _folderStorage[_currentFolder].Remove(email);
+                    if (_currentFolder != MailFolderType.Trash && _folderStorage.TryGetValue(MailFolderType.Trash, out var trashList))
+                    {
+                        bool exists = email.UniqueId > 0
+                            ? trashList.Any(e => e.UniqueId == email.UniqueId && string.Equals(e.AccountName, email.AccountName, StringComparison.OrdinalIgnoreCase))
+                            : trashList.Contains(email);
+
+                        if (!exists)
+                        {
+                            var trashCopy = email;
+                            trashCopy.Folder = MailFolderType.Trash;
+                            trashList.Add(trashCopy);
+                        }
+                    }
+                }
 
                 ListViewItem? foundItem = null;
                 foreach (ListViewItem lvi in _lvEmails.Items)

@@ -212,9 +212,13 @@ namespace EmailSummarizer.UI
             this.KeyDown += OnFormKeyDown;
         }
 
-        private void OnSidebarTabChanged(object? sender, int index)
+        private async void OnSidebarTabChanged(object? sender, int index)
         {
             ShowTab(index);
+            if (index == 0)
+            {
+                await _summariesView.SwitchToFolderAsync(_sidebar.SelectedFolder);
+            }
         }
 
         private async void OnSidebarMailFolderSelected(object? sender, MailFolderType folder)
