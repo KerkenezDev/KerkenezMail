@@ -1806,7 +1806,7 @@ namespace EmailSummarizer.UI.Tabs
 
                 string renderedHtml = BuildBrowserHtmlPage(email, htmlContent);
 
-                string tempDir = Path.Combine(Path.GetTempPath(), "EmailSummarizer");
+                string tempDir = ConfigService.TempFolder;
                 Directory.CreateDirectory(tempDir);
 
                 // Clean file name

@@ -355,6 +355,7 @@ namespace EmailSummarizer.UI
                     {
                         _isClosingFlushDone = true;
                         _llamaManager.Stop();
+                        ConfigService.CleanTempFolder();
                         if (!this.IsDisposed && this.IsHandleCreated)
                         {
                             try
@@ -374,6 +375,7 @@ namespace EmailSummarizer.UI
 
             base.OnFormClosing(e);
             _llamaManager.Stop();
+            ConfigService.CleanTempFolder();
         }
 
         protected override void Dispose(bool disposing)
@@ -382,6 +384,7 @@ namespace EmailSummarizer.UI
             {
                 _summariesView?.CancelRunningOperations();
                 _llamaManager?.Dispose();
+                ConfigService.CleanTempFolder();
             }
             base.Dispose(disposing);
         }

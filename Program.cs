@@ -17,6 +17,9 @@ namespace EmailSummarizer
         [STAThread]
         static void Main(string[] args)
         {
+            // Ensure temp folder cleanup on process exit
+            AppDomain.CurrentDomain.ProcessExit += (s, e) => ConfigService.CleanTempFolder();
+
             // 1. Handle --uninstall switch
             if (args != null && args.Any(a => a.Equals("--uninstall", StringComparison.OrdinalIgnoreCase) ||
                                               a.Equals("/uninstall", StringComparison.OrdinalIgnoreCase) ||
@@ -110,6 +113,7 @@ namespace EmailSummarizer
             }
             finally
             {
+                ConfigService.CleanTempFolder();
                 try { mainMutex.ReleaseMutex(); } catch { }
             }
         }

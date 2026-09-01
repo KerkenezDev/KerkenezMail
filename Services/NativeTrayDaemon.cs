@@ -342,6 +342,8 @@ namespace EmailSummarizer.Services
                 _idleTrimTimer?.Dispose();
                 _idleTrimTimer = null;
                 _daemonService.Dispose();
+
+                ConfigService.CleanTempFolder();
             }
             catch
             {

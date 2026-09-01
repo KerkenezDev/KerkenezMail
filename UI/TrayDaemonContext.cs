@@ -204,6 +204,7 @@ namespace EmailSummarizer.UI
             _notifyIcon.Visible = false;
             _notifyIcon.Dispose();
             _daemonService.Dispose();
+            ConfigService.CleanTempFolder();
             base.ExitThreadCore();
         }
     }

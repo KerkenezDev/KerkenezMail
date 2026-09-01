@@ -13,6 +13,10 @@ namespace EmailSummarizer.Services
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
             "EmailSummarizer");
 
+        public static readonly string TempFolder = Path.Combine(
+            Path.GetTempPath(),
+            "EmailSummarizer");
+
         public static readonly string ConfigFilePath = Path.Combine(AppDataFolder, "config.json");
         public static readonly string AccountsFilePath = Path.Combine(AppDataFolder, "accounts.dat");
 
@@ -340,6 +344,9 @@ namespace EmailSummarizer.Services
                 // Remove Desktop and Start Menu shortcuts
                 ShortcutService.DeleteShortcuts();
 
+                // Clean temporary folder
+                CleanTempFolder();
+
                 if (Directory.Exists(AppDataFolder))
                 {
                     Directory.Delete(AppDataFolder, true);
@@ -351,6 +358,61 @@ namespace EmailSummarizer.Services
             {
                 System.Diagnostics.Debug.WriteLine($"[ConfigService] Error during uninstall: {ex.Message}");
                 return false;
+            }
+        }
+
+        /// <summary>
+        /// Cleans up temporary preview and cache files stored in %TEMP%\EmailSummarizer.
+        /// Handles locked files gracefully without throwing exceptions.
+        /// </summary>
+        public static void CleanTempFolder()
+        {
+            try
+            {
+                if (!Directory.Exists(TempFolder)) return;
+
+                var dirInfo = new DirectoryInfo(TempFolder);
+
+                // Delete all files inside temp folder
+                foreach (var file in dirInfo.EnumerateFiles("*", SearchOption.AllDirectories))
+                {
+                    try
+                    {
+                        file.Attributes = FileAttributes.Normal;
+                        file.Delete();
+                    }
+                    catch
+                    {
+                        // File may be locked by another process (e.g. browser); best effort
+                    }
+                }
+
+                // Delete all subdirectories if any
+                foreach (var subDir in dirInfo.EnumerateDirectories("*", SearchOption.AllDirectories).OrderByDescending(d => d.FullName.Length))
+                {
+                    try
+                    {
+                        subDir.Delete(false);
+                    }
+                    catch
+                    {
+                        // Best effort
+                    }
+                }
+
+                // If directory is now empty, remove it
+                try
+                {
+                    if (!dirInfo.EnumerateFileSystemInfos().Any())
+                    {
+                        Directory.Delete(TempFolder, false);
+                    }
+                }
+                catch { }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[ConfigService] CleanTempFolder error: {ex.Message}");
             }
         }
     }
