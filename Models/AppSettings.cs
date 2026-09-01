@@ -62,6 +62,23 @@ namespace EmailSummarizer.Models
         public bool OnlyUnread { get; set; } = false; // Fetch all inbox emails by default
         public bool MarkAsSeen { get; set; } = false;
 
+        // Send Email Options
+        public bool SaveSentEmailsToImap { get; set; } = true;
+
+        // Attachment Download Options
+        public string AttachmentDownloadPath { get; set; } = string.Empty;
+
+        public string GetEffectiveAttachmentDownloadPath()
+        {
+            if (!string.IsNullOrWhiteSpace(AttachmentDownloadPath) && Directory.Exists(AttachmentDownloadPath))
+            {
+                return AttachmentDownloadPath;
+            }
+            string defaultDownloads = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads");
+            if (Directory.Exists(defaultDownloads)) return defaultDownloads;
+            return Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+        }
+
         // Multi-Selection Preview Display Option ("LastSelected" or "FirstSelected")
         public string MultiSelectPreview { get; set; } = "LastSelected";
 

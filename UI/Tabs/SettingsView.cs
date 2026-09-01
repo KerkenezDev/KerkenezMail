@@ -59,6 +59,7 @@ namespace EmailSummarizer.UI.Tabs
         private CheckBox _chkOnlyUnread = null!;
         private CheckBox _chkMarkAsSeen = null!;
         private ComboBox _cboMultiSelectPreview = null!;
+        private TextBox _txtAttachmentDownloadPath = null!;
 
         // UI & Layout controls
         private CheckBox _chkCollapseSidebarByDefault = null!;
@@ -714,6 +715,94 @@ namespace EmailSummarizer.UI.Tabs
             pnlEmailCard.Controls.Add(_chkMarkAsSeen);
             pnlEmailCard.Controls.Add(rowPreview);
 
+            // ==================== 2B. Attachment Downloads Section ====================
+            var pnlAttachmentCard = CreateCardPanel(ContentW);
+            var lblSecAtt = CreateSectionHeader("📁  Attachment Downloads");
+
+            var lblDownloadPathHeader = new Label
+            {
+                Text = "Default Download Folder:",
+                AutoSize = true,
+                Font = new Font("Segoe UI", 9F, FontStyle.Bold),
+                ForeColor = Color.FromArgb(40, 40, 40),
+                Margin = new Padding(0, 0, 0, 2)
+            };
+
+            var lblDownloadPathDesc = new Label
+            {
+                Text = "Location where email attachments will be saved by default (defaults to your Windows Downloads folder).",
+                AutoSize = true,
+                Font = new Font("Segoe UI", 8.5F),
+                ForeColor = Color.FromArgb(100, 100, 100),
+                Margin = new Padding(0, 0, 0, 8)
+            };
+
+            var rowPathControls = new FlowLayoutPanel
+            {
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = true,
+                Margin = new Padding(0, 2, 0, 6)
+            };
+
+            _txtAttachmentDownloadPath = new TextBox
+            {
+                Width = 340,
+                Font = new Font("Segoe UI", 9F),
+                Margin = new Padding(0, 2, 8, 4)
+            };
+
+            var btnBrowsePath = new Button
+            {
+                Text = "Browse...",
+                Width = 85,
+                Height = 26,
+                FlatStyle = FlatStyle.System,
+                Cursor = Cursors.Hand,
+                Font = new Font("Segoe UI", 8.5F),
+                Margin = new Padding(0, 1, 6, 4)
+            };
+            btnBrowsePath.Click += (s, e) =>
+            {
+                using var fbd = new FolderBrowserDialog
+                {
+                    Description = "Select Default Attachment Download Folder",
+                    UseDescriptionForTitle = true,
+                    SelectedPath = Directory.Exists(_txtAttachmentDownloadPath.Text.Trim()) 
+                        ? _txtAttachmentDownloadPath.Text.Trim() 
+                        : Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) + "\\Downloads"
+                };
+                if (fbd.ShowDialog() == DialogResult.OK && !string.IsNullOrWhiteSpace(fbd.SelectedPath))
+                {
+                    _txtAttachmentDownloadPath.Text = fbd.SelectedPath;
+                }
+            };
+
+            var btnResetPath = new Button
+            {
+                Text = "Default",
+                Width = 75,
+                Height = 26,
+                FlatStyle = FlatStyle.System,
+                Cursor = Cursors.Hand,
+                Font = new Font("Segoe UI", 8.5F),
+                Margin = new Padding(0, 1, 0, 4)
+            };
+            btnResetPath.Click += (s, e) =>
+            {
+                _txtAttachmentDownloadPath.Text = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads");
+            };
+
+            rowPathControls.Controls.Add(_txtAttachmentDownloadPath);
+            rowPathControls.Controls.Add(btnBrowsePath);
+            rowPathControls.Controls.Add(btnResetPath);
+
+            pnlAttachmentCard.Controls.Add(lblSecAtt);
+            pnlAttachmentCard.Controls.Add(lblDownloadPathHeader);
+            pnlAttachmentCard.Controls.Add(lblDownloadPathDesc);
+            pnlAttachmentCard.Controls.Add(rowPathControls);
+
             // ==================== 3. Interface & Layout Section ====================
             var pnlUiCard = CreateCardPanel(ContentW);
             var lblSecUi = CreateSectionHeader("🖥️  Interface & Layout");
@@ -1007,6 +1096,7 @@ namespace EmailSummarizer.UI.Tabs
 
             _mainFlow.Controls.Add(pnlLlmCard);
             _mainFlow.Controls.Add(pnlEmailCard);
+            _mainFlow.Controls.Add(pnlAttachmentCard);
             _mainFlow.Controls.Add(pnlUiCard);
             _mainFlow.Controls.Add(pnlTrayCard);
             _mainFlow.Controls.Add(pnlPromptCard);
@@ -1143,6 +1233,7 @@ namespace EmailSummarizer.UI.Tabs
             _chkOnlyUnread.Checked = s.OnlyUnread;
             _chkMarkAsSeen.Checked = s.MarkAsSeen;
             _cboMultiSelectPreview.SelectedIndex = string.Equals(s.MultiSelectPreview, "FirstSelected", StringComparison.OrdinalIgnoreCase) ? 1 : 0;
+            _txtAttachmentDownloadPath.Text = s.GetEffectiveAttachmentDownloadPath();
 
             // UI & Layout settings
             _chkCollapseSidebarByDefault.Checked = s.CollapseSidebarByDefault;
@@ -1502,6 +1593,7 @@ namespace EmailSummarizer.UI.Tabs
             s.OnlyUnread = _chkOnlyUnread.Checked;
             s.MarkAsSeen = _chkMarkAsSeen.Checked;
             s.MultiSelectPreview = _cboMultiSelectPreview.SelectedIndex == 1 ? "FirstSelected" : "LastSelected";
+            s.AttachmentDownloadPath = _txtAttachmentDownloadPath.Text.Trim();
 
             // UI & Layout settings
             s.CollapseSidebarByDefault = _chkCollapseSidebarByDefault.Checked;

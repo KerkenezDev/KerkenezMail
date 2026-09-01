@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using EmailSummarizer.Models;
 using EmailSummarizer.Services;
 using EmailSummarizer.UI.Controls;
 using EmailSummarizer.UI.Tabs;
@@ -27,7 +28,9 @@ namespace EmailSummarizer.UI
         private AccountsView _accountsView = null!;
         private SettingsView _settingsView = null!;
         private LogsView _logsView = null!;
+        private SendMailView? _sendMailView;
 
+        private readonly SmtpService _smtpService;
         private readonly bool _isFirstLaunch;
 
         public MainForm(ConfigService? configService = null)
@@ -39,6 +42,7 @@ namespace EmailSummarizer.UI
             // Initialize Core Services
             _configService = configService ?? new ConfigService();
             _imapService = new ImapService();
+            _smtpService = new SmtpService();
             _llamaManager = new LlamaServerManager();
             _llmService = new LlmSummarizerService();
 
@@ -165,6 +169,7 @@ namespace EmailSummarizer.UI
             // 3. Tab Views
             _summariesView = new SummariesView(_configService, _imapService, _llamaManager, _llmService, logger);
             _summariesView.StatusUpdated += (status, vram) => UpdateStatusStrip(status, vram);
+            _summariesView.ReplyRequested += (s, email) => OpenReplyScreen(email);
 
             _accountsView = new AccountsView(_configService, _imapService, logger);
             _accountsView.AccountsChanged += () =>
@@ -191,6 +196,7 @@ namespace EmailSummarizer.UI
             _sidebar = new SidebarNav();
             _sidebar.IsCollapsed = _configService.Settings.CollapseSidebarByDefault;
             _sidebar.TabChanged += OnSidebarTabChanged;
+            _sidebar.SendMailRequested += (s, e) => OpenSendMailScreen();
 
             // Initial view
             ShowTab(0);
@@ -212,6 +218,8 @@ namespace EmailSummarizer.UI
 
         private void ShowTab(int index)
         {
+            if (_sendMailView != null) _sendMailView.Visible = false;
+
             _summariesView.Visible = (index == 0);
             _accountsView.Visible = (index == 1);
             _settingsView.Visible = (index == 2);
@@ -229,6 +237,60 @@ namespace EmailSummarizer.UI
                 _settingsView.BringToFront();
             }
             else if (index == 3) _logsView.BringToFront();
+        }
+
+        private void OpenSendMailScreen()
+        {
+            EnsureSendMailViewInitialized();
+            _sendMailView!.SetNewEmail();
+            ShowSendMailView();
+        }
+
+        private void OpenReplyScreen(EmailItem email)
+        {
+            EnsureSendMailViewInitialized();
+            _sendMailView!.SetReplyEmail(email);
+            ShowSendMailView();
+        }
+
+        private void EnsureSendMailViewInitialized()
+        {
+            if (_sendMailView == null)
+            {
+                _sendMailView = new SendMailView(_configService, _smtpService);
+                _sendMailView.BackToInboxRequested += (s, e) =>
+                {
+                    _sidebar.SelectedIndex = 0;
+                    ShowTab(0);
+                };
+                _sendMailView.EmailSentSuccessfully += (s, e) =>
+                {
+                    _sidebar.SelectedIndex = 0;
+                    ShowTab(0);
+                };
+                _sendMailView.PopOutRequested += (s, e) =>
+                {
+                    var popoutForm = new SendMailForm(_configService, _smtpService);
+                    _sidebar.SelectedIndex = 0;
+                    ShowTab(0);
+                    popoutForm.Show(this);
+                };
+                _contentPanel.Controls.Add(_sendMailView);
+            }
+        }
+
+        private void ShowSendMailView()
+        {
+            _summariesView.Visible = false;
+            _accountsView.Visible = false;
+            _settingsView.Visible = false;
+            _logsView.Visible = false;
+
+            if (_sendMailView != null)
+            {
+                _sendMailView.Visible = true;
+                _sendMailView.BringToFront();
+            }
         }
 
         private void UpdateStatusStrip(string status, string vramStatus)

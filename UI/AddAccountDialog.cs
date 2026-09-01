@@ -20,6 +20,9 @@ namespace EmailSummarizer.UI
         private TextBox _txtHost = null!;
         private NumericUpDown _numPort = null!;
         private CheckBox _chkUseSsl = null!;
+        private TextBox _txtSmtpHost = null!;
+        private NumericUpDown _numSmtpPort = null!;
+        private CheckBox _chkSmtpUseSsl = null!;
         private Button _btnTestConnection = null!;
         private Label _lblTestResult = null!;
         private Button _btnSave = null!;
@@ -81,7 +84,7 @@ namespace EmailSummarizer.UI
                 Dock = DockStyle.Top,
                 Padding = new Padding(24, 16, 24, 16),
                 ColumnCount = 2,
-                RowCount = 10,
+                RowCount = 12,
                 AutoSize = true,
                 AutoSizeMode = AutoSizeMode.GrowAndShrink
             };
@@ -175,8 +178,35 @@ namespace EmailSummarizer.UI
             // 7. SSL Checkbox
             _chkUseSsl = new CheckBox
             {
-                Text = "Use SSL / TLS (Required for Gmail/Yahoo/iCloud)",
+                Text = "Use SSL / TLS for IMAP",
                 Checked = true,
+                AutoSize = true,
+                Margin = new Padding(0, 4, 0, 8)
+            };
+
+            // 7b. SMTP Host & Port
+            var lblSmtpHost = new Label { Text = "SMTP Host & Port:", AutoSize = true, Anchor = AnchorStyles.Left | AnchorStyles.Top, Margin = new Padding(0, 8, 0, 8) };
+            var smtpHostPortPanel = new Panel { Dock = DockStyle.Fill, Height = 32, Margin = new Padding(0, 4, 0, 8) };
+            _txtSmtpHost = new TextBox { Text = "smtp.gmail.com", Dock = DockStyle.Fill, Font = new Font("Segoe UI", 9.5F) };
+            _numSmtpPort = new NumericUpDown
+            {
+                Minimum = 1,
+                Maximum = 65535,
+                Value = 587,
+                Width = 70,
+                Dock = DockStyle.Right,
+                Font = new Font("Segoe UI", 9.5F)
+            };
+            var lblSmtpColon = new Label { Text = ":", Width = 15, TextAlign = ContentAlignment.MiddleCenter, Dock = DockStyle.Right };
+            smtpHostPortPanel.Controls.Add(_txtSmtpHost);
+            smtpHostPortPanel.Controls.Add(lblSmtpColon);
+            smtpHostPortPanel.Controls.Add(_numSmtpPort);
+
+            // 7c. SMTP SSL Checkbox
+            _chkSmtpUseSsl = new CheckBox
+            {
+                Text = "Use SSL on Connect for SMTP (Uncheck for STARTTLS on port 587)",
+                Checked = false,
                 AutoSize = true,
                 Margin = new Padding(0, 4, 0, 12)
             };
@@ -267,8 +297,14 @@ namespace EmailSummarizer.UI
             mainPanel.Controls.Add(new Label(), 0, 6);
             mainPanel.Controls.Add(_chkUseSsl, 1, 6);
 
-            mainPanel.Controls.Add(new Label(), 0, 7);
-            mainPanel.Controls.Add(testPanel, 1, 7);
+            mainPanel.Controls.Add(lblSmtpHost, 0, 7);
+            mainPanel.Controls.Add(smtpHostPortPanel, 1, 7);
+
+            mainPanel.Controls.Add(new Label(), 0, 8);
+            mainPanel.Controls.Add(_chkSmtpUseSsl, 1, 8);
+
+            mainPanel.Controls.Add(new Label(), 0, 9);
+            mainPanel.Controls.Add(testPanel, 1, 9);
 
             scrollPanel.Controls.Add(mainPanel);
             this.Controls.Add(scrollPanel);
@@ -288,6 +324,9 @@ namespace EmailSummarizer.UI
                 _txtHost.Text = _account.Host;
                 _numPort.Value = _account.Port;
                 _chkUseSsl.Checked = _account.UseSsl;
+                _txtSmtpHost.Text = _account.GetEffectiveSmtpHost();
+                _numSmtpPort.Value = _account.GetEffectiveSmtpPort();
+                _chkSmtpUseSsl.Checked = _account.SmtpUseSsl;
 
                 // Match provider
                 if (_account.Host.Contains("gmail")) _cboProvider.SelectedIndex = 0;
@@ -301,6 +340,9 @@ namespace EmailSummarizer.UI
                 _txtHost.Text = "imap.gmail.com";
                 _numPort.Value = 993;
                 _chkUseSsl.Checked = true;
+                _txtSmtpHost.Text = "smtp.gmail.com";
+                _numSmtpPort.Value = 587;
+                _chkSmtpUseSsl.Checked = false;
             }
         }
 
@@ -314,6 +356,12 @@ namespace EmailSummarizer.UI
                     _chkUseSsl.Checked = true;
                     _txtHost.Enabled = false;
                     _numPort.Enabled = false;
+                    _txtSmtpHost.Text = "smtp.gmail.com";
+                    _numSmtpPort.Value = 587;
+                    _chkSmtpUseSsl.Checked = false;
+                    _txtSmtpHost.Enabled = false;
+                    _numSmtpPort.Enabled = false;
+                    _chkSmtpUseSsl.Enabled = false;
                     break;
                 case 1: // Yahoo
                     _txtHost.Text = "imap.mail.yahoo.com";
@@ -321,6 +369,12 @@ namespace EmailSummarizer.UI
                     _chkUseSsl.Checked = true;
                     _txtHost.Enabled = false;
                     _numPort.Enabled = false;
+                    _txtSmtpHost.Text = "smtp.mail.yahoo.com";
+                    _numSmtpPort.Value = 465;
+                    _chkSmtpUseSsl.Checked = true;
+                    _txtSmtpHost.Enabled = false;
+                    _numSmtpPort.Enabled = false;
+                    _chkSmtpUseSsl.Enabled = false;
                     break;
                 case 2: // iCloud
                     _txtHost.Text = "imap.mail.me.com";
@@ -328,10 +382,19 @@ namespace EmailSummarizer.UI
                     _chkUseSsl.Checked = true;
                     _txtHost.Enabled = false;
                     _numPort.Enabled = false;
+                    _txtSmtpHost.Text = "smtp.mail.me.com";
+                    _numSmtpPort.Value = 587;
+                    _chkSmtpUseSsl.Checked = false;
+                    _txtSmtpHost.Enabled = false;
+                    _numSmtpPort.Enabled = false;
+                    _chkSmtpUseSsl.Enabled = false;
                     break;
                 default: // Custom
                     _txtHost.Enabled = true;
                     _numPort.Enabled = true;
+                    _txtSmtpHost.Enabled = true;
+                    _numSmtpPort.Enabled = true;
+                    _chkSmtpUseSsl.Enabled = true;
                     break;
             }
         }
@@ -387,21 +450,35 @@ namespace EmailSummarizer.UI
                 AppPassword = password,
                 Host = _txtHost.Text.Trim(),
                 Port = (int)_numPort.Value,
-                UseSsl = _chkUseSsl.Checked
+                UseSsl = _chkUseSsl.Checked,
+                SmtpHost = _txtSmtpHost.Text.Trim(),
+                SmtpPort = (int)_numSmtpPort.Value,
+                SmtpUseSsl = _chkSmtpUseSsl.Checked
             };
 
-            var (success, msg, unread) = await _imapService.TestConnectionAsync(tempAccount);
+            var (imapOk, imapMsg, unread) = await _imapService.TestConnectionAsync(tempAccount);
+
+            if (!imapOk)
+            {
+                _btnTestConnection.Enabled = true;
+                _lblTestResult.ForeColor = Color.Red;
+                _lblTestResult.Text = $"✗ IMAP: {imapMsg}";
+                return;
+            }
+
+            var smtpService = new SmtpService();
+            var (smtpOk, smtpMsg) = await smtpService.TestSmtpConnectionAsync(tempAccount);
 
             _btnTestConnection.Enabled = true;
-            if (success)
+            if (smtpOk)
             {
                 _lblTestResult.ForeColor = Color.DarkGreen;
-                _lblTestResult.Text = $"✓ {msg}";
+                _lblTestResult.Text = $"✓ IMAP & SMTP Verified! ({unread} unread)";
             }
             else
             {
-                _lblTestResult.ForeColor = Color.Red;
-                _lblTestResult.Text = $"✗ {msg}";
+                _lblTestResult.ForeColor = Color.DarkOrange;
+                _lblTestResult.Text = $"✓ IMAP OK, but ✗ SMTP: {smtpMsg}";
             }
         }
 
@@ -431,6 +508,9 @@ namespace EmailSummarizer.UI
             _account.Host = _txtHost.Text.Trim();
             _account.Port = (int)_numPort.Value;
             _account.UseSsl = _chkUseSsl.Checked;
+            _account.SmtpHost = _txtSmtpHost.Text.Trim();
+            _account.SmtpPort = (int)_numSmtpPort.Value;
+            _account.SmtpUseSsl = _chkSmtpUseSsl.Checked;
             _account.IsEnabled = true;
 
             this.DialogResult = DialogResult.OK;

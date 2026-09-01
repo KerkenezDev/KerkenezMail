@@ -51,6 +51,9 @@ namespace EmailSummarizer.UI.Tabs
         private RichTextBox _rtbEmailBody = null!;
         private Label _lblEmailMeta = null!;
         private Label _lblEmailSubject = null!;
+        private Button _btnReply = null!;
+        private FlowLayoutPanel _pnlAttachments = null!;
+        private Label _lblAttachmentsTitle = null!;
         private Label _lblInboxHeader = null!;
         private ProgressBar _progressBar = null!;
         private SplitContainer _mainSplit = null!;
@@ -73,6 +76,7 @@ namespace EmailSummarizer.UI.Tabs
         private readonly SemaphoreSlim _summaryQueueSemaphore = new SemaphoreSlim(1, 1);
 
         public event Action<string, string>? StatusUpdated;
+        public event EventHandler<EmailItem>? ReplyRequested;
 
         public SummariesView(
             ConfigService configService,
@@ -322,15 +326,45 @@ namespace EmailSummarizer.UI.Tabs
                 Padding = new Padding(0, 0, 0, 10)
             };
 
+            var subjectRow = new Panel
+            {
+                Dock = DockStyle.Top,
+                AutoSize = true,
+                Padding = new Padding(0, 0, 0, 4)
+            };
+
+            _btnReply = new Button
+            {
+                Text = "↩  Reply",
+                Width = (int)(80 * scale),
+                Height = (int)(26 * scale),
+                Dock = DockStyle.Right,
+                FlatStyle = FlatStyle.System,
+                Cursor = Cursors.Hand,
+                Font = new Font("Segoe UI", 8.5F, FontStyle.Bold),
+                Visible = false
+            };
+            _btnReply.Click += (s, e) =>
+            {
+                var currentEmail = GetCurrentPreviewEmail();
+                if (currentEmail != null)
+                {
+                    ReplyRequested?.Invoke(this, currentEmail);
+                }
+            };
+
             _lblEmailSubject = new Label
             {
                 Text = "Subject: (No email selected)",
-                Dock = DockStyle.Top,
+                Dock = DockStyle.Fill,
                 AutoSize = true,
                 Font = new Font("Segoe UI", 11F, FontStyle.Bold),
                 ForeColor = Color.FromArgb(20, 20, 20),
-                Padding = new Padding(0, 0, 0, 4)
+                Padding = new Padding(0, 2, 0, 2)
             };
+
+            subjectRow.Controls.Add(_lblEmailSubject);
+            subjectRow.Controls.Add(_btnReply);
 
             _lblEmailMeta = new Label
             {
@@ -342,7 +376,7 @@ namespace EmailSummarizer.UI.Tabs
             };
 
             metaHeader.Controls.Add(_lblEmailMeta);
-            metaHeader.Controls.Add(_lblEmailSubject);
+            metaHeader.Controls.Add(subjectRow);
 
             _rtbEmailBody = new RichTextBox
             {
@@ -362,7 +396,35 @@ namespace EmailSummarizer.UI.Tabs
             _linkHoverTimer = new System.Windows.Forms.Timer { Interval = 250 };
             _linkHoverTimer.Tick += OnLinkHoverTimerTick;
 
+            // --- Attachment Bar at the bottom of Email Viewer Panel (Compact Single-Row Strip) ---
+            _pnlAttachments = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Bottom,
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                BackColor = Color.FromArgb(246, 249, 253),
+                Padding = new Padding((int)(10 * scale), (int)(3 * scale), (int)(10 * scale), (int)(4 * scale)),
+                WrapContents = true,
+                Visible = false
+            };
+            _pnlAttachments.Paint += (s, e) =>
+            {
+                using var p = new Pen(Color.FromArgb(220, 228, 238), 1);
+                e.Graphics.DrawLine(p, 0, 0, _pnlAttachments.Width, 0);
+            };
+
+            _lblAttachmentsTitle = new Label
+            {
+                Text = "📎 Attachments:",
+                AutoSize = true,
+                Font = new Font("Segoe UI", 8.5F, FontStyle.Bold),
+                ForeColor = Color.FromArgb(40, 55, 80),
+                Margin = new Padding(0, (int)(4 * scale), (int)(8 * scale), 0)
+            };
+            _pnlAttachments.Controls.Add(_lblAttachmentsTitle);
+
             emailViewerPanel.Controls.Add(_rtbEmailBody);
+            emailViewerPanel.Controls.Add(_pnlAttachments);
             emailViewerPanel.Controls.Add(metaHeader);
             middleSplit.Panel1.Controls.Add(emailViewerPanel);
 
@@ -791,6 +853,7 @@ namespace EmailSummarizer.UI.Tabs
             };
 
             string subjectPrefix = email.IsArchived ? "📥 " : (email.IsRead ? "" : "● ");
+            if (email.HasAttachments) subjectPrefix += "📎 ";
             var subSubject = item.SubItems.Add(subjectPrefix + email.Subject);
             var subAccount = item.SubItems.Add(email.AccountName);
             var subSender = item.SubItems.Add(email.Sender);
@@ -972,6 +1035,9 @@ namespace EmailSummarizer.UI.Tabs
                 _currentEmailLinkSpans.Clear();
                 _lblEmailSubject.Text = "Subject: (No email selected)";
                 _lblEmailMeta.Text = "From: -   •   Date: -   •   Account: -";
+                _btnReply.Visible = false;
+                _pnlAttachments.Visible = false;
+                _pnlAttachments.Controls.Clear();
                 return;
             }
 
@@ -1078,6 +1144,7 @@ namespace EmailSummarizer.UI.Tabs
 
             _lblEmailSubject.Text = $"Subject: {email.Subject}";
             _lblEmailMeta.Text = $"From: {email.Sender}   •   Date: {email.DateString}   •   Account: {email.AccountName}{priTag}   •   {readTag}";
+            _btnReply.Visible = true;
 
             try
             {
@@ -1114,6 +1181,7 @@ namespace EmailSummarizer.UI.Tabs
             }
 
             UpdateEmailLinkSpans(email);
+            UpdateEmailAttachments(email);
         }
 
         private void OnEmailLinkClicked(object? sender, LinkClickedEventArgs e)
@@ -2037,6 +2105,229 @@ namespace EmailSummarizer.UI.Tabs
         {
             ResetLinkToolTip();
         }
+
+        #region Email Attachments
+
+        private void UpdateEmailAttachments(EmailItem email)
+        {
+            _pnlAttachments.SuspendLayout();
+            _pnlAttachments.Controls.Clear();
+
+            if (!email.HasAttachments)
+            {
+                _pnlAttachments.Visible = false;
+                _pnlAttachments.ResumeLayout();
+                return;
+            }
+
+            long totalBytes = email.Attachments.Sum(a => a.FileSizeBytes);
+            string totalFormatted = totalBytes > 0
+                ? (totalBytes < 1024 * 1024 ? $"{totalBytes / 1024.0:F1} KB" : $"{totalBytes / (1024.0 * 1024.0):F1} MB")
+                : "";
+
+            string sizeSuffix = !string.IsNullOrEmpty(totalFormatted) ? $" ({totalFormatted})" : "";
+            float scale = this.DeviceDpi / 96f;
+
+            _lblAttachmentsTitle.Text = $"📎 {email.Attachments.Count} attachment{(email.Attachments.Count > 1 ? "s" : "")}{sizeSuffix}:";
+            _lblAttachmentsTitle.Margin = new Padding(0, (int)(4 * scale), (int)(8 * scale), 0);
+            _pnlAttachments.Controls.Add(_lblAttachmentsTitle);
+
+            foreach (var att in email.Attachments)
+            {
+                var btnAtt = new Button
+                {
+                    Text = $"{att.GetFileIcon()}  {att.FileName} ({att.FormattedSize})   ⬇",
+                    AutoSize = true,
+                    Height = (int)(25 * scale),
+                    FlatStyle = FlatStyle.Flat,
+                    BackColor = Color.White,
+                    ForeColor = Color.FromArgb(20, 50, 100),
+                    Font = new Font("Segoe UI", 8.25F, FontStyle.Regular),
+                    Cursor = Cursors.Hand,
+                    Margin = new Padding(0, 0, (int)(6 * scale), 0)
+                };
+                btnAtt.FlatAppearance.BorderColor = Color.FromArgb(195, 212, 235);
+                btnAtt.FlatAppearance.BorderSize = 1;
+                btnAtt.FlatAppearance.MouseOverBackColor = Color.FromArgb(230, 242, 255);
+                btnAtt.Click += async (s, e) => await DownloadSingleAttachmentAsync(email, att);
+
+                _pnlAttachments.Controls.Add(btnAtt);
+            }
+
+            if (email.Attachments.Count > 1)
+            {
+                var btnSaveAll = new Button
+                {
+                    Text = "⬇ Save All",
+                    AutoSize = true,
+                    Height = (int)(25 * scale),
+                    FlatStyle = FlatStyle.Flat,
+                    BackColor = Color.FromArgb(235, 244, 255),
+                    ForeColor = Color.FromArgb(10, 70, 150),
+                    Font = new Font("Segoe UI", 8.25F, FontStyle.Bold),
+                    Cursor = Cursors.Hand,
+                    Margin = new Padding((int)(4 * scale), 0, 0, 0)
+                };
+                btnSaveAll.FlatAppearance.BorderColor = Color.FromArgb(160, 195, 240);
+                btnSaveAll.FlatAppearance.BorderSize = 1;
+                btnSaveAll.FlatAppearance.MouseOverBackColor = Color.FromArgb(215, 232, 255);
+                btnSaveAll.Click += OnSaveAllAttachmentsClick;
+
+                _pnlAttachments.Controls.Add(btnSaveAll);
+            }
+
+            _pnlAttachments.ResumeLayout();
+            _pnlAttachments.Visible = true;
+        }
+
+        private async Task DownloadSingleAttachmentAsync(EmailItem email, EmailAttachmentInfo att)
+        {
+            var account = _configService.GetAccounts().FirstOrDefault(a =>
+                string.Equals(a.Email, email.AccountEmail, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(a.Name, email.AccountName, StringComparison.OrdinalIgnoreCase));
+
+            if (account == null)
+            {
+                MessageBox.Show($"Could not locate configured email account for '{email.AccountName}' ({email.AccountEmail}).", "Download Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            using var sfd = new SaveFileDialog
+            {
+                FileName = att.FileName,
+                Title = $"Save {att.FileName}",
+                Filter = "All Files (*.*)|*.*",
+                InitialDirectory = _configService.Settings.GetEffectiveAttachmentDownloadPath()
+            };
+
+            if (sfd.ShowDialog(this) != DialogResult.OK) return;
+
+            string destPath = sfd.FileName;
+            StatusUpdated?.Invoke($"Downloading '{att.FileName}' from {account.Name}...", "IMAP Fetch");
+
+            try
+            {
+                var (success, msg) = await _imapService.DownloadAttachmentAsync(
+                    account,
+                    email.UniqueId,
+                    att.PartIndex,
+                    att.FileName,
+                    destPath,
+                    _logger);
+
+                if (success)
+                {
+                    StatusUpdated?.Invoke($"Downloaded '{att.FileName}'", "Ready");
+                    var res = MessageBox.Show($"Successfully downloaded '{att.FileName}'!\r\n\r\nSaved to: {destPath}\r\n\r\nWould you like to open the containing folder?", "Download Complete", MessageBoxButtons.YesNo, MessageBoxIcon.Information);
+                    if (res == DialogResult.Yes)
+                    {
+                        try
+                        {
+                            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                            {
+                                FileName = "explorer.exe",
+                                Arguments = $"/select,\"{destPath}\"",
+                                UseShellExecute = true
+                            });
+                        }
+                        catch { }
+                    }
+                }
+                else
+                {
+                    StatusUpdated?.Invoke("Download failed", "Ready");
+                    MessageBox.Show(msg, "Download Failed", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            }
+            catch (Exception ex)
+            {
+                StatusUpdated?.Invoke("Download error", "Ready");
+                MessageBox.Show($"Error saving attachment: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private async void OnSaveAllAttachmentsClick(object? sender, EventArgs e)
+        {
+            var email = GetCurrentPreviewEmail();
+            if (email == null || !email.HasAttachments) return;
+
+            var account = _configService.GetAccounts().FirstOrDefault(a =>
+                string.Equals(a.Email, email.AccountEmail, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(a.Name, email.AccountName, StringComparison.OrdinalIgnoreCase));
+
+            if (account == null)
+            {
+                MessageBox.Show($"Could not locate configured email account for '{email.AccountName}' ({email.AccountEmail}).", "Download Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            using var fbd = new FolderBrowserDialog
+            {
+                Description = "Select folder to save all attachments",
+                UseDescriptionForTitle = true,
+                SelectedPath = _configService.Settings.GetEffectiveAttachmentDownloadPath()
+            };
+
+            if (fbd.ShowDialog(this) != DialogResult.OK || string.IsNullOrWhiteSpace(fbd.SelectedPath)) return;
+
+            string destFolder = fbd.SelectedPath;
+            int successCount = 0;
+            int total = email.Attachments.Count;
+
+            var btn = sender as Button;
+            if (btn != null) btn.Enabled = false;
+            StatusUpdated?.Invoke($"Downloading {total} attachments...", "IMAP Fetch");
+
+            try
+            {
+                foreach (var att in email.Attachments)
+                {
+                    string destPath = Path.Combine(destFolder, att.FileName);
+                    int copy = 1;
+                    while (File.Exists(destPath))
+                    {
+                        string nameWithoutExt = Path.GetFileNameWithoutExtension(att.FileName);
+                        string ext = Path.GetExtension(att.FileName);
+                        destPath = Path.Combine(destFolder, $"{nameWithoutExt} ({copy++}){ext}");
+                    }
+
+                    var (success, _) = await _imapService.DownloadAttachmentAsync(
+                        account,
+                        email.UniqueId,
+                        att.PartIndex,
+                        att.FileName,
+                        destPath,
+                        _logger);
+
+                    if (success) successCount++;
+                }
+
+                StatusUpdated?.Invoke($"Saved {successCount}/{total} attachments", "Ready");
+                var res = MessageBox.Show($"Saved {successCount} of {total} attachments to:\r\n{destFolder}\r\n\r\nWould you like to open the folder?", "Download Complete", MessageBoxButtons.YesNo, MessageBoxIcon.Information);
+                if (res == DialogResult.Yes)
+                {
+                    try
+                    {
+                        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                        {
+                            FileName = destFolder,
+                            UseShellExecute = true
+                        });
+                    }
+                    catch { }
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error downloading attachments: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            finally
+            {
+                if (btn != null) btn.Enabled = true;
+            }
+        }
+
+        #endregion
 
         #endregion
     }

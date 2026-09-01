@@ -104,6 +104,48 @@ namespace EmailSummarizer.Services
                         bool isMailingList = DetectMailingListHeaders(message);
                         bool hasNewsletterFooter = DetectNewsletterFooter(cleanBody) || DetectNewsletterFooter(message.HtmlBody);
 
+                        // Extract attachment metadata
+                        var detectedAttachments = new List<EmailAttachmentInfo>();
+                        int partIdx = 0;
+                        foreach (var attachment in message.Attachments)
+                        {
+                            string fileName = "";
+                            long size = 0;
+                            string mimeType = attachment.ContentType?.MimeType ?? "application/octet-stream";
+                            string? contentId = attachment.ContentId;
+
+                            if (attachment is MimePart mimePart)
+                            {
+                                fileName = mimePart.FileName ?? mimePart.ContentDisposition?.FileName ?? "";
+                                if (mimePart.Content != null && mimePart.Content.Stream != null)
+                                {
+                                    try { size = mimePart.Content.Stream.Length; } catch { }
+                                }
+                                if (size == 0 && mimePart.ContentDisposition?.Size != null)
+                                {
+                                    size = mimePart.ContentDisposition.Size.Value;
+                                }
+                            }
+                            else if (attachment is MessagePart msgPart)
+                            {
+                                fileName = msgPart.ContentDisposition?.FileName ?? "message.eml";
+                            }
+
+                            if (string.IsNullOrWhiteSpace(fileName))
+                            {
+                                fileName = $"attachment_{partIdx + 1}";
+                            }
+
+                            detectedAttachments.Add(new EmailAttachmentInfo
+                            {
+                                FileName = fileName,
+                                FileSizeBytes = size,
+                                MimeType = mimeType,
+                                ContentId = contentId,
+                                PartIndex = partIdx++
+                            });
+                        }
+
                         var emailItem = new EmailItem
                         {
                             UniqueId = uid.Id,
@@ -112,11 +154,15 @@ namespace EmailSummarizer.Services
                             Subject = string.IsNullOrWhiteSpace(message.Subject) ? "(No Subject)" : message.Subject,
                             Sender = message.From.Mailboxes.FirstOrDefault()?.ToString() ?? "(Unknown Sender)",
                             Date = message.Date,
+                            MessageId = message.MessageId,
+                            InReplyTo = message.InReplyTo,
+                            References = message.References?.ToList() ?? new List<string>(),
                             RawBody = message.TextBody ?? message.HtmlBody ?? string.Empty,
                             CleanBody = cleanBody,
                             DisplayBody = displayText,
                             DisplayRtf = displayRtf,
                             ExtractedLinks = extractedLinks,
+                            Attachments = detectedAttachments,
                             IsRead = isRead,
                             Status = SummaryState.Pending,
                             IsMailingList = isMailingList,
@@ -791,6 +837,80 @@ namespace EmailSummarizer.Services
             }
 
             return alt;
+        }
+
+        /// <summary>
+        /// Downloads an email attachment on demand using a single-shot IMAP connection.
+        /// Immediately disconnects once streaming finishes. Zero persistent idle ports.
+        /// </summary>
+        public async Task<(bool Success, string Message)> DownloadAttachmentAsync(
+            EmailAccount account,
+            uint uniqueId,
+            int partIndex,
+            string fileName,
+            string targetFilePath,
+            IProgress<string>? logger = null,
+            CancellationToken ct = default)
+        {
+            using var client = new ImapClient();
+            try
+            {
+                client.Timeout = 30000;
+                var sslOption = account.UseSsl ? SecureSocketOptions.SslOnConnect : SecureSocketOptions.Auto;
+
+                logger?.Report($"[*] Connecting to {account.Name} to download attachment '{fileName}'...");
+                await client.ConnectAsync(account.Host, account.Port, sslOption, ct);
+                await client.AuthenticateAsync(account.Email, account.AppPassword, ct);
+
+                var inbox = client.Inbox;
+                await inbox.OpenAsync(FolderAccess.ReadOnly, ct);
+
+                var message = await inbox.GetMessageAsync(new UniqueId(uniqueId), ct);
+                var attachments = message.Attachments.ToList();
+
+                MimeEntity? targetEntity = null;
+                if (partIndex >= 0 && partIndex < attachments.Count)
+                {
+                    targetEntity = attachments[partIndex];
+                }
+                else
+                {
+                    targetEntity = attachments.FirstOrDefault(a =>
+                        (a is MimePart mp && string.Equals(mp.FileName, fileName, StringComparison.OrdinalIgnoreCase)) ||
+                        (a.ContentDisposition != null && string.Equals(a.ContentDisposition.FileName, fileName, StringComparison.OrdinalIgnoreCase)));
+                }
+
+                if (targetEntity == null)
+                {
+                    await client.DisconnectAsync(true, ct);
+                    return (false, $"Attachment '{fileName}' not found in message.");
+                }
+
+                using (var outputStream = File.Create(targetFilePath))
+                {
+                    if (targetEntity is MimePart mimePart && mimePart.Content != null)
+                    {
+                        await mimePart.Content.DecodeToAsync(outputStream, ct);
+                    }
+                    else if (targetEntity is MessagePart msgPart && msgPart.Message != null)
+                    {
+                        await msgPart.Message.WriteToAsync(outputStream, ct);
+                    }
+                    else
+                    {
+                        await targetEntity.WriteToAsync(outputStream, ct);
+                    }
+                }
+
+                await client.DisconnectAsync(true, ct);
+                logger?.Report($"[✓] Saved '{fileName}' to {targetFilePath}.");
+                return (true, $"Attachment downloaded successfully: {fileName}");
+            }
+            catch (Exception ex)
+            {
+                logger?.Report($"[!] Failed to download attachment: {ex.Message}");
+                return (false, $"Download error: {ex.Message}");
+            }
         }
     }
 }

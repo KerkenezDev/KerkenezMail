@@ -12,6 +12,7 @@ namespace EmailSummarizer.UI.Controls
 
         public event EventHandler<int>? TabChanged;
         public event EventHandler<bool>? CollapsedChanged;
+        public event EventHandler? SendMailRequested;
 
         private readonly string[] _tabTitles = new[]
         {
@@ -23,15 +24,33 @@ namespace EmailSummarizer.UI.Controls
 
         private readonly string[] _tabIcons = new[]
         {
-            "✉",
-            "👥",
-            "⚙",
-            "≡"
+            "\uE715", // Mail (Inbox)
+            "\uE716", // People (Accounts)
+            "\uE713", // Settings gear
+            "\uE700"  // Menu (Live Logs)
         };
+
+        private static string? _iconFontFamily;
+        private static string GetIconFontFamily()
+        {
+            if (_iconFontFamily != null) return _iconFontFamily;
+
+            try
+            {
+                using var installedFonts = new System.Drawing.Text.InstalledFontCollection();
+                var set = new HashSet<string>(installedFonts.Families.Select(f => f.Name), StringComparer.OrdinalIgnoreCase);
+                if (set.Contains("Segoe Fluent Icons")) return _iconFontFamily = "Segoe Fluent Icons";
+                if (set.Contains("Segoe MDL2 Assets")) return _iconFontFamily = "Segoe MDL2 Assets";
+            }
+            catch { }
+
+            return _iconFontFamily = "Segoe UI Symbol";
+        }
 
         private int _selectedIndex = 0;
         private int _hoveredIndex = -1;
         private bool _isToggleHovered = false;
+        private bool _isSendHovered = false;
         private bool _isCollapsed = false;
 
         private readonly System.Windows.Forms.Timer _animTimer;
@@ -171,6 +190,26 @@ namespace EmailSummarizer.UI.Controls
             }
         }
 
+        public Rectangle GetSendButtonBounds(float scale)
+        {
+            int headerH = (int)(72 * scale);
+            int itemH = (int)(46 * scale);
+            int btnTop = headerH + itemH;
+            return new Rectangle((int)(8 * scale), btnTop, this.Width - (int)(16 * scale), itemH - (int)(4 * scale));
+        }
+
+        public Rectangle GetItemBounds(int index, float scale)
+        {
+            int headerH = (int)(72 * scale);
+            int itemH = (int)(46 * scale);
+
+            int itemY = (index == 0)
+                ? headerH
+                : headerH + (index + 1) * itemH;
+
+            return new Rectangle((int)(8 * scale), itemY, this.Width - (int)(16 * scale), itemH - (int)(4 * scale));
+        }
+
         private void UpdateToolTip(string text, Point pt)
         {
             if (_currentToolTipText != text)
@@ -191,31 +230,42 @@ namespace EmailSummarizer.UI.Controls
         {
             base.OnMouseMove(e);
             float scale = this.DeviceDpi / 96f;
-            int headerH = (int)(72 * scale);
-            int itemH = (int)(46 * scale);
 
             bool prevToggleHover = _isToggleHovered;
+            bool prevSendHover = _isSendHovered;
             int prevHover = _hoveredIndex;
 
             var toggleRect = GetToggleButtonBounds(scale);
+            var sendRect = GetSendButtonBounds(scale);
+            var item0Rect = GetItemBounds(0, scale);
 
             if (toggleRect.Contains(e.Location))
             {
                 _isToggleHovered = true;
+                _isSendHovered = false;
                 _hoveredIndex = -1;
                 this.Cursor = Cursors.Hand;
                 string toggleTip = _isCollapsed ? "Expand sidebar (Ctrl+B)" : "Collapse sidebar (Ctrl+B)";
                 UpdateToolTip(toggleTip, e.Location);
             }
-            else if (e.Y >= headerH && e.Y < headerH + (_tabTitles.Length * itemH))
+            else if (sendRect.Contains(e.Location))
             {
                 _isToggleHovered = false;
-                _hoveredIndex = (e.Y - headerH) / itemH;
+                _isSendHovered = true;
+                _hoveredIndex = -1;
+                this.Cursor = Cursors.Hand;
+                UpdateToolTip("Send / Compose Email", e.Location);
+            }
+            else if (item0Rect.Contains(e.Location))
+            {
+                _isToggleHovered = false;
+                _isSendHovered = false;
+                _hoveredIndex = 0;
                 this.Cursor = Cursors.Hand;
 
-                if (_isCollapsed && _hoveredIndex >= 0 && _hoveredIndex < _tabTitles.Length)
+                if (_isCollapsed)
                 {
-                    UpdateToolTip(_tabTitles[_hoveredIndex], e.Location);
+                    UpdateToolTip(_tabTitles[0], e.Location);
                 }
                 else
                 {
@@ -225,12 +275,38 @@ namespace EmailSummarizer.UI.Controls
             else
             {
                 _isToggleHovered = false;
-                _hoveredIndex = -1;
-                this.Cursor = Cursors.Default;
-                UpdateToolTip("", Point.Empty);
+                _isSendHovered = false;
+                int matchedIdx = -1;
+                for (int i = 1; i < _tabTitles.Length; i++)
+                {
+                    if (GetItemBounds(i, scale).Contains(e.Location))
+                    {
+                        matchedIdx = i;
+                        break;
+                    }
+                }
+                _hoveredIndex = matchedIdx;
+
+                if (matchedIdx >= 0)
+                {
+                    this.Cursor = Cursors.Hand;
+                    if (_isCollapsed)
+                    {
+                        UpdateToolTip(_tabTitles[matchedIdx], e.Location);
+                    }
+                    else
+                    {
+                        UpdateToolTip("", Point.Empty);
+                    }
+                }
+                else
+                {
+                    this.Cursor = Cursors.Default;
+                    UpdateToolTip("", Point.Empty);
+                }
             }
 
-            if (prevToggleHover != _isToggleHovered || prevHover != _hoveredIndex)
+            if (prevToggleHover != _isToggleHovered || prevSendHover != _isSendHovered || prevHover != _hoveredIndex)
             {
                 Invalidate();
             }
@@ -240,6 +316,7 @@ namespace EmailSummarizer.UI.Controls
         {
             base.OnMouseLeave(e);
             _isToggleHovered = false;
+            _isSendHovered = false;
             _hoveredIndex = -1;
             this.Cursor = Cursors.Default;
             UpdateToolTip("", Point.Empty);
@@ -254,6 +331,12 @@ namespace EmailSummarizer.UI.Controls
                 if (_isToggleHovered)
                 {
                     ToggleCollapsed();
+                    return;
+                }
+
+                if (_isSendHovered)
+                {
+                    SendMailRequested?.Invoke(this, EventArgs.Empty);
                     return;
                 }
 
@@ -369,76 +452,126 @@ namespace EmailSummarizer.UI.Controls
                 }
             }
 
-            // Draw Navigation Tab Items
-            for (int i = 0; i < _tabTitles.Length; i++)
+            // 1. Draw Tab Item 0 (Summaries / Inbox)
+            DrawTabItem(g, 0, scale, isWide);
+
+            // 2. Draw Send Mail Item (Paper plane \uE724 matching other tabs)
+            var sendRect = GetSendButtonBounds(scale);
+            if (_isSendHovered)
             {
-                int itemY = headerH + (i * itemH);
-                bool isSelected = (i == _selectedIndex);
-                bool isHovered = (i == _hoveredIndex && !isSelected);
+                using var hoverBrush = new SolidBrush(_hoverBgColor);
+                FillRoundedRectangle(g, hoverBrush, sendRect, 5);
+            }
 
-                var itemRect = isWide
-                    ? new Rectangle((int)(8 * scale), itemY, this.Width - (int)(16 * scale), itemH - (int)(4 * scale))
-                    : new Rectangle((int)(8 * scale), itemY, this.Width - (int)(16 * scale), itemH - (int)(4 * scale));
+            var sendTextColor = _isSendHovered ? _activeTextColor : _textColor;
+            var sendFontStyle = _isSendHovered ? FontStyle.Bold : FontStyle.Regular;
+            using var sendItemFont = new Font("Segoe UI", 9.25F, sendFontStyle);
+            using var sendTextBrush = new SolidBrush(sendTextColor);
+            using var sendIconFont = new Font(GetIconFontFamily(), 11F, FontStyle.Regular);
 
-                // Tab Item Background
-                if (isSelected)
+            if (isWide)
+            {
+                var stringFormat = new StringFormat
                 {
-                    using var activeBrush = new SolidBrush(_activeBgColor);
-                    using var activeBorderPen = new Pen(_borderColor);
-                    FillRoundedRectangle(g, activeBrush, itemRect, 5);
-                    DrawRoundedRectangle(g, activeBorderPen, itemRect, 5);
+                    Alignment = StringAlignment.Near,
+                    LineAlignment = StringAlignment.Center,
+                    Trimming = StringTrimming.EllipsisCharacter,
+                    FormatFlags = StringFormatFlags.NoWrap
+                };
 
-                    // Left Accent Indicator
-                    using var accentBrush = new SolidBrush(_accentColor);
-                    g.FillRectangle(accentBrush, new Rectangle(itemRect.Left + 2, itemRect.Top + 6, isWide ? 4 : 3, itemRect.Height - 12));
-                }
-                else if (isHovered)
+                int iconLeft = sendRect.Left + (int)(8 * scale);
+                int iconWidth = (int)(22 * scale);
+                g.DrawString("\uE724", sendIconFont, sendTextBrush, new Rectangle(iconLeft, sendRect.Top, iconWidth, sendRect.Height), stringFormat);
+
+                int textLeft = iconLeft + iconWidth + (int)(6 * scale);
+                int textWidth = sendRect.Width - (textLeft - sendRect.Left) - 2;
+                if (textWidth > 0)
                 {
-                    using var hoverBrush = new SolidBrush(_hoverBgColor);
-                    FillRoundedRectangle(g, hoverBrush, itemRect, 5);
+                    var textRect = new Rectangle(textLeft, sendRect.Top, textWidth, sendRect.Height);
+                    g.DrawString("Send Mail", sendItemFont, sendTextBrush, textRect, stringFormat);
                 }
-
-                // Tab Icon & Text Colors
-                var textColor = isSelected ? _activeTextColor : _textColor;
-                var fontStyle = isSelected ? FontStyle.Bold : FontStyle.Regular;
-                using var itemFont = new Font("Segoe UI", 9.25F, fontStyle);
-                using var textBrush = new SolidBrush(textColor);
-                using var iconFont = new Font("Segoe UI Symbol", 11F, FontStyle.Regular);
-
-                if (isWide)
+            }
+            else
+            {
+                var centerFormat = new StringFormat
                 {
-                    var stringFormat = new StringFormat
-                    {
-                        Alignment = StringAlignment.Near,
-                        LineAlignment = StringAlignment.Center,
-                        Trimming = StringTrimming.EllipsisCharacter,
-                        FormatFlags = StringFormatFlags.NoWrap
-                    };
+                    Alignment = StringAlignment.Center,
+                    LineAlignment = StringAlignment.Center
+                };
+                g.DrawString("\uE724", sendIconFont, sendTextBrush, sendRect, centerFormat);
+            }
 
-                    // Draw icon
-                    int iconLeft = itemRect.Left + (int)(8 * scale);
-                    int iconWidth = (int)(22 * scale);
-                    g.DrawString(_tabIcons[i], iconFont, textBrush, new Rectangle(iconLeft, itemRect.Top, iconWidth, itemRect.Height), stringFormat);
+            // 3. Draw Remaining Tab Items (Accounts, Settings, Live Logs)
+            for (int i = 1; i < _tabTitles.Length; i++)
+            {
+                DrawTabItem(g, i, scale, isWide);
+            }
+        }
 
-                    // Draw label text
-                    int textLeft = iconLeft + iconWidth + (int)(6 * scale);
-                    int textWidth = itemRect.Width - (textLeft - itemRect.Left) - 2;
-                    if (textWidth > 0)
-                    {
-                        var textRect = new Rectangle(textLeft, itemRect.Top, textWidth, itemRect.Height);
-                        g.DrawString(_tabTitles[i], itemFont, textBrush, textRect, stringFormat);
-                    }
-                }
-                else
+        private void DrawTabItem(Graphics g, int i, float scale, bool isWide)
+        {
+            var itemRect = GetItemBounds(i, scale);
+            bool isSelected = (i == _selectedIndex);
+            bool isHovered = (i == _hoveredIndex && !isSelected);
+
+            // Tab Item Background
+            if (isSelected)
+            {
+                using var activeBrush = new SolidBrush(_activeBgColor);
+                using var activeBorderPen = new Pen(_borderColor);
+                FillRoundedRectangle(g, activeBrush, itemRect, 5);
+                DrawRoundedRectangle(g, activeBorderPen, itemRect, 5);
+
+                // Left Accent Indicator
+                using var accentBrush = new SolidBrush(_accentColor);
+                g.FillRectangle(accentBrush, new Rectangle(itemRect.Left + 2, itemRect.Top + 6, isWide ? 4 : 3, itemRect.Height - 12));
+            }
+            else if (isHovered)
+            {
+                using var hoverBrush = new SolidBrush(_hoverBgColor);
+                FillRoundedRectangle(g, hoverBrush, itemRect, 5);
+            }
+
+            // Tab Icon & Text Colors
+            var textColor = isSelected ? _activeTextColor : _textColor;
+            var fontStyle = isSelected ? FontStyle.Bold : FontStyle.Regular;
+            using var itemFont = new Font("Segoe UI", 9.25F, fontStyle);
+            using var textBrush = new SolidBrush(textColor);
+            using var iconFont = new Font(GetIconFontFamily(), 11F, FontStyle.Regular);
+
+            if (isWide)
+            {
+                var stringFormat = new StringFormat
                 {
-                    // Centered icon in collapsed rail
-                    var centerFormat = new StringFormat
-                    {
-                        Alignment = StringAlignment.Center,
-                        LineAlignment = StringAlignment.Center
-                    };
-                    g.DrawString(_tabIcons[i], iconFont, textBrush, itemRect, centerFormat);
+                    Alignment = StringAlignment.Near,
+                    LineAlignment = StringAlignment.Center,
+                    Trimming = StringTrimming.EllipsisCharacter,
+                    FormatFlags = StringFormatFlags.NoWrap
+                };
+
+                // Draw icon
+                int iconLeft = itemRect.Left + (int)(8 * scale);
+                int iconWidth = (int)(22 * scale);
+                g.DrawString(_tabIcons[i], iconFont, textBrush, new Rectangle(iconLeft, itemRect.Top, iconWidth, itemRect.Height), stringFormat);
+
+                // Draw label text
+                int textLeft = iconLeft + iconWidth + (int)(6 * scale);
+                int textWidth = itemRect.Width - (textLeft - itemRect.Left) - 2;
+                if (textWidth > 0)
+                {
+                    var textRect = new Rectangle(textLeft, itemRect.Top, textWidth, itemRect.Height);
+                    g.DrawString(_tabTitles[i], itemFont, textBrush, textRect, stringFormat);
                 }
+            }
+            else
+            {
+                // Centered icon in collapsed rail
+                var centerFormat = new StringFormat
+                {
+                    Alignment = StringAlignment.Center,
+                    LineAlignment = StringAlignment.Center
+                };
+                g.DrawString(_tabIcons[i], iconFont, textBrush, itemRect, centerFormat);
             }
         }
 

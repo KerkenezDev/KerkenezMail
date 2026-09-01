@@ -19,6 +19,12 @@ namespace EmailSummarizer.Models
         public string Subject { get; set; } = string.Empty;
         public string Sender { get; set; } = string.Empty;
         public DateTimeOffset Date { get; set; }
+
+        // RFC 5322 Threading Headers
+        public string? MessageId { get; set; }
+        public string? InReplyTo { get; set; }
+        public List<string> References { get; set; } = new List<string>();
+
         public string RawBody { get; set; } = string.Empty;
         public string CleanBody { get; set; } = string.Empty;
         public string DisplayBody { get; set; } = string.Empty;
@@ -42,6 +48,10 @@ namespace EmailSummarizer.Models
 
         // Extracted hyperlinks for hover tooltips and actions
         public List<EmailLink> ExtractedLinks { get; set; } = new List<EmailLink>();
+
+        // Detected incoming email attachments metadata
+        public List<EmailAttachmentInfo> Attachments { get; set; } = new List<EmailAttachmentInfo>();
+        public bool HasAttachments => Attachments != null && Attachments.Count > 0;
 
         public string DateString => Date.LocalDateTime.ToString("dd/MM/yyyy HH:mm");
         public string ShortDateString => Date.LocalDateTime.ToString("dd/MM HH:mm");
