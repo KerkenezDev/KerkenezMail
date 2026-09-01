@@ -26,6 +26,7 @@ namespace EmailSummarizer.Models
         public List<string> References { get; set; } = new List<string>();
 
         public string RawBody { get; set; } = string.Empty;
+        public string? HtmlBody { get; set; }
         public string CleanBody { get; set; } = string.Empty;
         public string DisplayBody { get; set; } = string.Empty;
         public string? DisplayRtf { get; set; }

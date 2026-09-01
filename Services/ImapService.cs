@@ -158,6 +158,7 @@ namespace EmailSummarizer.Services
                             InReplyTo = message.InReplyTo,
                             References = message.References?.ToList() ?? new List<string>(),
                             RawBody = message.TextBody ?? message.HtmlBody ?? string.Empty,
+                            HtmlBody = message.HtmlBody,
                             CleanBody = cleanBody,
                             DisplayBody = displayText,
                             DisplayRtf = displayRtf,
@@ -910,6 +911,37 @@ namespace EmailSummarizer.Services
             {
                 logger?.Report($"[!] Failed to download attachment: {ex.Message}");
                 return (false, $"Download error: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Lightweight on-demand fetch of the original HTML body of an email for browser rendering.
+        /// </summary>
+        public async Task<string?> FetchEmailHtmlBodyAsync(
+            EmailAccount account,
+            uint uniqueId,
+            CancellationToken ct = default)
+        {
+            using var client = new ImapClient();
+            try
+            {
+                client.Timeout = 20000;
+                var sslOption = account.UseSsl ? SecureSocketOptions.SslOnConnect : SecureSocketOptions.Auto;
+
+                await client.ConnectAsync(account.Host, account.Port, sslOption, ct);
+                await client.AuthenticateAsync(account.Email, account.AppPassword, ct);
+
+                var inbox = client.Inbox;
+                await inbox.OpenAsync(FolderAccess.ReadOnly, ct);
+
+                var message = await inbox.GetMessageAsync(new UniqueId(uniqueId), ct);
+                await client.DisconnectAsync(true, ct);
+
+                return message.HtmlBody;
+            }
+            catch
+            {
+                return null;
             }
         }
     }

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
 using System.Linq;
+using System.Net;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -42,8 +43,10 @@ namespace EmailSummarizer.UI.Tabs
         private Button _btnRefresh = null!;
         private Button _btnCopySummary = null!;
         private Button _btnExport = null!;
+        private Button _btnOpenInBrowser = null!;
         private Button _btnArchive = null!;
         private Button _btnDelete = null!;
+        private ToolTip _topBarToolTip = null!;
         private ComboBox _cboAccountFilter = null!;
         private TextBox _txtSearch = null!;
         private ListView _lvEmails = null!;
@@ -136,12 +139,12 @@ namespace EmailSummarizer.UI.Tabs
 
             _btnRefresh = new Button
             {
-                Text = "🔄  Refresh Inbox",
+                Text = "🔄 Refresh Inbox",
                 UseMnemonic = false,
                 AutoSize = true,
                 AutoSizeMode = AutoSizeMode.GrowAndShrink,
-                Padding = new Padding((int)(10 * scale), (int)(6 * scale), (int)(10 * scale), (int)(6 * scale)),
-                Margin = new Padding(0, 0, (int)(8 * scale), 0),
+                Padding = new Padding((int)(7 * scale), (int)(5 * scale), (int)(7 * scale), (int)(5 * scale)),
+                Margin = new Padding(0, 0, (int)(4 * scale), 0),
                 FlatStyle = FlatStyle.System,
                 Font = new Font("Segoe UI", 9F, FontStyle.Bold),
                 Cursor = Cursors.Hand
@@ -154,9 +157,10 @@ namespace EmailSummarizer.UI.Tabs
                 UseMnemonic = false,
                 AutoSize = true,
                 AutoSizeMode = AutoSizeMode.GrowAndShrink,
-                Padding = new Padding((int)(10 * scale), (int)(6 * scale), (int)(10 * scale), (int)(6 * scale)),
-                Margin = new Padding(0, 0, (int)(8 * scale), 0),
+                Padding = new Padding((int)(7 * scale), (int)(5 * scale), (int)(7 * scale), (int)(5 * scale)),
+                Margin = new Padding(0, 0, (int)(4 * scale), 0),
                 FlatStyle = FlatStyle.System,
+                Font = new Font("Segoe UI", 9F, FontStyle.Regular),
                 Cursor = Cursors.Hand
             };
             _btnCopySummary.Click += OnCopySummaryClick;
@@ -167,19 +171,35 @@ namespace EmailSummarizer.UI.Tabs
                 UseMnemonic = false,
                 AutoSize = true,
                 AutoSizeMode = AutoSizeMode.GrowAndShrink,
-                Padding = new Padding((int)(10 * scale), (int)(6 * scale), (int)(10 * scale), (int)(6 * scale)),
-                Margin = new Padding(0, 0, (int)(8 * scale), 0),
+                Padding = new Padding((int)(7 * scale), (int)(5 * scale), (int)(7 * scale), (int)(5 * scale)),
+                Margin = new Padding(0, 0, (int)(4 * scale), 0),
                 FlatStyle = FlatStyle.System,
+                Font = new Font("Segoe UI", 9F, FontStyle.Regular),
                 Cursor = Cursors.Hand
             };
             _btnExport.Click += OnExportClick;
+
+            // Square Open in Browser button (exact same height as full buttons, fits to the left of Archive/Delete)
+            string topBarIconFont = GetTopBarIconFontFamily();
+            _btnOpenInBrowser = new Button
+            {
+                Width = btnH,
+                Height = btnH,
+                Margin = new Padding(0, 0, (int)(4 * scale), 0),
+                Padding = new Padding(0),
+                FlatStyle = FlatStyle.System,
+                Cursor = Cursors.Hand,
+                Font = new Font(topBarIconFont, 11F, FontStyle.Regular),
+                Text = topBarIconFont.Contains("Segoe") ? "\uE774" : "🌐"
+            };
+            _btnOpenInBrowser.Click += OnOpenInBrowserClick;
 
             // Stacked Archive and Delete half-height square buttons
             var pnlTriageButtons = new Panel
             {
                 Width = (int)(32 * scale),
                 Height = btnH,
-                Margin = new Padding(0, 0, (int)(14 * scale), 0),
+                Margin = new Padding(0, 0, (int)(10 * scale), 0),
                 Padding = new Padding(0)
             };
 
@@ -211,9 +231,18 @@ namespace EmailSummarizer.UI.Tabs
             };
             _btnDelete.Click += OnDeleteClick;
 
-            var toolTip = new ToolTip();
-            toolTip.SetToolTip(_btnArchive, "Archive selected email(s)");
-            toolTip.SetToolTip(_btnDelete, "Delete selected email(s)");
+            _topBarToolTip = new ToolTip
+            {
+                AutoPopDelay = 8000,
+                InitialDelay = 400,
+                ReshowDelay = 150
+            };
+            _topBarToolTip.SetToolTip(_btnRefresh, "Refresh Inbox: Fetch new messages from configured accounts");
+            _topBarToolTip.SetToolTip(_btnCopySummary, "Copy Summary: Copy the AI executive summary to clipboard");
+            _topBarToolTip.SetToolTip(_btnExport, "Export: Save emails and summaries to JSON, CSV, Markdown, or HTML report");
+            _topBarToolTip.SetToolTip(_btnOpenInBrowser, "Open in Browser: View original email in default browser (Full HTML with remote images & styles)");
+            _topBarToolTip.SetToolTip(_btnArchive, "Archive: Move selected email(s) to Archive folder");
+            _topBarToolTip.SetToolTip(_btnDelete, "Delete: Move selected email(s) to Trash folder");
 
             pnlTriageButtons.Controls.Add(_btnDelete);
             pnlTriageButtons.Controls.Add(_btnArchive);
@@ -249,6 +278,7 @@ namespace EmailSummarizer.UI.Tabs
             actionsFlow.Controls.Add(_btnRefresh);
             actionsFlow.Controls.Add(_btnCopySummary);
             actionsFlow.Controls.Add(_btnExport);
+            actionsFlow.Controls.Add(_btnOpenInBrowser);
             actionsFlow.Controls.Add(pnlTriageButtons);
             actionsFlow.Controls.Add(lblAccount);
             actionsFlow.Controls.Add(_cboAccountFilter);
@@ -361,6 +391,7 @@ namespace EmailSummarizer.UI.Tabs
                     ReplyRequested?.Invoke(this, currentEmail);
                 }
             };
+            _topBarToolTip.SetToolTip(_btnReply, "Reply: Compose a reply to this email thread");
             pnlReplyBox.Controls.Add(_btnReply);
 
             var pnlSubjectContainer = new Panel
@@ -1722,6 +1753,157 @@ namespace EmailSummarizer.UI.Tabs
             }
         }
 
+        private static string? _topBarIconFontFamily;
+        private static string GetTopBarIconFontFamily()
+        {
+            if (_topBarIconFontFamily != null) return _topBarIconFontFamily;
+            try
+            {
+                using var installedFonts = new System.Drawing.Text.InstalledFontCollection();
+                var set = new HashSet<string>(installedFonts.Families.Select(f => f.Name), StringComparer.OrdinalIgnoreCase);
+                if (set.Contains("Segoe Fluent Icons")) return _topBarIconFontFamily = "Segoe Fluent Icons";
+                if (set.Contains("Segoe MDL2 Assets")) return _topBarIconFontFamily = "Segoe MDL2 Assets";
+            }
+            catch { }
+            return _topBarIconFontFamily = "Segoe UI Emoji";
+        }
+
+        private async void OnOpenInBrowserClick(object? sender, EventArgs e)
+        {
+            var email = GetCurrentPreviewEmail();
+            if (email == null)
+            {
+                _logger?.Report("[*] Select an email from the inbox list to open it in your browser.");
+                return;
+            }
+
+            try
+            {
+                _logger?.Report($"[*] Opening \"{email.Subject}\" in default web browser...");
+
+                string? htmlContent = email.HtmlBody;
+
+                // If HtmlBody was not cached during initial fetch, try fetching on-demand from IMAP
+                if (string.IsNullOrWhiteSpace(htmlContent) && email.UniqueId > 0 && !string.IsNullOrWhiteSpace(email.AccountName))
+                {
+                    var account = _configService.GetAccounts().FirstOrDefault(a => 
+                        string.Equals(a.Name, email.AccountName, StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(a.Email, email.AccountEmail, StringComparison.OrdinalIgnoreCase));
+
+                    if (account != null)
+                    {
+                        try
+                        {
+                            htmlContent = await _imapService.FetchEmailHtmlBodyAsync(account, email.UniqueId);
+                            if (!string.IsNullOrWhiteSpace(htmlContent))
+                            {
+                                email.HtmlBody = htmlContent;
+                            }
+                        }
+                        catch { }
+                    }
+                }
+
+                string renderedHtml = BuildBrowserHtmlPage(email, htmlContent);
+
+                string tempDir = Path.Combine(Path.GetTempPath(), "EmailSummarizer");
+                Directory.CreateDirectory(tempDir);
+
+                // Clean file name
+                string safeSubject = string.Concat(email.Subject.Split(Path.GetInvalidFileNameChars())).Trim();
+                if (string.IsNullOrWhiteSpace(safeSubject)) safeSubject = "email";
+                if (safeSubject.Length > 30) safeSubject = safeSubject.Substring(0, 30);
+
+                string tempFile = Path.Combine(tempDir, $"{safeSubject}_{email.UniqueId}_{DateTime.UtcNow.Ticks}.html");
+                await File.WriteAllTextAsync(tempFile, renderedHtml, Encoding.UTF8);
+
+                var psi = new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = tempFile,
+                    UseShellExecute = true
+                };
+                System.Diagnostics.Process.Start(psi);
+
+                _logger?.Report("[✓] Email opened in web browser successfully.");
+            }
+            catch (Exception ex)
+            {
+                _logger?.Report($"[!] Failed to open email in browser: {ex.Message}");
+                MessageBox.Show($"Failed to open email in browser:\n{ex.Message}", "Browser Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+        }
+
+        private static string BuildBrowserHtmlPage(EmailItem email, string? htmlBody)
+        {
+            string encSubject = WebUtility.HtmlEncode(email.Subject);
+            string encSender = WebUtility.HtmlEncode(email.Sender);
+            string encDate = WebUtility.HtmlEncode(email.DateString);
+            string encAccount = WebUtility.HtmlEncode(email.AccountName);
+
+            string headerBanner = $@"
+<div style=""background: #f8f9fa; border-bottom: 2px solid #e2e8f0; padding: 16px 24px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #2d3748; margin: 0 0 20px 0; box-shadow: 0 1px 3px rgba(0,0,0,0.06);"">
+    <div style=""font-size: 19px; font-weight: 700; color: #1a202c; margin-bottom: 6px;"">{encSubject}</div>
+    <div style=""font-size: 13px; color: #4a5568; line-height: 1.5;"">
+        <strong>From:</strong> {encSender} &bull; 
+        <strong>Date:</strong> {encDate} &bull; 
+        <strong>Account:</strong> {encAccount}
+    </div>
+</div>";
+
+            if (!string.IsNullOrWhiteSpace(htmlBody))
+            {
+                // If it's already a full HTML document with <body>, inject the header banner right after <body>
+                int bodyIdx = htmlBody.IndexOf("<body", StringComparison.OrdinalIgnoreCase);
+                if (bodyIdx >= 0)
+                {
+                    int bodyCloseIdx = htmlBody.IndexOf('>', bodyIdx);
+                    if (bodyCloseIdx >= 0)
+                    {
+                        string before = htmlBody.Substring(0, bodyCloseIdx + 1);
+                        string after = htmlBody.Substring(bodyCloseIdx + 1);
+                        return before + headerBanner + after;
+                    }
+                }
+
+                // If no <body> tag, wrap in a clean document structure
+                return $@"<!DOCTYPE html>
+<html>
+<head>
+    <meta charset=""utf-8"">
+    <meta name=""viewport"" content=""width=device-width, initial-scale=1"">
+    <title>{encSubject}</title>
+</head>
+<body style=""margin: 0; padding: 0; background: #ffffff;"">
+    {headerBanner}
+    <div style=""padding: 0 24px 30px 24px;"">
+        {htmlBody}
+    </div>
+</body>
+</html>";
+            }
+
+            // Plaintext fallback
+            string bodyText = !string.IsNullOrWhiteSpace(email.DisplayBody) ? email.DisplayBody : email.CleanBody;
+            string encContent = WebUtility.HtmlEncode(bodyText);
+
+            return $@"<!DOCTYPE html>
+<html>
+<head>
+    <meta charset=""utf-8"">
+    <meta name=""viewport"" content=""width=device-width, initial-scale=1"">
+    <title>{encSubject}</title>
+    <style>
+        body {{ margin: 0; padding: 0; background: #fdfdfd; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }}
+        .content-body {{ padding: 10px 24px 40px 24px; font-size: 15px; line-height: 1.65; color: #2d3748; white-space: pre-wrap; word-wrap: break-word; }}
+    </style>
+</head>
+<body>
+    {headerBanner}
+    <div class=""content-body"">{encContent}</div>
+</body>
+</html>";
+        }
+
         public void CancelRunningOperations()
         {
             try
@@ -1750,6 +1932,7 @@ namespace EmailSummarizer.UI.Tabs
                 _linkHoverTimer?.Dispose();
                 _linkHoverTimer = null;
                 _inboxCellToolTip?.Dispose();
+                _topBarToolTip?.Dispose();
             }
             base.Dispose(disposing);
         }
