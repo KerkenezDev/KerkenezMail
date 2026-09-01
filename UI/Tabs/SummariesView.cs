@@ -70,6 +70,7 @@ namespace EmailSummarizer.UI.Tabs
         private readonly List<(int Start, int Length, string Url)> _currentEmailLinkSpans = new List<(int Start, int Length, string Url)>();
         private string? _lastHoverLinkUrl;
         private System.Windows.Forms.Timer? _linkHoverTimer;
+        private readonly SemaphoreSlim _summaryQueueSemaphore = new SemaphoreSlim(1, 1);
 
         public event Action<string, string>? StatusUpdated;
 
@@ -582,6 +583,7 @@ namespace EmailSummarizer.UI.Tabs
                         settings.LlamaModelPath,
                         settings.LlamaServerPort,
                         settings.LlamaGpuLayers,
+                        contextSize: settings.LlamaContextSize,
                         logger: _logger,
                         ct: ct);
                 }
@@ -675,7 +677,7 @@ namespace EmailSummarizer.UI.Tabs
         {
             try
             {
-                email.Status = SummaryState.Summarizing;
+                email.Status = SummaryState.Pending;
 
                 if (serverTask != null)
                 {
@@ -688,25 +690,52 @@ namespace EmailSummarizer.UI.Tabs
                     return;
                 }
 
-                string summary = await _llmService.SummarizeEmailAsync(email, settings, ct);
-                email.Summary = summary;
-                email.Status = SummaryState.Completed;
-
-                _logger.Report($"[✓] Background summary generated for: \"{email.Subject}\" (Priority {email.Priority ?? 2})");
-
-                if (this.IsDisposed || !this.IsHandleCreated) return;
-
-                this.BeginInvoke(new Action(() =>
+                // Acquire sequential queue lock (1-at-a-time inference to prevent KV cache collisions and cloud rate limits)
+                await _summaryQueueSemaphore.WaitAsync(ct);
+                try
                 {
+                    if (ct.IsCancellationRequested || this.IsDisposed)
+                    {
+                        email.Status = SummaryState.Pending;
+                        return;
+                    }
+
+                    email.Status = SummaryState.Summarizing;
+                    if (this.IsHandleCreated && !this.IsDisposed)
+                    {
+                        this.BeginInvoke(new Action(() =>
+                        {
+                            if (!this.IsDisposed && this.IsHandleCreated)
+                            {
+                                UpdateListViewItemForEmail(email);
+                            }
+                        }));
+                    }
+
+                    string summary = await _llmService.SummarizeEmailAsync(email, settings, ct);
+                    email.Summary = summary;
+                    email.Status = SummaryState.Completed;
+
+                    _logger.Report($"[✓] Background summary generated for: \"{email.Subject}\" (Priority {email.Priority ?? 2})");
+
                     if (this.IsDisposed || !this.IsHandleCreated) return;
 
-                    UpdateListViewItemForEmail(email);
-
-                    if (_lvEmails.SelectedItems.Count > 0 && GetCurrentPreviewEmail() == email)
+                    this.BeginInvoke(new Action(() =>
                     {
-                        DisplayEmail(email);
-                    }
-                }));
+                        if (this.IsDisposed || !this.IsHandleCreated) return;
+
+                        UpdateListViewItemForEmail(email);
+
+                        if (_lvEmails.SelectedItems.Count > 0 && GetCurrentPreviewEmail() == email)
+                        {
+                            DisplayEmail(email);
+                        }
+                    }));
+                }
+                finally
+                {
+                    _summaryQueueSemaphore.Release();
+                }
             }
             catch (OperationCanceledException)
             {
@@ -983,7 +1012,12 @@ namespace EmailSummarizer.UI.Tabs
                 var settings = _configService.Settings;
                 if (string.Equals(settings.AiBackend, "LlamaCpp", StringComparison.OrdinalIgnoreCase) && settings.AutoStartLlamaServer)
                 {
-                    await _llamaManager.StartAsync(settings.LlamaModelPath, settings.LlamaServerPort, settings.LlamaGpuLayers, logger: _logger);
+                    await _llamaManager.StartAsync(
+                        settings.LlamaModelPath,
+                        settings.LlamaServerPort,
+                        settings.LlamaGpuLayers,
+                        contextSize: settings.LlamaContextSize,
+                        logger: _logger);
                 }
 
                 string summary = await _llmService.SummarizeEmailAsync(email, settings);

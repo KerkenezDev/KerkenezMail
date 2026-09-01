@@ -211,6 +211,7 @@ namespace EmailSummarizer.Services
             int port = 8080,
             int ngl = 99,
             string host = "127.0.0.1",
+            int contextSize = 8192,
             int waitTimeoutSeconds = 35,
             IProgress<string>? logger = null,
             CancellationToken ct = default)
@@ -272,12 +273,13 @@ namespace EmailSummarizer.Services
                 {
                     string exePath = ResolveLlamaServerExecutable();
                     string modelName = Path.GetFileName(modelPath);
-                    logger?.Report($"[*] Launching '{Path.GetFileName(exePath)}' with '{modelName}' on port {port} (GPU offload: {ngl} layers)...");
+                    int ctx = contextSize > 0 ? contextSize : 8192;
+                    logger?.Report($"[*] Launching '{Path.GetFileName(exePath)}' with '{modelName}' on port {port} (GPU offload: {ngl} layers, context: {ctx})...");
 
                     var psi = new ProcessStartInfo
                     {
                         FileName = exePath,
-                        Arguments = $"-m \"{modelPath}\" --port {port} --host {host} -ngl {ngl} -c 4096 -lv 0",
+                        Arguments = $"-m \"{modelPath}\" --port {port} --host {host} -ngl {ngl} -c {ctx} --parallel 1 -lv 0",
                         UseShellExecute = false,
                         CreateNoWindow = true,
                         RedirectStandardOutput = false,

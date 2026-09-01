@@ -18,6 +18,7 @@ namespace EmailSummarizer.Models
         public int LlamaServerPort { get; set; } = 8080;
         public string LlamaServerUrl { get; set; } = "http://127.0.0.1:8080/v1/chat/completions";
         public int LlamaGpuLayers { get; set; } = 99;
+        public int LlamaContextSize { get; set; } = 8192;
         public bool AutoStartLlamaServer { get; set; } = true;
         public bool InstantVramUnload { get; set; } = false;
 
@@ -88,7 +89,8 @@ namespace EmailSummarizer.Models
             "2. Summary: Write a concise 1-3 sentence executive brief in an objective, neutral third-person perspective. Accurately state key facts, errors, or required actions. Never use first-person pronouns.\r\n" +
             "3. Format: Output strictly in this format:\r\n" +
             "Priority: [1/2/3]\r\n" +
-            "Summary: [summary text]";
+            "Summary: [summary text]\r\n" +
+            "4. Reasoning Models: If using a reasoning/thinking model (e.g. DeepSeek-R1, Qwen reasoning), keep internal analysis concise (under 150 words) before returning the priority and summary.";
 
         public static AppSettings CreateDefault()
         {

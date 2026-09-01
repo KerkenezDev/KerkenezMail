@@ -27,6 +27,7 @@ namespace EmailSummarizer.UI.Tabs
         private Button _btnBrowseModel = null!;
         private NumericUpDown _numPort = null!;
         private NumericUpDown _numGpuLayers = null!;
+        private NumericUpDown _numContextSize = null!;
         private TextBox _txtServerUrl = null!;
         private CheckBox _chkAutoStart = null!;
         private CheckBox _chkInstantVram = null!;
@@ -240,8 +241,32 @@ namespace EmailSummarizer.UI.Tabs
             pnlPort.Controls.Add(lblPort);
             pnlPort.Controls.Add(_numPort);
 
+            var pnlContextSize = new FlowLayoutPanel
+            {
+                Width = 200,
+                AutoSize = true,
+                FlowDirection = FlowDirection.TopDown,
+                WrapContents = false,
+                Margin = new Padding(0, 0, 20, 0)
+            };
+            var lblContextSize = new Label { Text = "Context Size (-c):", AutoSize = true, Font = new Font("Segoe UI", 8.75F), Margin = new Padding(0, 0, 0, 4) };
+            _numContextSize = new NumericUpDown
+            {
+                Width = 150,
+                Height = 28,
+                Minimum = 2048,
+                Maximum = 131072,
+                Increment = 1024,
+                Value = 8192,
+                Font = new Font("Segoe UI", 9.5F)
+            };
+            pnlContextSize.Controls.Add(lblContextSize);
+            pnlContextSize.Controls.Add(_numContextSize);
+
+            rowParams.WrapContents = true;
             rowParams.Controls.Add(pnlLayers);
             rowParams.Controls.Add(pnlPort);
+            rowParams.Controls.Add(pnlContextSize);
 
             var lblUrl = new Label { Text = "OpenAI Chat Endpoint URL:", AutoSize = true, Margin = new Padding(0, 0, 0, 3), Font = new Font("Segoe UI", 8.75F) };
             _txtServerUrl = new TextBox { Width = ContentW - 28, Font = new Font("Segoe UI", 9F), Margin = new Padding(0, 0, 0, 8) };
@@ -1083,6 +1108,7 @@ namespace EmailSummarizer.UI.Tabs
             _txtModelPath.Text = s.LlamaModelPath;
             _numPort.Value = Math.Max(_numPort.Minimum, Math.Min(_numPort.Maximum, s.LlamaServerPort));
             _numGpuLayers.Value = Math.Max(_numGpuLayers.Minimum, Math.Min(_numGpuLayers.Maximum, s.LlamaGpuLayers));
+            _numContextSize.Value = Math.Max(_numContextSize.Minimum, Math.Min(_numContextSize.Maximum, s.LlamaContextSize > 0 ? s.LlamaContextSize : 8192));
             _txtServerUrl.Text = s.LlamaServerUrl;
             _chkAutoStart.Checked = s.AutoStartLlamaServer;
             _chkInstantVram.Checked = s.InstantVramUnload;
@@ -1452,6 +1478,7 @@ namespace EmailSummarizer.UI.Tabs
             s.LlamaModelPath = _txtModelPath.Text.Trim();
             s.LlamaServerPort = (int)_numPort.Value;
             s.LlamaGpuLayers = (int)_numGpuLayers.Value;
+            s.LlamaContextSize = (int)_numContextSize.Value;
             s.LlamaServerUrl = _txtServerUrl.Text.Trim();
             s.AutoStartLlamaServer = _chkAutoStart.Checked;
             s.InstantVramUnload = _chkInstantVram.Checked;
