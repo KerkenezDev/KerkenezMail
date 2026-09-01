@@ -51,6 +51,8 @@ namespace EmailSummarizer.UI.Tabs
         private RichTextBox _rtbEmailBody = null!;
         private Label _lblEmailMeta = null!;
         private Label _lblEmailSubject = null!;
+        private Panel _pnlSubjectViewport = null!;
+        private HScrollBar _sliderSubject = null!;
         private Button _btnReply = null!;
         private FlowLayoutPanel _pnlAttachments = null!;
         private Label _lblAttachmentsTitle = null!;
@@ -330,15 +332,22 @@ namespace EmailSummarizer.UI.Tabs
             {
                 Dock = DockStyle.Top,
                 AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 Padding = new Padding(0, 0, 0, 4)
+            };
+
+            var pnlReplyBox = new Panel
+            {
+                Dock = DockStyle.Right,
+                Width = (int)(88 * scale),
+                Padding = new Padding((int)(6 * scale), 0, 0, 0)
             };
 
             _btnReply = new Button
             {
                 Text = "↩  Reply",
-                Width = (int)(80 * scale),
+                Dock = DockStyle.Top,
                 Height = (int)(26 * scale),
-                Dock = DockStyle.Right,
                 FlatStyle = FlatStyle.System,
                 Cursor = Cursors.Hand,
                 Font = new Font("Segoe UI", 8.5F, FontStyle.Bold),
@@ -352,19 +361,69 @@ namespace EmailSummarizer.UI.Tabs
                     ReplyRequested?.Invoke(this, currentEmail);
                 }
             };
+            pnlReplyBox.Controls.Add(_btnReply);
+
+            var pnlSubjectContainer = new Panel
+            {
+                Dock = DockStyle.Fill,
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink
+            };
+
+            _pnlSubjectViewport = new Panel
+            {
+                Dock = DockStyle.Top,
+                Height = (int)(26 * scale),
+                AutoScroll = false
+            };
 
             _lblEmailSubject = new Label
             {
                 Text = "Subject: (No email selected)",
-                Dock = DockStyle.Fill,
                 AutoSize = true,
+                Location = new Point(0, (int)(2 * scale)),
                 Font = new Font("Segoe UI", 11F, FontStyle.Bold),
-                ForeColor = Color.FromArgb(20, 20, 20),
-                Padding = new Padding(0, 2, 0, 2)
+                ForeColor = Color.FromArgb(20, 20, 20)
             };
 
-            subjectRow.Controls.Add(_lblEmailSubject);
-            subjectRow.Controls.Add(_btnReply);
+            _pnlSubjectViewport.Controls.Add(_lblEmailSubject);
+
+            _sliderSubject = new HScrollBar
+            {
+                Dock = DockStyle.Top,
+                Height = (int)(13 * scale),
+                Visible = false,
+                Cursor = Cursors.Hand
+            };
+
+            _sliderSubject.Scroll += (s, e) =>
+            {
+                _lblEmailSubject.Location = new Point(-_sliderSubject.Value, (int)(2 * scale));
+            };
+
+            MouseEventHandler onSubjectWheel = (s, e) =>
+            {
+                if (_sliderSubject.Visible)
+                {
+                    int maxVal = _sliderSubject.Maximum - _sliderSubject.LargeChange + 1;
+                    if (maxVal > 0)
+                    {
+                        int newVal = Math.Clamp(_sliderSubject.Value - (e.Delta / 2), 0, maxVal);
+                        _sliderSubject.Value = newVal;
+                        _lblEmailSubject.Location = new Point(-newVal, (int)(2 * scale));
+                    }
+                }
+            };
+            _pnlSubjectViewport.MouseWheel += onSubjectWheel;
+            _lblEmailSubject.MouseWheel += onSubjectWheel;
+
+            _pnlSubjectViewport.Resize += (s, e) => UpdateSubjectSlider();
+
+            pnlSubjectContainer.Controls.Add(_sliderSubject);
+            pnlSubjectContainer.Controls.Add(_pnlSubjectViewport);
+
+            subjectRow.Controls.Add(pnlSubjectContainer);
+            subjectRow.Controls.Add(pnlReplyBox);
 
             _lblEmailMeta = new Label
             {
@@ -1036,6 +1095,12 @@ namespace EmailSummarizer.UI.Tabs
                 _lblEmailSubject.Text = "Subject: (No email selected)";
                 _lblEmailMeta.Text = "From: -   •   Date: -   •   Account: -";
                 _btnReply.Visible = false;
+                if (_sliderSubject != null)
+                {
+                    _sliderSubject.Visible = false;
+                    _sliderSubject.Value = 0;
+                    _lblEmailSubject.Location = new Point(0, 0);
+                }
                 _pnlAttachments.Visible = false;
                 _pnlAttachments.Controls.Clear();
                 return;
@@ -1143,6 +1208,7 @@ namespace EmailSummarizer.UI.Tabs
                 : "";
 
             _lblEmailSubject.Text = $"Subject: {email.Subject}";
+            UpdateSubjectSlider();
             _lblEmailMeta.Text = $"From: {email.Sender}   •   Date: {email.DateString}   •   Account: {email.AccountName}{priTag}   •   {readTag}";
             _btnReply.Visible = true;
 
@@ -1182,6 +1248,47 @@ namespace EmailSummarizer.UI.Tabs
 
             UpdateEmailLinkSpans(email);
             UpdateEmailAttachments(email);
+        }
+
+        private void UpdateSubjectSlider()
+        {
+            if (this.IsDisposed || !this.IsHandleCreated || _pnlSubjectViewport == null || _sliderSubject == null || _lblEmailSubject == null) return;
+
+            float scale = this.DeviceDpi / 96f;
+            int textWidth = TextRenderer.MeasureText(_lblEmailSubject.Text, _lblEmailSubject.Font).Width;
+            int visibleWidth = _pnlSubjectViewport.ClientSize.Width;
+
+            if (textWidth > visibleWidth && visibleWidth > (int)(40 * scale))
+            {
+                int maxScroll = textWidth - visibleWidth;
+                int largeChange = Math.Max(10, visibleWidth / 4);
+                _sliderSubject.Minimum = 0;
+                _sliderSubject.LargeChange = largeChange;
+                _sliderSubject.SmallChange = Math.Max(5, visibleWidth / 10);
+                _sliderSubject.Maximum = maxScroll + largeChange - 1;
+
+                if (!_sliderSubject.Visible)
+                {
+                    _sliderSubject.Visible = true;
+                    _sliderSubject.Value = 0;
+                    _lblEmailSubject.Location = new Point(0, (int)(2 * scale));
+                }
+                else
+                {
+                    int clampedVal = Math.Clamp(_sliderSubject.Value, 0, maxScroll);
+                    _sliderSubject.Value = clampedVal;
+                    _lblEmailSubject.Location = new Point(-clampedVal, (int)(2 * scale));
+                }
+            }
+            else
+            {
+                if (_sliderSubject.Visible)
+                {
+                    _sliderSubject.Visible = false;
+                    _sliderSubject.Value = 0;
+                }
+                _lblEmailSubject.Location = new Point(0, (int)(2 * scale));
+            }
         }
 
         private void OnEmailLinkClicked(object? sender, LinkClickedEventArgs e)
