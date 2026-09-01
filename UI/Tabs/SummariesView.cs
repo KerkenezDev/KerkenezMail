@@ -23,6 +23,8 @@ namespace EmailSummarizer.UI.Tabs
 
         private CancellationTokenSource? _cts;
         private volatile bool _isBatchSyncing = false;
+        private MailFolderType _currentFolder = MailFolderType.Inbox;
+        private readonly Dictionary<MailFolderType, List<EmailItem>> _folderCache = new();
         private readonly List<EmailItem> _emails = new List<EmailItem>();
         private readonly List<EmailItem> _selectedEmailsOrder = new List<EmailItem>();
 
@@ -692,9 +694,70 @@ namespace EmailSummarizer.UI.Tabs
             }
         }
 
-        public async Task FetchAndAutoSummarizeAsync()
+        public async Task SwitchToFolderAsync(MailFolderType folder, bool forceRefresh = false)
+        {
+            if (_currentFolder == folder && !forceRefresh)
+            {
+                return;
+            }
+
+            // Save previous emails into cache if any
+            if (_emails.Count > 0)
+            {
+                _folderCache[_currentFolder] = new List<EmailItem>(_emails);
+            }
+
+            _currentFolder = folder;
+            _btnRefresh.Text = (folder == MailFolderType.Inbox)
+                ? "🔄 Refresh Inbox"
+                : $"🔄 Refresh {folder.GetDisplayName()}";
+
+            _topBarToolTip.SetToolTip(_btnRefresh, $"Refresh {folder.GetDisplayName()}: Fetch messages for this folder from configured accounts");
+
+            if (_folderCache.TryGetValue(folder, out var cached) && !forceRefresh)
+            {
+                _emails.Clear();
+                _emails.AddRange(cached);
+                PopulateListView();
+
+                int unreadCount = _emails.Count(e => !e.IsRead);
+                string backendType = _configService.Settings.AiBackend;
+                string status = string.Equals(backendType, "LlamaCpp", StringComparison.OrdinalIgnoreCase) 
+                    ? (_configService.Settings.InstantVramUnload ? "VRAM Free" : "Model Loaded in VRAM") 
+                    : (string.Equals(backendType, "Ollama", StringComparison.OrdinalIgnoreCase) ? "Ollama Active" : "Cloud Active");
+
+                string metric = folder == MailFolderType.Inbox
+                    ? $"Ready • {_emails.Count} emails in inbox ({unreadCount} unread)"
+                    : $"Ready • {_emails.Count} emails in {folder.GetDisplayName()}";
+                StatusUpdated?.Invoke(metric, status);
+
+                if (_lvEmails.Items.Count > 0)
+                {
+                    _lvEmails.Items[0].Selected = true;
+                }
+                else
+                {
+                    ResetEmailPreview();
+                }
+
+                return;
+            }
+
+            // Not cached yet or forced refresh: fetch on-demand only now!
+            await FetchAndAutoSummarizeAsync(folder);
+        }
+
+        public async Task FetchAndAutoSummarizeAsync(MailFolderType? targetFolder = null)
         {
             if (_btnRefresh.Enabled == false) return;
+
+            if (targetFolder.HasValue)
+            {
+                _currentFolder = targetFolder.Value;
+                _btnRefresh.Text = (_currentFolder == MailFolderType.Inbox)
+                    ? "🔄 Refresh Inbox"
+                    : $"🔄 Refresh {_currentFolder.GetDisplayName()}";
+            }
 
             _cts = new CancellationTokenSource();
             var ct = _cts.Token;
@@ -717,10 +780,11 @@ namespace EmailSummarizer.UI.Tabs
             }
 
             string backendName = settings.GetBackendDisplayName();
+            string folderName = _currentFolder.GetDisplayName();
 
-            StatusUpdated?.Invoke("Syncing inboxes...", "Active");
+            StatusUpdated?.Invoke($"Syncing {folderName}...", "Active");
             _logger.Report("\r\n" + new string('═', 60));
-            _logger.Report($"[*] Fast-syncing all accounts with AI backend [{backendName}]...");
+            _logger.Report($"[*] Fast-syncing all accounts for [{folderName}] with AI backend [{backendName}]...");
 
             _emails.Clear();
             PopulateListView();
@@ -768,12 +832,13 @@ namespace EmailSummarizer.UI.Tabs
                         }
                         catch { }
 
-                        if (!emailItem.IsRead)
+                        if (!emailItem.IsRead && _currentFolder == MailFolderType.Inbox)
                         {
                             activeSummaryTasks.Add(SummarizeUnreadEmailInBackgroundAsync(emailItem, settings, serverTask, ct));
                         }
                     },
-                    ct: ct);
+                    ct: ct,
+                    folderType: _currentFolder);
 
                 await fetchTask;
                 if (serverTask != null) await serverTask;
@@ -783,8 +848,14 @@ namespace EmailSummarizer.UI.Tabs
                     await Task.WhenAll(activeSummaryTasks);
                 }
 
+                _folderCache[_currentFolder] = new List<EmailItem>(_emails);
+
                 int unreadCount = _emails.Count(e => !e.IsRead);
-                _logger.Report($"[✓] Parallel sync complete. Loaded {_emails.Count} total email(s) ({unreadCount} unread).");
+                _logger.Report($"[✓] {folderName} sync complete. Loaded {_emails.Count} total email(s) ({unreadCount} unread).");
+
+                string metricMsg = (_currentFolder == MailFolderType.Inbox)
+                    ? $"Ready • {_emails.Count} emails in inbox ({unreadCount} unread)"
+                    : $"Ready • {_emails.Count} emails in {folderName}";
 
                 // Handle Instant VRAM Unload setting after entire batch is fetched & summarized
                 if (string.Equals(settings.AiBackend, "LlamaCpp", StringComparison.OrdinalIgnoreCase) && settings.AutoStartLlamaServer)
@@ -792,11 +863,11 @@ namespace EmailSummarizer.UI.Tabs
                     if (settings.InstantVramUnload)
                     {
                         _llamaManager.Stop(_logger);
-                        StatusUpdated?.Invoke($"Ready • {_emails.Count} emails in inbox ({unreadCount} unread)", "VRAM Free");
+                        StatusUpdated?.Invoke(metricMsg, "VRAM Free");
                     }
                     else
                     {
-                        StatusUpdated?.Invoke($"Ready • {_emails.Count} emails in inbox ({unreadCount} unread)", "Model Loaded in VRAM");
+                        StatusUpdated?.Invoke(metricMsg, "Model Loaded in VRAM");
                     }
                 }
                 else
@@ -804,13 +875,13 @@ namespace EmailSummarizer.UI.Tabs
                     string backendMetric = string.Equals(settings.AiBackend, "Ollama", StringComparison.OrdinalIgnoreCase) 
                         ? "Ollama Active" 
                         : "Cloud Active";
-                    StatusUpdated?.Invoke($"Ready • {_emails.Count} emails in inbox ({unreadCount} unread)", backendMetric);
+                    StatusUpdated?.Invoke(metricMsg, backendMetric);
                 }
             }
             catch (OperationCanceledException)
             {
                 StatusUpdated?.Invoke("Operation cancelled", "Ready");
-                _logger.Report("[!] Inbox sync cancelled.");
+                _logger.Report($"[!] {folderName} sync cancelled.");
             }
             catch (Exception ex)
             {
@@ -1013,7 +1084,40 @@ namespace EmailSummarizer.UI.Tabs
             _lvEmails.Items.Add(item);
 
             int unreadCount = _emails.Count(e => !e.IsRead);
-            _lblInboxHeader.Text = $"Inbox ({_emails.Count} emails, {unreadCount} unread)";
+            UpdateHeaderTitle(_emails.Count, unreadCount);
+        }
+
+        private void UpdateHeaderTitle(int totalCount, int unreadCount)
+        {
+            string folderName = _currentFolder.GetDisplayName();
+            if (_currentFolder == MailFolderType.Inbox)
+            {
+                _lblInboxHeader.Text = $"{folderName} ({totalCount} emails, {unreadCount} unread)";
+            }
+            else
+            {
+                _lblInboxHeader.Text = $"{folderName} ({totalCount} emails)";
+            }
+        }
+
+        private void ResetEmailPreview()
+        {
+            _selectedEmailsOrder.Clear();
+            _txtSummary.Clear();
+            _rtbEmailBody.Clear();
+            ResetLinkToolTip();
+            _currentEmailLinkSpans.Clear();
+            _lblEmailSubject.Text = "Subject: (No email selected)";
+            _lblEmailMeta.Text = "From: -   •   Date: -   •   Account: -";
+            _btnReply.Visible = false;
+            if (_sliderSubject != null)
+            {
+                _sliderSubject.Visible = false;
+                _sliderSubject.Value = 0;
+                _lblEmailSubject.Location = new Point(0, 0);
+            }
+            _pnlAttachments.Visible = false;
+            _pnlAttachments.Controls.Clear();
         }
 
         private void PopulateListView()
@@ -1058,7 +1162,7 @@ namespace EmailSummarizer.UI.Tabs
             }).ToList();
 
             int unreadCount = visibleEmails.Count(e => !e.IsRead);
-            _lblInboxHeader.Text = $"Inbox ({visibleEmails.Count} emails, {unreadCount} unread)";
+            UpdateHeaderTitle(visibleEmails.Count, unreadCount);
 
             var groupsDict = new Dictionary<string, ListViewGroup>(StringComparer.OrdinalIgnoreCase);
 
@@ -1118,22 +1222,7 @@ namespace EmailSummarizer.UI.Tabs
         {
             if (_lvEmails.SelectedItems.Count == 0)
             {
-                _selectedEmailsOrder.Clear();
-                _txtSummary.Clear();
-                _rtbEmailBody.Clear();
-                ResetLinkToolTip();
-                _currentEmailLinkSpans.Clear();
-                _lblEmailSubject.Text = "Subject: (No email selected)";
-                _lblEmailMeta.Text = "From: -   •   Date: -   •   Account: -";
-                _btnReply.Visible = false;
-                if (_sliderSubject != null)
-                {
-                    _sliderSubject.Visible = false;
-                    _sliderSubject.Value = 0;
-                    _lblEmailSubject.Location = new Point(0, 0);
-                }
-                _pnlAttachments.Visible = false;
-                _pnlAttachments.Controls.Clear();
+                ResetEmailPreview();
                 return;
             }
 
@@ -1511,7 +1600,7 @@ namespace EmailSummarizer.UI.Tabs
             _lvEmails.EndUpdate();
 
             int unreadCount = _emails.Count(em => !em.IsRead);
-            _lblInboxHeader.Text = $"Inbox ({_emails.Count} emails, {unreadCount} unread)";
+            UpdateHeaderTitle(_emails.Count, unreadCount);
 
             if (_lvEmails.Items.Count > 0)
             {
@@ -1530,12 +1619,7 @@ namespace EmailSummarizer.UI.Tabs
             }
             else
             {
-                _txtSummary.Clear();
-                _rtbEmailBody.Clear();
-                ResetLinkToolTip();
-                _currentEmailLinkSpans.Clear();
-                _lblEmailSubject.Text = "Subject: (No email selected)";
-                _lblEmailMeta.Text = "From: -   •   Date: -   •   Account: -";
+                ResetEmailPreview();
             }
 
             if (selected.Count > 1)
@@ -1794,7 +1878,7 @@ namespace EmailSummarizer.UI.Tabs
                     {
                         try
                         {
-                            htmlContent = await _imapService.FetchEmailHtmlBodyAsync(account, email.UniqueId);
+                            htmlContent = await _imapService.FetchEmailHtmlBodyAsync(account, email.UniqueId, email.Folder);
                             if (!string.IsNullOrWhiteSpace(htmlContent))
                             {
                                 email.HtmlBody = htmlContent;

@@ -47,7 +47,8 @@ namespace EmailSummarizer.Services
             AppSettings settings,
             IProgress<string>? logger = null,
             Action<EmailItem>? onEmailFetched = null,
-            CancellationToken ct = default)
+            CancellationToken ct = default,
+            MailFolderType folderType = MailFolderType.Inbox)
         {
             var emails = new List<EmailItem>();
             if (!account.IsEnabled) return emails;
@@ -62,26 +63,36 @@ namespace EmailSummarizer.Services
                 await client.ConnectAsync(account.Host, account.Port, sslOption, ct);
                 await client.AuthenticateAsync(account.Email, account.AppPassword, ct);
 
-                var inbox = client.Inbox;
-                await inbox.OpenAsync(FolderAccess.ReadWrite, ct);
+                var targetFolder = await ResolveFolderAsync(client, folderType, ct);
+                if (targetFolder == null)
+                {
+                    logger?.Report($"[-] {account.Name}: {folderType.GetDisplayName()} folder not found on server.");
+                    await client.DisconnectAsync(true, ct);
+                    return emails;
+                }
 
-                // Fetch either unread or all messages
-                var searchQuery = settings.OnlyUnread ? SearchQuery.NotSeen : SearchQuery.All;
-                var uids = await inbox.SearchAsync(searchQuery, ct);
+                await targetFolder.OpenAsync(FolderAccess.ReadWrite, ct);
+
+                // Fetch either unread or all messages (for non-Inbox folders, always fetch all messages)
+                var searchQuery = (folderType == MailFolderType.Inbox && settings.OnlyUnread)
+                    ? SearchQuery.NotSeen
+                    : SearchQuery.All;
+
+                var uids = await targetFolder.SearchAsync(searchQuery, ct);
 
                 if (uids.Count == 0)
                 {
-                    logger?.Report($"[✓] {account.Name}: Inbox is empty.");
+                    logger?.Report($"[✓] {account.Name}: {folderType.GetDisplayName()} is empty.");
                     await client.DisconnectAsync(true, ct);
                     return emails;
                 }
 
                 // Take latest N messages (highest UIDs)
                 var targetUids = uids.Reverse().Take(settings.MaxEmailsPerAccount).ToList();
-                logger?.Report($"[*] {account.Name}: Found {uids.Count} total messages. Fetching {targetUids.Count} recent emails...");
+                logger?.Report($"[*] {account.Name} ({folderType.GetDisplayName()}): Found {uids.Count} total messages. Fetching {targetUids.Count} recent emails...");
 
                 // Batch fetch flags (Seen/Unseen) for all target UIDs
-                var summaries = await inbox.FetchAsync(targetUids, MessageSummaryItems.Flags | MessageSummaryItems.UniqueId, ct);
+                var summaries = await targetFolder.FetchAsync(targetUids, MessageSummaryItems.Flags | MessageSummaryItems.UniqueId, ct);
                 var flagDict = summaries.ToDictionary(s => s.UniqueId, s => s.Flags);
 
                 // Stream full MIME messages progressively
@@ -91,7 +102,7 @@ namespace EmailSummarizer.Services
 
                     try
                     {
-                        var message = await inbox.GetMessageAsync(uid, ct);
+                        var message = await targetFolder.GetMessageAsync(uid, ct);
 
                         bool isRead = false;
                         if (flagDict.TryGetValue(uid, out var flags) && flags.HasValue)
@@ -165,6 +176,7 @@ namespace EmailSummarizer.Services
                             ExtractedLinks = extractedLinks,
                             Attachments = detectedAttachments,
                             IsRead = isRead,
+                            Folder = folderType,
                             Status = SummaryState.Pending,
                             IsMailingList = isMailingList,
                             HasNewsletterFooter = hasNewsletterFooter
@@ -175,9 +187,9 @@ namespace EmailSummarizer.Services
                         // Stream immediately to UI in real-time!
                         onEmailFetched?.Invoke(emailItem);
 
-                        if (settings.MarkAsSeen && !isRead)
+                        if (settings.MarkAsSeen && !isRead && folderType == MailFolderType.Inbox)
                         {
-                            await inbox.AddFlagsAsync(uid, MessageFlags.Seen, true, ct);
+                            await targetFolder.AddFlagsAsync(uid, MessageFlags.Seen, true, ct);
                         }
                     }
                     catch (Exception ex)
@@ -206,11 +218,12 @@ namespace EmailSummarizer.Services
             AppSettings settings,
             IProgress<string>? logger = null,
             Action<EmailItem>? onEmailFetched = null,
-            CancellationToken ct = default)
+            CancellationToken ct = default,
+            MailFolderType folderType = MailFolderType.Inbox)
         {
             var tasks = accounts
                 .Where(a => a.IsEnabled)
-                .Select(acc => FetchEmailsFromAccountAsync(acc, settings, logger, onEmailFetched, ct));
+                .Select(acc => FetchEmailsFromAccountAsync(acc, settings, logger, onEmailFetched, ct, folderType));
 
             var results = await Task.WhenAll(tasks);
             var allEmails = results.SelectMany(r => r)
@@ -920,6 +933,7 @@ namespace EmailSummarizer.Services
         public async Task<string?> FetchEmailHtmlBodyAsync(
             EmailAccount account,
             uint uniqueId,
+            MailFolderType folderType = MailFolderType.Inbox,
             CancellationToken ct = default)
         {
             using var client = new ImapClient();
@@ -931,10 +945,12 @@ namespace EmailSummarizer.Services
                 await client.ConnectAsync(account.Host, account.Port, sslOption, ct);
                 await client.AuthenticateAsync(account.Email, account.AppPassword, ct);
 
-                var inbox = client.Inbox;
-                await inbox.OpenAsync(FolderAccess.ReadOnly, ct);
+                var folder = await ResolveFolderAsync(client, folderType, ct);
+                if (folder == null) return null;
 
-                var message = await inbox.GetMessageAsync(new UniqueId(uniqueId), ct);
+                await folder.OpenAsync(FolderAccess.ReadOnly, ct);
+
+                var message = await folder.GetMessageAsync(new UniqueId(uniqueId), ct);
                 await client.DisconnectAsync(true, ct);
 
                 return message.HtmlBody;
@@ -943,6 +959,97 @@ namespace EmailSummarizer.Services
             {
                 return null;
             }
+        }
+
+        public static async Task<IMailFolder?> ResolveFolderAsync(ImapClient client, MailFolderType folderType, CancellationToken ct = default)
+        {
+            switch (folderType)
+            {
+                case MailFolderType.Inbox:
+                    return client.Inbox;
+
+                case MailFolderType.Sent:
+                {
+                    try
+                    {
+                        var f = client.GetFolder(SpecialFolder.Sent);
+                        if (f != null) return f;
+                    }
+                    catch { }
+
+                    return await FindFolderByNamesAsync(client, ct, "sent", "sent items", "sent messages", "gesendet", "inbox.sent");
+                }
+
+                case MailFolderType.Archive:
+                {
+                    try
+                    {
+                        var f = client.GetFolder(SpecialFolder.Archive);
+                        if (f != null) return f;
+                    }
+                    catch { }
+
+                    try
+                    {
+                        var f = client.GetFolder(SpecialFolder.All);
+                        if (f != null) return f;
+                    }
+                    catch { }
+
+                    return await FindFolderByNamesAsync(client, ct, "archive", "archives", "all mail", "inbox.archive", "archiv");
+                }
+
+                case MailFolderType.Spam:
+                {
+                    try
+                    {
+                        var f = client.GetFolder(SpecialFolder.Junk);
+                        if (f != null) return f;
+                    }
+                    catch { }
+
+                    return await FindFolderByNamesAsync(client, ct, "junk", "spam", "bulk", "junk email", "junk e-mail", "inbox.junk", "unerwünscht");
+                }
+
+                case MailFolderType.Trash:
+                {
+                    try
+                    {
+                        var f = client.GetFolder(SpecialFolder.Trash);
+                        if (f != null) return f;
+                    }
+                    catch { }
+
+                    return await FindFolderByNamesAsync(client, ct, "trash", "deleted", "deleted items", "bin", "inbox.trash", "papierkorb");
+                }
+
+                default:
+                    return client.Inbox;
+            }
+        }
+
+        private static async Task<IMailFolder?> FindFolderByNamesAsync(ImapClient client, CancellationToken ct, params string[] candidateNames)
+        {
+            try
+            {
+                foreach (var ns in client.PersonalNamespaces)
+                {
+                    var root = await client.GetFolderAsync(ns.Path, ct);
+                    var subfolders = await root.GetSubfoldersAsync(false, ct);
+                    foreach (var folder in subfolders)
+                    {
+                        foreach (var name in candidateNames)
+                        {
+                            if (string.Equals(folder.Name, name, StringComparison.OrdinalIgnoreCase))
+                            {
+                                return folder;
+                            }
+                        }
+                    }
+                }
+            }
+            catch { }
+            return null;
         }
     }
 }

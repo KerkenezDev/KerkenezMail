@@ -196,6 +196,7 @@ namespace EmailSummarizer.UI
             _sidebar = new SidebarNav();
             _sidebar.IsCollapsed = _configService.Settings.CollapseSidebarByDefault;
             _sidebar.TabChanged += OnSidebarTabChanged;
+            _sidebar.MailFolderSelected += OnSidebarMailFolderSelected;
             _sidebar.SendMailRequested += (s, e) => OpenSendMailScreen();
 
             // Initial view
@@ -214,6 +215,12 @@ namespace EmailSummarizer.UI
         private void OnSidebarTabChanged(object? sender, int index)
         {
             ShowTab(index);
+        }
+
+        private async void OnSidebarMailFolderSelected(object? sender, MailFolderType folder)
+        {
+            ShowTab(0);
+            await _summariesView.SwitchToFolderAsync(folder);
         }
 
         private void ShowTab(int index)

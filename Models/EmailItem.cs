@@ -40,6 +40,9 @@ namespace EmailSummarizer.Models
         // Track whether email is archived
         public bool IsArchived { get; set; }
 
+        // Folder type (Inbox, Sent, Archive, Spam, Trash)
+        public MailFolderType Folder { get; set; } = MailFolderType.Inbox;
+
         // Priority ranking (1 = High / Urgent, 2 = Normal / Medium, 3 = Low / Newsletter, null = unranked)
         public int? Priority { get; set; } = null;
 
