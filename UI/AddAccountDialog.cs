@@ -15,8 +15,14 @@ namespace EmailSummarizer.UI
         private TextBox _txtName = null!;
         private ComboBox _cboProvider = null!;
         private TextBox _txtEmail = null!;
+        private Label _lblPasswordHeader = null!;
+        private Panel _pwdPanel = null!;
         private TextBox _txtPassword = null!;
         private Button _btnShowPassword = null!;
+        private Label _lblHelpNote = null!;
+        private Panel _pnlOAuthSection = null!;
+        private Button _btnMicrosoftSignIn = null!;
+        private Label _lblOAuthStatus = null!;
         private TextBox _txtHost = null!;
         private NumericUpDown _numPort = null!;
         private CheckBox _chkUseSsl = null!;
@@ -44,7 +50,15 @@ namespace EmailSummarizer.UI
                     Host = existingAccount.Host,
                     Port = existingAccount.Port,
                     UseSsl = existingAccount.UseSsl,
-                    IsEnabled = existingAccount.IsEnabled
+                    IsEnabled = existingAccount.IsEnabled,
+                    Provider = existingAccount.Provider,
+                    EncryptedRefreshToken = existingAccount.EncryptedRefreshToken,
+                    EncryptedAccessToken = existingAccount.EncryptedAccessToken,
+                    AccessTokenExpiresUtc = existingAccount.AccessTokenExpiresUtc,
+                    LastRefreshedUtc = existingAccount.LastRefreshedUtc,
+                    SmtpHost = existingAccount.SmtpHost,
+                    SmtpPort = existingAccount.SmtpPort,
+                    SmtpUseSsl = existingAccount.SmtpUseSsl
                 }
                 : new EmailAccount();
 
@@ -107,6 +121,7 @@ namespace EmailSummarizer.UI
             _cboProvider.Items.AddRange(new object[]
             {
                 "Gmail (imap.gmail.com:993)",
+                "Microsoft Outlook / Office 365 (OAuth 2.0)",
                 "Yahoo Mail (imap.mail.yahoo.com:993)",
                 "iCloud Mail (imap.mail.me.com:993)",
                 "Custom IMAP Server"
@@ -119,10 +134,12 @@ namespace EmailSummarizer.UI
             _txtEmail = new TextBox { Dock = DockStyle.Fill, Margin = new Padding(0, 4, 0, 10), Font = new Font("Segoe UI", 9.5F) };
             _txtEmail.TextChanged += OnEmailTextChanged;
 
-            // 4. App Password
-            var lblPassword = new Label { Text = "App Password:", AutoSize = true, Anchor = AnchorStyles.Left | AnchorStyles.Top, Margin = new Padding(0, 8, 0, 8) };
+            // 4. Authentication / Password
+            _lblPasswordHeader = new Label { Text = "App Password:", AutoSize = true, Anchor = AnchorStyles.Left | AnchorStyles.Top, Margin = new Padding(0, 8, 0, 8) };
             
-            var pwdPanel = new Panel { Dock = DockStyle.Fill, Height = 32, Margin = new Padding(0, 4, 0, 4) };
+            var panelAuthHolder = new Panel { Dock = DockStyle.Fill, AutoSize = true, Margin = new Padding(0, 4, 0, 4) };
+
+            _pwdPanel = new Panel { Dock = DockStyle.Top, Height = 32 };
             _txtPassword = new TextBox
             {
                 UseSystemPasswordChar = true,
@@ -143,11 +160,43 @@ namespace EmailSummarizer.UI
             {
                 _txtPassword.UseSystemPasswordChar = !_txtPassword.UseSystemPasswordChar;
             };
-            pwdPanel.Controls.Add(_txtPassword);
-            pwdPanel.Controls.Add(_btnShowPassword);
+            _pwdPanel.Controls.Add(_txtPassword);
+            _pwdPanel.Controls.Add(_btnShowPassword);
+
+            // 4b. OAuth 2.0 Panel for Microsoft Outlook
+            _pnlOAuthSection = new Panel { Dock = DockStyle.Top, AutoSize = true, Visible = false };
+            _btnMicrosoftSignIn = new Button
+            {
+                Text = "🌐  Sign in with Microsoft",
+                Height = 36,
+                Dock = DockStyle.Top,
+                FlatStyle = FlatStyle.Flat,
+                BackColor = Color.FromArgb(0, 120, 212),
+                ForeColor = Color.White,
+                Font = new Font("Segoe UI", 9.5F, FontStyle.Bold),
+                Cursor = Cursors.Hand
+            };
+            _btnMicrosoftSignIn.FlatAppearance.BorderColor = Color.FromArgb(0, 100, 180);
+            _btnMicrosoftSignIn.Click += OnMicrosoftSignInClick;
+
+            _lblOAuthStatus = new Label
+            {
+                Text = "Click above to sign in via your web browser.",
+                Font = new Font("Segoe UI", 8.5F, FontStyle.Italic),
+                ForeColor = Color.FromArgb(80, 80, 80),
+                Dock = DockStyle.Top,
+                AutoSize = true,
+                Margin = new Padding(0, 4, 0, 0)
+            };
+
+            _pnlOAuthSection.Controls.Add(_lblOAuthStatus);
+            _pnlOAuthSection.Controls.Add(_btnMicrosoftSignIn);
+
+            panelAuthHolder.Controls.Add(_pnlOAuthSection);
+            panelAuthHolder.Controls.Add(_pwdPanel);
 
             // 5. Help text / note
-            var lblHelpNote = new Label
+            _lblHelpNote = new Label
             {
                 Text = "💡 For Gmail: Use a 16-character Google App Password (myaccount.google.com/apppasswords). Standard Google passwords will not work with 2FA enabled.",
                 ForeColor = Color.FromArgb(80, 80, 80),
@@ -285,11 +334,11 @@ namespace EmailSummarizer.UI
             mainPanel.Controls.Add(lblEmail, 0, 2);
             mainPanel.Controls.Add(_txtEmail, 1, 2);
 
-            mainPanel.Controls.Add(lblPassword, 0, 3);
-            mainPanel.Controls.Add(pwdPanel, 1, 3);
+            mainPanel.Controls.Add(_lblPasswordHeader, 0, 3);
+            mainPanel.Controls.Add(panelAuthHolder, 1, 3);
 
             mainPanel.Controls.Add(new Label(), 0, 4);
-            mainPanel.Controls.Add(lblHelpNote, 1, 4);
+            mainPanel.Controls.Add(_lblHelpNote, 1, 4);
 
             mainPanel.Controls.Add(lblHost, 0, 5);
             mainPanel.Controls.Add(hostPortPanel, 1, 5);
@@ -329,10 +378,14 @@ namespace EmailSummarizer.UI
                 _chkSmtpUseSsl.Checked = _account.SmtpUseSsl;
 
                 // Match provider
-                if (_account.Host.Contains("gmail")) _cboProvider.SelectedIndex = 0;
-                else if (_account.Host.Contains("yahoo")) _cboProvider.SelectedIndex = 1;
-                else if (_account.Host.Contains("mail.me.com")) _cboProvider.SelectedIndex = 2;
-                else _cboProvider.SelectedIndex = 3;
+                if (_account.IsOutlookOAuth || _account.Host.Contains("office365.com", StringComparison.OrdinalIgnoreCase) || _account.Host.Contains("outlook.com", StringComparison.OrdinalIgnoreCase))
+                {
+                    _cboProvider.SelectedIndex = 1;
+                }
+                else if (_account.Host.Contains("gmail")) _cboProvider.SelectedIndex = 0;
+                else if (_account.Host.Contains("yahoo")) _cboProvider.SelectedIndex = 2;
+                else if (_account.Host.Contains("mail.me.com")) _cboProvider.SelectedIndex = 3;
+                else _cboProvider.SelectedIndex = 4;
             }
             else
             {
@@ -351,6 +404,10 @@ namespace EmailSummarizer.UI
             switch (_cboProvider.SelectedIndex)
             {
                 case 0: // Gmail
+                    _lblPasswordHeader.Text = "App Password:";
+                    _pwdPanel.Visible = true;
+                    _pnlOAuthSection.Visible = false;
+                    _lblHelpNote.Text = "💡 For Gmail: Use a 16-character Google App Password (myaccount.google.com/apppasswords). Standard Google passwords will not work with 2FA enabled.";
                     _txtHost.Text = "imap.gmail.com";
                     _numPort.Value = 993;
                     _chkUseSsl.Checked = true;
@@ -363,7 +420,40 @@ namespace EmailSummarizer.UI
                     _numSmtpPort.Enabled = false;
                     _chkSmtpUseSsl.Enabled = false;
                     break;
-                case 1: // Yahoo
+                case 1: // Microsoft Outlook / Office 365 (OAuth 2.0)
+                    _lblPasswordHeader.Text = "Authentication:";
+                    _pwdPanel.Visible = false;
+                    _pnlOAuthSection.Visible = true;
+                    _lblHelpNote.Text = "🔐 Connect your Microsoft Outlook / Office 365 account securely via OAuth 2.0. No App Password needed.";
+                    _txtHost.Text = OutlookOAuthService.DefaultImapHost;
+                    _numPort.Value = OutlookOAuthService.DefaultImapPort;
+                    _chkUseSsl.Checked = true;
+                    _txtHost.Enabled = false;
+                    _numPort.Enabled = false;
+                    _txtSmtpHost.Text = OutlookOAuthService.DefaultSmtpHost;
+                    _numSmtpPort.Value = OutlookOAuthService.DefaultSmtpPort;
+                    _chkSmtpUseSsl.Checked = false;
+                    _txtSmtpHost.Enabled = false;
+                    _numSmtpPort.Enabled = false;
+                    _chkSmtpUseSsl.Enabled = false;
+
+                    if (_account.IsOutlookOAuth && !string.IsNullOrWhiteSpace(_account.EncryptedAccessToken))
+                    {
+                        _lblOAuthStatus.ForeColor = Color.DarkGreen;
+                        _lblOAuthStatus.Text = $"✓ Authenticated with Microsoft as: {_account.Email}";
+                        _btnMicrosoftSignIn.Text = "🌐  Re-authenticate with Microsoft";
+                    }
+                    else
+                    {
+                        // Auto-prompt browser sign-in when Outlook is selected if not yet authenticated
+                        OnMicrosoftSignInClick(null, EventArgs.Empty);
+                    }
+                    break;
+                case 2: // Yahoo
+                    _lblPasswordHeader.Text = "App Password:";
+                    _pwdPanel.Visible = true;
+                    _pnlOAuthSection.Visible = false;
+                    _lblHelpNote.Text = "💡 For Yahoo Mail: Generate an App Password in your Yahoo Account Security settings.";
                     _txtHost.Text = "imap.mail.yahoo.com";
                     _numPort.Value = 993;
                     _chkUseSsl.Checked = true;
@@ -376,7 +466,11 @@ namespace EmailSummarizer.UI
                     _numSmtpPort.Enabled = false;
                     _chkSmtpUseSsl.Enabled = false;
                     break;
-                case 2: // iCloud
+                case 3: // iCloud
+                    _lblPasswordHeader.Text = "App Password:";
+                    _pwdPanel.Visible = true;
+                    _pnlOAuthSection.Visible = false;
+                    _lblHelpNote.Text = "💡 For iCloud: Generate an App-Specific Password at appleid.apple.com.";
                     _txtHost.Text = "imap.mail.me.com";
                     _numPort.Value = 993;
                     _chkUseSsl.Checked = true;
@@ -390,12 +484,64 @@ namespace EmailSummarizer.UI
                     _chkSmtpUseSsl.Enabled = false;
                     break;
                 default: // Custom
+                    _lblPasswordHeader.Text = "App Password:";
+                    _pwdPanel.Visible = true;
+                    _pnlOAuthSection.Visible = false;
+                    _lblHelpNote.Text = "💡 Enter your IMAP password or App Password for your custom mail server.";
                     _txtHost.Enabled = true;
                     _numPort.Enabled = true;
                     _txtSmtpHost.Enabled = true;
                     _numSmtpPort.Enabled = true;
                     _chkSmtpUseSsl.Enabled = true;
                     break;
+            }
+        }
+
+        private async void OnMicrosoftSignInClick(object? sender, EventArgs e)
+        {
+            _btnMicrosoftSignIn.Enabled = false;
+            _lblOAuthStatus.ForeColor = Color.FromArgb(0, 102, 204);
+            _lblOAuthStatus.Text = "⏳ Waiting for Microsoft sign-in in your web browser...";
+
+            try
+            {
+                var (success, error, tokens) = await OutlookOAuthService.SignInAsync();
+                if (success && tokens != null)
+                {
+                    _account.Provider = "OutlookOAuth";
+                    _account.Email = tokens.Email;
+                    _account.EncryptedAccessToken = AccountCryptoService.EncryptString(tokens.AccessToken);
+                    _account.EncryptedRefreshToken = AccountCryptoService.EncryptString(tokens.RefreshToken);
+                    _account.AccessTokenExpiresUtc = DateTime.UtcNow.AddSeconds(tokens.ExpiresIn);
+                    _account.LastRefreshedUtc = DateTime.UtcNow;
+
+                    _txtEmail.Text = tokens.Email;
+                    if (string.IsNullOrWhiteSpace(_txtName.Text) || _txtName.Text.StartsWith("My ") || _txtName.Text.Equals("Outlook Account", StringComparison.OrdinalIgnoreCase))
+                    {
+                        _txtName.Text = tokens.DisplayName;
+                    }
+
+                    _lblOAuthStatus.ForeColor = Color.DarkGreen;
+                    _lblOAuthStatus.Text = $"✓ Authenticated with Microsoft as: {tokens.Email}";
+                    _btnMicrosoftSignIn.Text = "🌐  Re-authenticate with Microsoft";
+
+                    // Automatically trigger test connection for immediate feedback
+                    OnTestConnectionClick(null, EventArgs.Empty);
+                }
+                else
+                {
+                    _lblOAuthStatus.ForeColor = Color.Red;
+                    _lblOAuthStatus.Text = $"✗ Sign-in failed: {error}";
+                }
+            }
+            catch (Exception ex)
+            {
+                _lblOAuthStatus.ForeColor = Color.Red;
+                _lblOAuthStatus.Text = $"✗ Sign-in exception: {ex.Message}";
+            }
+            finally
+            {
+                _btnMicrosoftSignIn.Enabled = true;
             }
         }
 
@@ -408,14 +554,21 @@ namespace EmailSummarizer.UI
                 {
                     _cboProvider.SelectedIndex = 0;
                 }
-                else if (email.EndsWith("@yahoo.com", StringComparison.OrdinalIgnoreCase))
+                else if (email.EndsWith("@outlook.com", StringComparison.OrdinalIgnoreCase) ||
+                         email.EndsWith("@hotmail.com", StringComparison.OrdinalIgnoreCase) ||
+                         email.EndsWith("@live.com", StringComparison.OrdinalIgnoreCase) ||
+                         email.EndsWith("@msn.com", StringComparison.OrdinalIgnoreCase))
                 {
                     _cboProvider.SelectedIndex = 1;
+                }
+                else if (email.EndsWith("@yahoo.com", StringComparison.OrdinalIgnoreCase))
+                {
+                    _cboProvider.SelectedIndex = 2;
                 }
                 else if (email.EndsWith("@icloud.com", StringComparison.OrdinalIgnoreCase) ||
                          email.EndsWith("@me.com", StringComparison.OrdinalIgnoreCase))
                 {
-                    _cboProvider.SelectedIndex = 2;
+                    _cboProvider.SelectedIndex = 3;
                 }
             }
         }
@@ -423,20 +576,33 @@ namespace EmailSummarizer.UI
         private async void OnTestConnectionClick(object? sender, EventArgs e)
         {
             string email = _txtEmail.Text.Trim();
-            string password = _txtPassword.Text.Trim();
+            bool isOutlook = _cboProvider.SelectedIndex == 1 || _account.IsOutlookOAuth;
 
             if (string.IsNullOrWhiteSpace(email))
             {
                 _lblTestResult.ForeColor = Color.Red;
-                _lblTestResult.Text = "Please enter an email address.";
+                _lblTestResult.Text = "Please enter an email address or sign in with Microsoft.";
                 return;
             }
 
-            if (string.IsNullOrWhiteSpace(password))
+            if (isOutlook)
             {
-                _lblTestResult.ForeColor = Color.Red;
-                _lblTestResult.Text = "Please enter an App Password.";
-                return;
+                if (string.IsNullOrWhiteSpace(_account.EncryptedAccessToken))
+                {
+                    _lblTestResult.ForeColor = Color.Red;
+                    _lblTestResult.Text = "Please sign in with Microsoft first.";
+                    return;
+                }
+            }
+            else
+            {
+                string password = _txtPassword.Text.Trim();
+                if (string.IsNullOrWhiteSpace(password))
+                {
+                    _lblTestResult.ForeColor = Color.Red;
+                    _lblTestResult.Text = "Please enter an App Password.";
+                    return;
+                }
             }
 
             _btnTestConnection.Enabled = false;
@@ -445,9 +611,15 @@ namespace EmailSummarizer.UI
 
             var tempAccount = new EmailAccount
             {
+                Id = _account.Id,
                 Name = _txtName.Text.Trim(),
                 Email = email,
-                AppPassword = password,
+                AppPassword = isOutlook ? "" : _txtPassword.Text.Trim(),
+                Provider = isOutlook ? "OutlookOAuth" : "Custom",
+                EncryptedAccessToken = _account.EncryptedAccessToken,
+                EncryptedRefreshToken = _account.EncryptedRefreshToken,
+                AccessTokenExpiresUtc = _account.AccessTokenExpiresUtc,
+                LastRefreshedUtc = _account.LastRefreshedUtc,
                 Host = _txtHost.Text.Trim(),
                 Port = (int)_numPort.Value,
                 UseSsl = _chkUseSsl.Checked,
@@ -486,7 +658,7 @@ namespace EmailSummarizer.UI
         {
             string name = _txtName.Text.Trim();
             string email = _txtEmail.Text.Trim();
-            string password = _txtPassword.Text.Trim();
+            bool isOutlook = _cboProvider.SelectedIndex == 1 || _account.IsOutlookOAuth;
 
             if (string.IsNullOrWhiteSpace(email))
             {
@@ -495,16 +667,31 @@ namespace EmailSummarizer.UI
                 return;
             }
 
-            if (string.IsNullOrWhiteSpace(password))
+            if (isOutlook)
             {
-                MessageBox.Show("Please enter an App Password.", "Validation Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                _txtPassword.Focus();
-                return;
+                if (string.IsNullOrWhiteSpace(_account.EncryptedAccessToken))
+                {
+                    MessageBox.Show("Please sign in with Microsoft to connect your Outlook account.", "Authentication Required", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+                _account.Provider = "OutlookOAuth";
+                _account.AppPassword = "";
+            }
+            else
+            {
+                string password = _txtPassword.Text.Trim();
+                if (string.IsNullOrWhiteSpace(password))
+                {
+                    MessageBox.Show("Please enter an App Password.", "Validation Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    _txtPassword.Focus();
+                    return;
+                }
+                _account.Provider = "Custom";
+                _account.AppPassword = password;
             }
 
             _account.Name = string.IsNullOrWhiteSpace(name) ? email : name;
             _account.Email = email;
-            _account.AppPassword = password;
             _account.Host = _txtHost.Text.Trim();
             _account.Port = (int)_numPort.Value;
             _account.UseSsl = _chkUseSsl.Checked;

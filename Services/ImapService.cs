@@ -27,7 +27,7 @@ namespace EmailSummarizer.Services
                 var sslOption = account.UseSsl ? SecureSocketOptions.SslOnConnect : SecureSocketOptions.Auto;
 
                 await client.ConnectAsync(account.Host, account.Port, sslOption, ct);
-                await client.AuthenticateAsync(account.Email, account.AppPassword, ct);
+                await AuthenticateClientAsync(client, account, ct: ct);
 
                 var inbox = client.Inbox;
                 await inbox.OpenAsync(FolderAccess.ReadOnly, ct);
@@ -61,7 +61,7 @@ namespace EmailSummarizer.Services
                 var sslOption = account.UseSsl ? SecureSocketOptions.SslOnConnect : SecureSocketOptions.Auto;
 
                 await client.ConnectAsync(account.Host, account.Port, sslOption, ct);
-                await client.AuthenticateAsync(account.Email, account.AppPassword, ct);
+                await AuthenticateClientAsync(client, account, logger, ct);
 
                 var targetFolder = await ResolveFolderAsync(client, folderType, ct);
                 if (targetFolder == null)
@@ -251,7 +251,7 @@ namespace EmailSummarizer.Services
                 var sslOption = account.UseSsl ? SecureSocketOptions.SslOnConnect : SecureSocketOptions.Auto;
 
                 await client.ConnectAsync(account.Host, account.Port, sslOption, ct);
-                await client.AuthenticateAsync(account.Email, account.AppPassword, ct);
+                await AuthenticateClientAsync(client, account, logger, ct);
 
                 var sourceFolder = await ResolveFolderAsync(client, folderType, ct);
                 if (sourceFolder == null)
@@ -333,7 +333,7 @@ namespace EmailSummarizer.Services
                 var sslOption = account.UseSsl ? SecureSocketOptions.SslOnConnect : SecureSocketOptions.Auto;
 
                 await client.ConnectAsync(account.Host, account.Port, sslOption, ct);
-                await client.AuthenticateAsync(account.Email, account.AppPassword, ct);
+                await AuthenticateClientAsync(client, account, logger, ct);
 
                 var sourceFolder = await ResolveFolderAsync(client, folderType, ct);
                 if (sourceFolder == null)
@@ -904,7 +904,7 @@ namespace EmailSummarizer.Services
 
                 logger?.Report($"[*] Connecting to {account.Name} to download attachment '{fileName}'...");
                 await client.ConnectAsync(account.Host, account.Port, sslOption, ct);
-                await client.AuthenticateAsync(account.Email, account.AppPassword, ct);
+                await AuthenticateClientAsync(client, account, logger, ct);
 
                 var inbox = client.Inbox;
                 await inbox.OpenAsync(FolderAccess.ReadOnly, ct);
@@ -973,7 +973,7 @@ namespace EmailSummarizer.Services
                 var sslOption = account.UseSsl ? SecureSocketOptions.SslOnConnect : SecureSocketOptions.Auto;
 
                 await client.ConnectAsync(account.Host, account.Port, sslOption, ct);
-                await client.AuthenticateAsync(account.Email, account.AppPassword, ct);
+                await AuthenticateClientAsync(client, account, ct: ct);
 
                 var folder = await ResolveFolderAsync(client, folderType, ct);
                 if (folder == null) return null;
@@ -1080,6 +1080,14 @@ namespace EmailSummarizer.Services
             }
             catch { }
             return null;
+        }
+        private static async Task AuthenticateClientAsync(
+            ImapClient client, 
+            EmailAccount account, 
+            IProgress<string>? logger = null, 
+            CancellationToken ct = default)
+        {
+            await OutlookOAuthService.AuthenticateMailServiceAsync(client, account, null, logger, ct);
         }
     }
 }

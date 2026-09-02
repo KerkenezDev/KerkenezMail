@@ -29,7 +29,7 @@ namespace EmailSummarizer.Services
                     : SecureSocketOptions.StartTlsWhenAvailable;
 
                 await client.ConnectAsync(host, port, sslOption, ct);
-                await client.AuthenticateAsync(account.Email, account.AppPassword, ct);
+                await OutlookOAuthService.AuthenticateMailServiceAsync(client, account, ct: ct);
                 await client.DisconnectAsync(true, ct);
 
                 return (true, $"SMTP Connected & Authenticated successfully ({host}:{port}).");
@@ -134,7 +134,7 @@ namespace EmailSummarizer.Services
                     await smtp.ConnectAsync(host, port, sslOption, ct);
 
                     logger?.Report($"[*] Authenticating as {account.Email}...");
-                    await smtp.AuthenticateAsync(account.Email, account.AppPassword, ct);
+                    await OutlookOAuthService.AuthenticateMailServiceAsync(smtp, account, logger: logger, ct: ct);
 
                     logger?.Report($"[*] Sending message '{message.Subject}'...");
                     await smtp.SendAsync(message, ct);
@@ -193,7 +193,7 @@ namespace EmailSummarizer.Services
                 var sslOption = account.UseSsl ? SecureSocketOptions.SslOnConnect : SecureSocketOptions.Auto;
 
                 await imap.ConnectAsync(account.Host, account.Port, sslOption, ct);
-                await imap.AuthenticateAsync(account.Email, account.AppPassword, ct);
+                await OutlookOAuthService.AuthenticateMailServiceAsync(imap, account, logger: logger, ct: ct);
 
                 var sentFolder = imap.GetFolder(SpecialFolder.Sent);
                 if (sentFolder != null)

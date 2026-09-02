@@ -167,7 +167,7 @@ namespace EmailSummarizer.Services
                 var sslOption = account.UseSsl ? SecureSocketOptions.SslOnConnect : SecureSocketOptions.Auto;
 
                 await client.ConnectAsync(account.Host, account.Port, sslOption, ct);
-                await client.AuthenticateAsync(account.Email, account.AppPassword, ct);
+                await OutlookOAuthService.AuthenticateMailServiceAsync(client, account, _configService, ct: ct);
 
                 var inbox = client.Inbox;
                 await inbox.OpenAsync(FolderAccess.ReadOnly, ct);

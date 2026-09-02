@@ -248,9 +248,10 @@ namespace EmailSummarizer.UI.Tabs
                 Top = 8
             };
 
+            string providerBadge = account.IsOutlookOAuth ? "  •  🔐 OAuth 2.0" : "";
             var lblEmail = new Label
             {
-                Text = $"📧 {account.Email}  •  🌐 {account.Host}:{account.Port} ({(account.UseSsl ? "SSL" : "Plain")})",
+                Text = $"📧 {account.Email}  •  🌐 {account.Host}:{account.Port} ({(account.UseSsl ? "SSL" : "Plain")}){providerBadge}",
                 Font = new Font("Segoe UI", 8.5F),
                 ForeColor = Color.FromArgb(90, 90, 90),
                 AutoSize = true,
@@ -334,6 +335,14 @@ namespace EmailSummarizer.UI.Tabs
                     account.Host = updated.Host;
                     account.Port = updated.Port;
                     account.UseSsl = updated.UseSsl;
+                    account.SmtpHost = updated.SmtpHost;
+                    account.SmtpPort = updated.SmtpPort;
+                    account.SmtpUseSsl = updated.SmtpUseSsl;
+                    account.Provider = updated.Provider;
+                    account.EncryptedAccessToken = updated.EncryptedAccessToken;
+                    account.EncryptedRefreshToken = updated.EncryptedRefreshToken;
+                    account.AccessTokenExpiresUtc = updated.AccessTokenExpiresUtc;
+                    account.LastRefreshedUtc = updated.LastRefreshedUtc;
 
                     var accounts = _configService.GetAccounts();
                     var idx = accounts.FindIndex(a => a.Id == account.Id);
