@@ -14,11 +14,11 @@ namespace EmailSummarizer.UI.Controls
         public event EventHandler<int>? TabChanged;
         public event EventHandler<MailFolderType>? MailFolderSelected;
         public event EventHandler<bool>? CollapsedChanged;
-        public event EventHandler? SendMailRequested;
 
         private readonly string[] _tabTitles = new[]
         {
             "Inbox",
+            "Send Mail",
             "Accounts",
             "Settings",
             "Live Logs"
@@ -35,6 +35,7 @@ namespace EmailSummarizer.UI.Controls
         private readonly string[] _tabIcons = new[]
         {
             "\uE715", // Mail (Inbox)
+            "\uE724", // Paper plane (Send Mail)
             "\uE716", // People (Accounts)
             "\uE713", // Settings gear
             "\uE700"  // Menu (Live Logs)
@@ -60,7 +61,6 @@ namespace EmailSummarizer.UI.Controls
         private int _selectedIndex = 0;
         private int _hoveredIndex = -1;
         private bool _isToggleHovered = false;
-        private bool _isSendHovered = false;
         private bool _isCollapsed = false;
 
         private bool _isInboxExpanded = false;
@@ -259,16 +259,6 @@ namespace EmailSummarizer.UI.Controls
             return new Rectangle(left, top, width, subH);
         }
 
-        public Rectangle GetSendButtonBounds(float scale)
-        {
-            int headerH = (int)(72 * scale);
-            int itemH = (int)(46 * scale);
-            bool isWide = this.Width >= (int)(130 * scale);
-            int subH = (_isInboxExpanded && isWide) ? (SubFolders.Length * (int)(34 * scale) + (int)(2 * scale)) : 0;
-            int btnTop = headerH + itemH + subH;
-            return new Rectangle((int)(8 * scale), btnTop, this.Width - (int)(16 * scale), itemH - (int)(4 * scale));
-        }
-
         public Rectangle GetItemBounds(int index, float scale)
         {
             int headerH = (int)(72 * scale);
@@ -278,7 +268,7 @@ namespace EmailSummarizer.UI.Controls
 
             int itemY = (index == 0)
                 ? headerH
-                : headerH + (index + 1) * itemH + subH;
+                : headerH + index * itemH + subH;
 
             return new Rectangle((int)(8 * scale), itemY, this.Width - (int)(16 * scale), itemH - (int)(4 * scale));
         }
@@ -315,7 +305,8 @@ namespace EmailSummarizer.UI.Controls
             if (matchedIdx >= 0)
             {
                 this.Cursor = Cursors.Hand;
-                if (_isCollapsed)
+                // No tooltip for Send Mail (tab 1); only show tooltip for other tabs when collapsed
+                if (_isCollapsed && matchedIdx != 1)
                 {
                     UpdateToolTip(_tabTitles[matchedIdx], loc);
                 }
@@ -338,20 +329,17 @@ namespace EmailSummarizer.UI.Controls
             bool isWide = this.Width >= (int)(130 * scale);
 
             bool prevToggleHover = _isToggleHovered;
-            bool prevSendHover = _isSendHovered;
             bool prevChevronHover = _isChevronHovered;
             int prevHover = _hoveredIndex;
             MailFolderType? prevFolderHover = _hoveredFolder;
 
             var toggleRect = GetToggleButtonBounds(scale);
-            var sendRect = GetSendButtonBounds(scale);
             var item0Rect = GetItemBounds(0, scale);
             var chevronRect = isWide ? GetChevronBounds(scale) : Rectangle.Empty;
 
             if (toggleRect.Contains(e.Location))
             {
                 _isToggleHovered = true;
-                _isSendHovered = false;
                 _hoveredIndex = -1;
                 _isChevronHovered = false;
                 _hoveredFolder = null;
@@ -359,20 +347,9 @@ namespace EmailSummarizer.UI.Controls
                 string toggleTip = _isCollapsed ? "Expand sidebar (Ctrl+B)" : "Collapse sidebar (Ctrl+B)";
                 UpdateToolTip(toggleTip, e.Location);
             }
-            else if (sendRect.Contains(e.Location))
-            {
-                _isToggleHovered = false;
-                _isSendHovered = true;
-                _hoveredIndex = -1;
-                _isChevronHovered = false;
-                _hoveredFolder = null;
-                this.Cursor = Cursors.Hand;
-                UpdateToolTip("Send / Compose Email", e.Location);
-            }
             else if (isWide && chevronRect.Contains(e.Location))
             {
                 _isToggleHovered = false;
-                _isSendHovered = false;
                 _hoveredIndex = 0;
                 _isChevronHovered = true;
                 _hoveredFolder = null;
@@ -382,7 +359,6 @@ namespace EmailSummarizer.UI.Controls
             else if (item0Rect.Contains(e.Location))
             {
                 _isToggleHovered = false;
-                _isSendHovered = false;
                 _hoveredIndex = 0;
                 _isChevronHovered = false;
                 _hoveredFolder = null;
@@ -412,7 +388,6 @@ namespace EmailSummarizer.UI.Controls
                 if (matched.HasValue)
                 {
                     _isToggleHovered = false;
-                    _isSendHovered = false;
                     _hoveredIndex = -1;
                     _isChevronHovered = false;
                     _hoveredFolder = matched;
@@ -434,7 +409,6 @@ namespace EmailSummarizer.UI.Controls
             }
 
             if (prevToggleHover != _isToggleHovered ||
-                prevSendHover != _isSendHovered ||
                 prevChevronHover != _isChevronHovered ||
                 prevHover != _hoveredIndex ||
                 prevFolderHover != _hoveredFolder)
@@ -447,7 +421,6 @@ namespace EmailSummarizer.UI.Controls
         {
             base.OnMouseLeave(e);
             _isToggleHovered = false;
-            _isSendHovered = false;
             _isChevronHovered = false;
             _hoveredIndex = -1;
             _hoveredFolder = null;
@@ -465,7 +438,6 @@ namespace EmailSummarizer.UI.Controls
             if (e.Button == MouseButtons.Left)
             {
                 var toggleRect = GetToggleButtonBounds(scale);
-                var sendRect = GetSendButtonBounds(scale);
                 var item0Rect = GetItemBounds(0, scale);
                 var chevronRect = isWide ? GetChevronBounds(scale) : Rectangle.Empty;
 
@@ -494,12 +466,6 @@ namespace EmailSummarizer.UI.Controls
                             return;
                         }
                     }
-                }
-
-                if (sendRect.Contains(e.Location) || _isSendHovered)
-                {
-                    SendMailRequested?.Invoke(this, EventArgs.Empty);
-                    return;
                 }
 
                 if (item0Rect.Contains(e.Location) || _hoveredIndex == 0)
@@ -682,53 +648,7 @@ namespace EmailSummarizer.UI.Controls
                 }
             }
 
-            // 2. Draw Send Mail Item (Paper plane \uE724 matching other tabs)
-            var sendRect = GetSendButtonBounds(scale);
-            if (_isSendHovered)
-            {
-                using var hoverBrush = new SolidBrush(_hoverBgColor);
-                FillRoundedRectangle(g, hoverBrush, sendRect, 5);
-            }
-
-            var sendTextColor = _isSendHovered ? _activeTextColor : _textColor;
-            var sendFontStyle = _isSendHovered ? FontStyle.Bold : FontStyle.Regular;
-            using var sendItemFont = new Font("Segoe UI", 9.25F, sendFontStyle);
-            using var sendTextBrush = new SolidBrush(sendTextColor);
-            using var sendIconFont = new Font(GetIconFontFamily(), 11F, FontStyle.Regular);
-
-            if (isWide)
-            {
-                var stringFormat = new StringFormat
-                {
-                    Alignment = StringAlignment.Near,
-                    LineAlignment = StringAlignment.Center,
-                    Trimming = StringTrimming.EllipsisCharacter,
-                    FormatFlags = StringFormatFlags.NoWrap
-                };
-
-                int iconLeft = sendRect.Left + (int)(8 * scale);
-                int iconWidth = (int)(22 * scale);
-                g.DrawString("\uE724", sendIconFont, sendTextBrush, new Rectangle(iconLeft, sendRect.Top, iconWidth, sendRect.Height), stringFormat);
-
-                int textLeft = iconLeft + iconWidth + (int)(6 * scale);
-                int textWidth = sendRect.Width - (textLeft - sendRect.Left) - 2;
-                if (textWidth > 0)
-                {
-                    var textRect = new Rectangle(textLeft, sendRect.Top, textWidth, sendRect.Height);
-                    g.DrawString("Send Mail", sendItemFont, sendTextBrush, textRect, stringFormat);
-                }
-            }
-            else
-            {
-                var centerFormat = new StringFormat
-                {
-                    Alignment = StringAlignment.Center,
-                    LineAlignment = StringAlignment.Center
-                };
-                g.DrawString("\uE724", sendIconFont, sendTextBrush, sendRect, centerFormat);
-            }
-
-            // 3. Draw Remaining Tab Items (Accounts, Settings, Live Logs)
+            // 2. Draw Tab Items (Send Mail, Accounts, Settings, Live Logs)
             for (int i = 1; i < _tabTitles.Length; i++)
             {
                 DrawTabItem(g, i, scale, isWide);

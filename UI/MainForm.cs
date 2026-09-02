@@ -197,7 +197,6 @@ namespace EmailSummarizer.UI
             _sidebar.IsCollapsed = _configService.Settings.CollapseSidebarByDefault;
             _sidebar.TabChanged += OnSidebarTabChanged;
             _sidebar.MailFolderSelected += OnSidebarMailFolderSelected;
-            _sidebar.SendMailRequested += (s, e) => OpenSendMailScreen();
 
             // Initial view
             ShowTab(0);
@@ -223,45 +222,57 @@ namespace EmailSummarizer.UI
 
         private async void OnSidebarMailFolderSelected(object? sender, MailFolderType folder)
         {
+            _sidebar.SelectedIndex = 0;
             ShowTab(0);
             await _summariesView.SwitchToFolderAsync(folder);
         }
 
         private void ShowTab(int index)
         {
-            if (_sendMailView != null) _sendMailView.Visible = false;
+            if (index == 1)
+            {
+                EnsureSendMailViewInitialized();
+                if (!_sendMailView!.HasDraft)
+                {
+                    _sendMailView.SetNewEmail();
+                }
+            }
 
             _summariesView.Visible = (index == 0);
-            _accountsView.Visible = (index == 1);
-            _settingsView.Visible = (index == 2);
-            _logsView.Visible = (index == 3);
+            if (_sendMailView != null) _sendMailView.Visible = (index == 1);
+            _accountsView.Visible = (index == 2);
+            _settingsView.Visible = (index == 3);
+            _logsView.Visible = (index == 4);
 
             if (index == 0) _summariesView.BringToFront();
-            else if (index == 1)
+            else if (index == 1) _sendMailView!.BringToFront();
+            else if (index == 2)
             {
                 _accountsView.LoadAccounts();
                 _accountsView.BringToFront();
             }
-            else if (index == 2)
+            else if (index == 3)
             {
                 _settingsView.LoadSettings();
                 _settingsView.BringToFront();
             }
-            else if (index == 3) _logsView.BringToFront();
+            else if (index == 4) _logsView.BringToFront();
         }
 
         private void OpenSendMailScreen()
         {
             EnsureSendMailViewInitialized();
             _sendMailView!.SetNewEmail();
-            ShowSendMailView();
+            _sidebar.SelectedIndex = 1;
+            ShowTab(1);
         }
 
         private void OpenReplyScreen(EmailItem email)
         {
             EnsureSendMailViewInitialized();
             _sendMailView!.SetReplyEmail(email);
-            ShowSendMailView();
+            _sidebar.SelectedIndex = 1;
+            ShowTab(1);
         }
 
         private void EnsureSendMailViewInitialized()
@@ -292,16 +303,8 @@ namespace EmailSummarizer.UI
 
         private void ShowSendMailView()
         {
-            _summariesView.Visible = false;
-            _accountsView.Visible = false;
-            _settingsView.Visible = false;
-            _logsView.Visible = false;
-
-            if (_sendMailView != null)
-            {
-                _sendMailView.Visible = true;
-                _sendMailView.BringToFront();
-            }
+            _sidebar.SelectedIndex = 1;
+            ShowTab(1);
         }
 
         private void UpdateStatusStrip(string status, string vramStatus)

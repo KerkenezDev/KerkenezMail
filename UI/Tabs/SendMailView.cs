@@ -19,6 +19,9 @@ namespace EmailSummarizer.UI.Tabs
         public event EventHandler? PopOutRequested;
         public event EventHandler? EmailSentSuccessfully;
 
+        public bool HasDraft => !string.IsNullOrWhiteSpace(_txtTo?.Text) || !string.IsNullOrWhiteSpace(_txtSubject?.Text) || !string.IsNullOrWhiteSpace(_txtBodyMarkdown?.Text) || (_attachments != null && _attachments.Count > 0) || _isReply;
+        public bool IsReply => _isReply;
+
         private readonly ConfigService _configService;
         private readonly SmtpService _smtpService;
 
