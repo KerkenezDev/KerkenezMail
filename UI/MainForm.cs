@@ -366,6 +366,11 @@ namespace EmailSummarizer.UI
 
                     if (_configService.Settings.DisableAiOnBattery)
                     {
+                        if (_configService.Settings.IsBatterySaverActive)
+                        {
+                            _llamaManager.Stop();
+                        }
+
                         _summariesView.ApplyAiModeLayout();
                         UpdateMetrics();
                         _settingsView.UpdateBatteryNotice();

@@ -688,6 +688,12 @@ namespace EmailSummarizer.UI.Tabs
 
             bool isAiDisabled = _configService.Settings.IsAiDisabled;
 
+            if (isAiDisabled)
+            {
+                CancelRunningOperations();
+                _llamaManager.Stop(_logger);
+            }
+
             if (_middleSplit != null)
             {
                 _middleSplit.Panel2Collapsed = isAiDisabled;

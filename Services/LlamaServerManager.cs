@@ -409,6 +409,33 @@ namespace EmailSummarizer.Services
                     catch { }
                 }
             }
+            else
+            {
+                KillAnyRunningLlamaServer(logger);
+            }
+        }
+
+        public static void KillAnyRunningLlamaServer(IProgress<string>? logger = null)
+        {
+            try
+            {
+                var procs = Process.GetProcessesByName("llama-server");
+                foreach (var p in procs)
+                {
+                    try
+                    {
+                        if (!p.HasExited)
+                        {
+                            logger?.Report("[*] Terminating running llama-server process to free VRAM...");
+                            p.Kill(true);
+                            p.WaitForExit(2000);
+                        }
+                        p.Dispose();
+                    }
+                    catch { }
+                }
+            }
+            catch { }
         }
 
         public void Dispose()
