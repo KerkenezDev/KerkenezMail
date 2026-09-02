@@ -47,6 +47,9 @@ namespace EmailSummarizer
             // Always ensure application registration in HKCU Uninstall key is created/updated (e.g. if app moved)
             UninstallRegistrationService.RegisterOrUpdate();
 
+            // Ensure AUMID is registered for persistent Windows Action Center notifications
+            NotificationService.EnsureRegistered();
+
             // 2. Handle --daemon or --tray switch (Background System Tray Daemon)
             bool isDaemonMode = args != null && args.Any(a => a.Equals("--daemon", StringComparison.OrdinalIgnoreCase) ||
                                                               a.Equals("/daemon", StringComparison.OrdinalIgnoreCase) ||

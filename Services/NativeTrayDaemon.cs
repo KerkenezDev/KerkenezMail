@@ -277,12 +277,14 @@ namespace EmailSummarizer.Services
                 if (title.Length > 60) title = title.Substring(0, 57) + "...";
                 if (message.Length > 240) message = message.Substring(0, 237) + "...";
 
-                _nid.uFlags = NativeMethods.NIF_INFO;
-                _nid.szInfoTitle = title;
-                _nid.szInfo = message;
-                _nid.dwInfoFlags = NativeMethods.NIIF_INFO;
-
-                NativeMethods.Shell_NotifyIcon(NativeMethods.NIM_MODIFY, ref _nid);
+                NotificationService.ShowNotification(title, message, fallbackAction: () =>
+                {
+                    _nid.uFlags = NativeMethods.NIF_INFO;
+                    _nid.szInfoTitle = title;
+                    _nid.szInfo = message;
+                    _nid.dwInfoFlags = NativeMethods.NIIF_INFO;
+                    NativeMethods.Shell_NotifyIcon(NativeMethods.NIM_MODIFY, ref _nid);
+                });
             }
             catch
             {

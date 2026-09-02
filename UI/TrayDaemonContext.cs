@@ -151,7 +151,13 @@ namespace EmailSummarizer.UI
                     message = $"Latest from {first.Sender}: {first.Subject}";
                 }
 
-                _notifyIcon.ShowBalloonTip(5000, title, message, ToolTipIcon.Info);
+                if (title.Length > 60) title = title.Substring(0, 57) + "...";
+                if (message.Length > 240) message = message.Substring(0, 237) + "...";
+
+                NotificationService.ShowNotification(title, message, fallbackAction: () =>
+                {
+                    _notifyIcon.ShowBalloonTip(5000, title, message, ToolTipIcon.Info);
+                });
             }
             catch
             {
