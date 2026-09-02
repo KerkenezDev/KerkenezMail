@@ -49,6 +49,7 @@ namespace EmailSummarizer.UI.Tabs
         {
             public EmailItem Email { get; set; } = null!;
             public TriageActionType Action { get; set; }
+            public MailFolderType SourceFolder { get; set; } = MailFolderType.Inbox;
         }
         private readonly List<PendingTriageItem> _pendingSingleTriage = new List<PendingTriageItem>();
         private readonly object _triageLock = new object();
@@ -734,6 +735,22 @@ namespace EmailSummarizer.UI.Tabs
                 : $"🔄 Refresh {folder.GetDisplayName()}";
 
             _topBarToolTip.SetToolTip(_btnRefresh, $"Refresh {folder.GetDisplayName()}: Fetch messages for this folder from configured accounts");
+
+            if (folder == MailFolderType.Trash)
+            {
+                _topBarToolTip.SetToolTip(_btnDelete, "Delete Permanently: Permanently remove selected email(s)");
+                _btnArchive.Enabled = false;
+            }
+            else if (folder == MailFolderType.Archive)
+            {
+                _topBarToolTip.SetToolTip(_btnDelete, "Delete: Move selected email(s) to Trash folder");
+                _btnArchive.Enabled = false;
+            }
+            else
+            {
+                _topBarToolTip.SetToolTip(_btnDelete, "Delete: Move selected email(s) to Trash folder");
+                _btnArchive.Enabled = true;
+            }
 
             // 3. Load exclusively from this folder's dedicated storage
             lock (_folderStorage)
@@ -1637,7 +1654,7 @@ namespace EmailSummarizer.UI.Tabs
 
                         if (!exists)
                         {
-                            var archCopy = email;
+                            var archCopy = email.Clone();
                             archCopy.Folder = MailFolderType.Archive;
                             archList.Add(archCopy);
                         }
@@ -1651,14 +1668,15 @@ namespace EmailSummarizer.UI.Tabs
                 DisplayEmail(previewEmail);
             }
 
+            var sourceFolder = _currentFolder;
             if (selected.Count > 1)
             {
-                var task = ExecuteImapTriageAsync(selected.Select(em => new PendingTriageItem { Email = em, Action = TriageActionType.Archive }).ToList());
+                var task = ExecuteImapTriageAsync(selected.Select(em => new PendingTriageItem { Email = em, Action = TriageActionType.Archive, SourceFolder = sourceFolder }).ToList());
                 TrackInFlightTask(task);
             }
             else
             {
-                QueueSingleTriage(selected[0], TriageActionType.Archive);
+                QueueSingleTriage(selected[0], TriageActionType.Archive, sourceFolder);
             }
         }
 
@@ -1685,7 +1703,7 @@ namespace EmailSummarizer.UI.Tabs
 
                         if (!exists)
                         {
-                            var trashCopy = email;
+                            var trashCopy = email.Clone();
                             trashCopy.Folder = MailFolderType.Trash;
                             trashList.Add(trashCopy);
                         }
@@ -1731,23 +1749,24 @@ namespace EmailSummarizer.UI.Tabs
                 ResetEmailPreview();
             }
 
+            var sourceFolder = _currentFolder;
             if (selected.Count > 1)
             {
-                var task = ExecuteImapTriageAsync(selected.Select(em => new PendingTriageItem { Email = em, Action = TriageActionType.Delete }).ToList());
+                var task = ExecuteImapTriageAsync(selected.Select(em => new PendingTriageItem { Email = em, Action = TriageActionType.Delete, SourceFolder = sourceFolder }).ToList());
                 TrackInFlightTask(task);
             }
             else
             {
-                QueueSingleTriage(selected[0], TriageActionType.Delete);
+                QueueSingleTriage(selected[0], TriageActionType.Delete, sourceFolder);
             }
         }
 
-        private void QueueSingleTriage(EmailItem email, TriageActionType action)
+        private void QueueSingleTriage(EmailItem email, TriageActionType action, MailFolderType sourceFolder)
         {
             lock (_triageLock)
             {
                 _pendingSingleTriage.RemoveAll(x => x.Email.UniqueId == email.UniqueId && string.Equals(x.Email.AccountEmail, email.AccountEmail, StringComparison.OrdinalIgnoreCase));
-                _pendingSingleTriage.Add(new PendingTriageItem { Email = email, Action = action });
+                _pendingSingleTriage.Add(new PendingTriageItem { Email = email, Action = action, SourceFolder = sourceFolder });
 
                 _debounceTriageTimer?.Dispose();
                 _debounceTriageTimer = new System.Threading.Timer(_ =>
@@ -1779,19 +1798,27 @@ namespace EmailSummarizer.UI.Tabs
             if (items.Count == 0) return;
 
             var accounts = _configService.GetAccounts();
-            var deleteEmails = items.Where(i => i.Action == TriageActionType.Delete).Select(i => i.Email).ToList();
-            var archiveEmails = items.Where(i => i.Action == TriageActionType.Archive).Select(i => i.Email).ToList();
+            var deleteItems = items.Where(i => i.Action == TriageActionType.Delete).ToList();
+            var archiveItems = items.Where(i => i.Action == TriageActionType.Archive).ToList();
 
             var tasks = new List<Task>();
 
-            if (deleteEmails.Count > 0)
+            if (deleteItems.Count > 0)
             {
-                tasks.Add(_imapService.DeleteEmailsBatchAsync(deleteEmails, accounts, _logger));
+                foreach (var item in deleteItems)
+                {
+                    item.Email.Folder = item.SourceFolder;
+                }
+                tasks.Add(_imapService.DeleteEmailsBatchAsync(deleteItems.Select(i => i.Email), accounts, _logger));
             }
 
-            if (archiveEmails.Count > 0)
+            if (archiveItems.Count > 0)
             {
-                tasks.Add(_imapService.ArchiveEmailsBatchAsync(archiveEmails, accounts, _logger));
+                foreach (var item in archiveItems)
+                {
+                    item.Email.Folder = item.SourceFolder;
+                }
+                tasks.Add(_imapService.ArchiveEmailsBatchAsync(archiveItems.Select(i => i.Email), accounts, _logger));
             }
 
             await Task.WhenAll(tasks);

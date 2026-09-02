@@ -59,6 +59,8 @@ namespace EmailSummarizer.Models
 
         public string DateString => Date.LocalDateTime.ToString("dd/MM/yyyy HH:mm");
         public string ShortDateString => Date.LocalDateTime.ToString("dd/MM HH:mm");
+
+        public EmailItem Clone() => (EmailItem)this.MemberwiseClone();
     }
 
     public class EmailLink

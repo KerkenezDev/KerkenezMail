@@ -236,45 +236,71 @@ namespace EmailSummarizer.Services
         public async Task<bool> DeleteEmailsAsync(
             EmailAccount account,
             IEnumerable<uint> uids,
+            MailFolderType folderType = MailFolderType.Inbox,
             IProgress<string>? logger = null,
             CancellationToken ct = default)
         {
-            var uidList = uids.Select(u => new UniqueId(u)).ToList();
+            var uidList = uids.Where(u => u > 0).Select(u => new UniqueId(u)).ToList();
             if (uidList.Count == 0 || !account.IsEnabled) return true;
 
             using var client = new ImapClient();
             try
             {
-                logger?.Report($"[*] Connecting to {account.Name} to delete {uidList.Count} message(s)...");
+                logger?.Report($"[*] Connecting to {account.Name} to delete {uidList.Count} message(s) from {folderType.GetDisplayName()}...");
                 client.Timeout = 15000;
                 var sslOption = account.UseSsl ? SecureSocketOptions.SslOnConnect : SecureSocketOptions.Auto;
 
                 await client.ConnectAsync(account.Host, account.Port, sslOption, ct);
                 await client.AuthenticateAsync(account.Email, account.AppPassword, ct);
 
-                var inbox = client.Inbox;
-                await inbox.OpenAsync(FolderAccess.ReadWrite, ct);
-
-                // Try to move to Trash if available, otherwise mark Deleted and Expunge
-                IMailFolder? trashFolder = null;
-                try
+                var sourceFolder = await ResolveFolderAsync(client, folderType, ct);
+                if (sourceFolder == null)
                 {
-                    trashFolder = client.GetFolder(SpecialFolder.Trash);
+                    logger?.Report($"[!] {account.Name}: Could not resolve folder '{folderType.GetDisplayName()}' for deletion.");
+                    return false;
                 }
-                catch { }
 
-                if (trashFolder != null && trashFolder.FullName != inbox.FullName)
+                await sourceFolder.OpenAsync(FolderAccess.ReadWrite, ct);
+
+                if (folderType == MailFolderType.Trash)
                 {
-                    await inbox.MoveToAsync(uidList, trashFolder, ct);
+                    // Already in Trash: permanently delete
+                    await sourceFolder.AddFlagsAsync(uidList, MessageFlags.Deleted, true, ct);
+                    await sourceFolder.ExpungeAsync(ct);
                 }
                 else
                 {
-                    await inbox.AddFlagsAsync(uidList, MessageFlags.Deleted, true, ct);
-                    await inbox.ExpungeAsync(ct);
+                    // Try to move to Trash if available, otherwise mark Deleted and Expunge
+                    IMailFolder? trashFolder = null;
+                    try
+                    {
+                        trashFolder = await ResolveFolderAsync(client, MailFolderType.Trash, ct);
+                    }
+                    catch { }
+
+                    bool moved = false;
+                    if (trashFolder != null && trashFolder.FullName != sourceFolder.FullName)
+                    {
+                        try
+                        {
+                            await sourceFolder.MoveToAsync(uidList, trashFolder, ct);
+                            moved = true;
+                        }
+                        catch (Exception ex)
+                        {
+                            logger?.Report($"[!] {account.Name}: Move to Trash failed ({ex.Message}), falling back to direct delete.");
+                        }
+                    }
+
+                    if (!moved)
+                    {
+                        await sourceFolder.AddFlagsAsync(uidList, MessageFlags.Deleted, true, ct);
+                        await sourceFolder.ExpungeAsync(ct);
+                    }
                 }
 
                 await client.DisconnectAsync(true, ct);
-                logger?.Report($"[✓] {account.Name}: Successfully deleted {uidList.Count} message(s).");
+                logger?.Report($"[✓] {account.Name}: Successfully deleted {uidList.Count} message(s) from {folderType.GetDisplayName()}.");
                 return true;
             }
             catch (OperationCanceledException)
@@ -292,70 +318,64 @@ namespace EmailSummarizer.Services
         public async Task<bool> ArchiveEmailsAsync(
             EmailAccount account,
             IEnumerable<uint> uids,
+            MailFolderType folderType = MailFolderType.Inbox,
             IProgress<string>? logger = null,
             CancellationToken ct = default)
         {
-            var uidList = uids.Select(u => new UniqueId(u)).ToList();
+            var uidList = uids.Where(u => u > 0).Select(u => new UniqueId(u)).ToList();
             if (uidList.Count == 0 || !account.IsEnabled) return true;
 
             using var client = new ImapClient();
             try
             {
-                logger?.Report($"[*] Connecting to {account.Name} to archive {uidList.Count} message(s)...");
+                logger?.Report($"[*] Connecting to {account.Name} to archive {uidList.Count} message(s) from {folderType.GetDisplayName()}...");
                 client.Timeout = 15000;
                 var sslOption = account.UseSsl ? SecureSocketOptions.SslOnConnect : SecureSocketOptions.Auto;
 
                 await client.ConnectAsync(account.Host, account.Port, sslOption, ct);
                 await client.AuthenticateAsync(account.Email, account.AppPassword, ct);
 
-                var inbox = client.Inbox;
-                await inbox.OpenAsync(FolderAccess.ReadWrite, ct);
+                var sourceFolder = await ResolveFolderAsync(client, folderType, ct);
+                if (sourceFolder == null)
+                {
+                    logger?.Report($"[!] {account.Name}: Could not resolve folder '{folderType.GetDisplayName()}' for archival.");
+                    return false;
+                }
 
-                // Look for standard Archive or All Mail folder
+                await sourceFolder.OpenAsync(FolderAccess.ReadWrite, ct);
+
+                // Look for standard Archive folder
                 IMailFolder? targetFolder = null;
                 try
                 {
-                    targetFolder = client.GetFolder(SpecialFolder.Archive);
+                    targetFolder = await ResolveFolderAsync(client, MailFolderType.Archive, ct);
                 }
                 catch { }
 
-                if (targetFolder == null)
+                bool moved = false;
+                if (targetFolder != null && targetFolder.FullName != sourceFolder.FullName)
                 {
                     try
                     {
-                        targetFolder = client.GetFolder(SpecialFolder.All);
+                        await sourceFolder.MoveToAsync(uidList, targetFolder, ct);
+                        moved = true;
                     }
-                    catch { }
-                }
-
-                if (targetFolder == null)
-                {
-                    try
+                    catch (Exception ex)
                     {
-                        var personal = client.GetFolder(client.PersonalNamespaces.FirstOrDefault()?.Path ?? "");
-                        var subfolders = await personal.GetSubfoldersAsync(false, ct);
-                        targetFolder = subfolders.FirstOrDefault(f =>
-                            f.Name.Equals("Archive", StringComparison.OrdinalIgnoreCase) ||
-                            f.Name.Equals("Archives", StringComparison.OrdinalIgnoreCase) ||
-                            f.Name.Equals("All Mail", StringComparison.OrdinalIgnoreCase));
+                        logger?.Report($"[!] {account.Name}: Move to Archive failed ({ex.Message}), falling back to mark seen.");
                     }
-                    catch { }
                 }
 
-                if (targetFolder != null && targetFolder.FullName != inbox.FullName)
+                if (!moved)
                 {
-                    await inbox.MoveToAsync(uidList, targetFolder, ct);
-                }
-                else
-                {
-                    // If no dedicated archive folder exists, mark as Seen and remove from inbox via Deleted+Expunge
-                    await inbox.AddFlagsAsync(uidList, MessageFlags.Seen, true, ct);
-                    await inbox.AddFlagsAsync(uidList, MessageFlags.Deleted, true, ct);
-                    await inbox.ExpungeAsync(ct);
+                    // If no dedicated archive folder exists or move failed, mark as Seen and remove from folder via Deleted+Expunge
+                    await sourceFolder.AddFlagsAsync(uidList, MessageFlags.Seen, true, ct);
+                    await sourceFolder.AddFlagsAsync(uidList, MessageFlags.Deleted, true, ct);
+                    await sourceFolder.ExpungeAsync(ct);
                 }
 
                 await client.DisconnectAsync(true, ct);
-                logger?.Report($"[✓] {account.Name}: Successfully archived {uidList.Count} message(s).");
+                logger?.Report($"[✓] {account.Name}: Successfully archived {uidList.Count} message(s) from {folderType.GetDisplayName()}.");
                 return true;
             }
             catch (OperationCanceledException)
@@ -380,19 +400,24 @@ namespace EmailSummarizer.Services
             if (emailList.Count == 0) return;
 
             var accList = accounts.ToList();
-            var grouped = emailList.GroupBy(e => 
-                accList.FirstOrDefault(a => 
-                    string.Equals(a.Email, e.AccountEmail, StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(a.Name, e.AccountName, StringComparison.OrdinalIgnoreCase)));
+            var grouped = emailList.GroupBy(e => (
+                Account: accList.FirstOrDefault(a => 
+                    (!string.IsNullOrEmpty(e.AccountEmail) && string.Equals(a.Email, e.AccountEmail, StringComparison.OrdinalIgnoreCase)) ||
+                    (!string.IsNullOrEmpty(e.AccountName) && string.Equals(a.Name, e.AccountName, StringComparison.OrdinalIgnoreCase))),
+                Folder: e.Folder
+            ));
 
             var tasks = new List<Task>();
             foreach (var group in grouped)
             {
-                var account = group.Key;
+                var account = group.Key.Account;
+                var folder = group.Key.Folder;
                 if (account == null) continue;
 
-                var uids = group.Select(e => e.UniqueId).Distinct().ToList();
-                tasks.Add(DeleteEmailsAsync(account, uids, logger, ct));
+                var uids = group.Select(e => e.UniqueId).Where(u => u > 0).Distinct().ToList();
+                if (uids.Count == 0) continue;
+
+                tasks.Add(DeleteEmailsAsync(account, uids, folder, logger, ct));
             }
 
             await Task.WhenAll(tasks);
@@ -408,19 +433,24 @@ namespace EmailSummarizer.Services
             if (emailList.Count == 0) return;
 
             var accList = accounts.ToList();
-            var grouped = emailList.GroupBy(e => 
-                accList.FirstOrDefault(a => 
-                    string.Equals(a.Email, e.AccountEmail, StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(a.Name, e.AccountName, StringComparison.OrdinalIgnoreCase)));
+            var grouped = emailList.GroupBy(e => (
+                Account: accList.FirstOrDefault(a => 
+                    (!string.IsNullOrEmpty(e.AccountEmail) && string.Equals(a.Email, e.AccountEmail, StringComparison.OrdinalIgnoreCase)) ||
+                    (!string.IsNullOrEmpty(e.AccountName) && string.Equals(a.Name, e.AccountName, StringComparison.OrdinalIgnoreCase))),
+                Folder: e.Folder
+            ));
 
             var tasks = new List<Task>();
             foreach (var group in grouped)
             {
-                var account = group.Key;
+                var account = group.Key.Account;
+                var folder = group.Key.Folder;
                 if (account == null) continue;
 
-                var uids = group.Select(e => e.UniqueId).Distinct().ToList();
-                tasks.Add(ArchiveEmailsAsync(account, uids, logger, ct));
+                var uids = group.Select(e => e.UniqueId).Where(u => u > 0).Distinct().ToList();
+                if (uids.Count == 0) continue;
+
+                tasks.Add(ArchiveEmailsAsync(account, uids, folder, logger, ct));
             }
 
             await Task.WhenAll(tasks);
