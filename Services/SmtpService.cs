@@ -144,9 +144,13 @@ namespace EmailSummarizer.Services
                 }
 
                 // 8. Optional: Single-Shot IMAP Sent Folder Append
-                // Gmail automatically stores messages sent through SMTP into Sent Mail.
+                // Gmail and Microsoft Outlook automatically store messages sent through SMTP into Sent Mail.
                 // For other providers (Yahoo, iCloud, Custom IMAP), append to Sent folder via single connection.
-                if (saveSentToImap && !account.Host.Contains("gmail.com", StringComparison.OrdinalIgnoreCase))
+                if (saveSentToImap && 
+                    !account.Host.Contains("gmail.com", StringComparison.OrdinalIgnoreCase) && 
+                    !account.IsOutlookOAuth && 
+                    !account.Host.Contains("office365.com", StringComparison.OrdinalIgnoreCase) &&
+                    !account.Host.Contains("outlook.com", StringComparison.OrdinalIgnoreCase))
                 {
                     await TryAppendToSentFolderAsync(account, message, logger, ct);
                 }
@@ -195,7 +199,7 @@ namespace EmailSummarizer.Services
                 await imap.ConnectAsync(account.Host, account.Port, sslOption, ct);
                 await OutlookOAuthService.AuthenticateMailServiceAsync(imap, account, logger: logger, ct: ct);
 
-                var sentFolder = imap.GetFolder(SpecialFolder.Sent);
+                var sentFolder = await ImapService.ResolveFolderAsync(imap, MailFolderType.Sent, ct);
                 if (sentFolder != null)
                 {
                     await sentFolder.OpenAsync(FolderAccess.ReadWrite, ct);
