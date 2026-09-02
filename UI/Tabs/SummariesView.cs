@@ -694,10 +694,8 @@ namespace EmailSummarizer.UI.Tabs
                 _llamaManager.Stop(_logger);
             }
 
-            if (_middleSplit != null)
-            {
-                _middleSplit.Panel2Collapsed = isAiDisabled;
-            }
+            var current = GetCurrentPreviewEmail();
+            UpdateSummaryPaneVisibility(current);
 
             SetupListViewColumns();
 
@@ -705,12 +703,35 @@ namespace EmailSummarizer.UI.Tabs
             {
                 PopulateListView();
 
-                var current = GetCurrentPreviewEmail();
                 if (current != null)
                 {
                     DisplayEmail(current);
                 }
             }
+        }
+
+        private void UpdateSummaryPaneVisibility(EmailItem? email)
+        {
+            if (_middleSplit == null) return;
+
+            bool isAiDisabled = _configService.Settings.IsAiDisabled;
+            if (!isAiDisabled)
+            {
+                // In AI mode, the summary pane is always visible
+                _middleSplit.Panel2Collapsed = false;
+                return;
+            }
+
+            // In No-AI / Battery Saver mode:
+            // If the user is viewing an email that already has a generated summary,
+            // leave the summary card visible. Only collapse if there is no pre-existing summary.
+            bool hasValidSummary = email != null && 
+                                   !string.IsNullOrWhiteSpace(email.Summary) && 
+                                   !email.Summary.StartsWith("✨", StringComparison.OrdinalIgnoreCase) &&
+                                   !email.Summary.StartsWith("(LLM Error", StringComparison.OrdinalIgnoreCase) &&
+                                   !email.Summary.StartsWith("(Could not reach", StringComparison.OrdinalIgnoreCase);
+
+            _middleSplit.Panel2Collapsed = !hasValidSummary;
         }
 
         private void AdjustSplitter()
@@ -1320,6 +1341,7 @@ namespace EmailSummarizer.UI.Tabs
             }
             _pnlAttachments.Visible = false;
             _pnlAttachments.Controls.Clear();
+            UpdateSummaryPaneVisibility(null);
         }
 
         private void PopulateListView()
@@ -1530,10 +1552,12 @@ namespace EmailSummarizer.UI.Tabs
 
         private void DisplayEmail(EmailItem email)
         {
+            UpdateSummaryPaneVisibility(email);
+
             string readTag = email.IsRead ? "[Read]" : "[Unread]";
             if (email.IsArchived) readTag = "[Archived] • " + readTag;
 
-            string priTag = (!_configService.Settings.IsAiDisabled && email.Priority.HasValue)
+            string priTag = email.Priority.HasValue
                 ? $"   •   Priority: {email.Priority.Value} ({(email.Priority.Value == 1 ? "High" : email.Priority.Value == 2 ? "Normal" : "Low")})"
                 : "";
 
@@ -1549,7 +1573,12 @@ namespace EmailSummarizer.UI.Tabs
             }
             catch { }
 
-            if (!_configService.Settings.IsAiDisabled)
+            bool hasValidSummary = !string.IsNullOrWhiteSpace(email.Summary) && 
+                                   !email.Summary.StartsWith("✨", StringComparison.OrdinalIgnoreCase) &&
+                                   !email.Summary.StartsWith("(LLM Error", StringComparison.OrdinalIgnoreCase) &&
+                                   !email.Summary.StartsWith("(Could not reach", StringComparison.OrdinalIgnoreCase);
+
+            if (!_configService.Settings.IsAiDisabled || hasValidSummary)
             {
                 string summaryText = string.IsNullOrWhiteSpace(email.Summary) 
                     ? "✨ Generating AI summary for this email..." 
