@@ -156,9 +156,11 @@ namespace EmailSummarizer.UI.Tabs
             {
                 Width = ContentW - 28,
                 AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 FlowDirection = FlowDirection.LeftToRight,
-                WrapContents = true,
-                Margin = new Padding(0, 0, 0, 8)
+                WrapContents = false,
+                Padding = new Padding(0, 2, 0, 8),
+                Margin = new Padding(0, 0, 0, 10)
             };
 
             _btnBackendLlama = CreateBackendOptionButton("🦙  Local llama.cpp", 0);
@@ -175,9 +177,9 @@ namespace EmailSummarizer.UI.Tabs
             _pnlBatteryActiveWarning = new Panel
             {
                 Width = ContentW - 28,
-                Height = 68,
+                Height = 88,
                 BackColor = Color.FromArgb(254, 249, 231),
-                Margin = new Padding(0, 0, 0, 10),
+                Margin = new Padding(0, 2, 0, 12),
                 Visible = false
             };
             _pnlBatteryActiveWarning.Paint += (s, e) =>
@@ -191,7 +193,7 @@ namespace EmailSummarizer.UI.Tabs
                 Text = "⚡  Running in No AI Mode (Battery Saver Active)",
                 Font = new Font("Segoe UI", 9F, FontStyle.Bold),
                 ForeColor = Color.FromArgb(145, 95, 0),
-                Location = new Point(12, 8),
+                Location = new Point(14, 10),
                 AutoSize = true
             };
 
@@ -200,13 +202,21 @@ namespace EmailSummarizer.UI.Tabs
                 Text = "AI summarization and priority ranking are temporarily suspended because this device is running on battery power. Your configured settings below remain saved and will automatically resume when plugged into AC power.",
                 Font = new Font("Segoe UI", 8.5F),
                 ForeColor = Color.FromArgb(115, 75, 0),
-                Location = new Point(12, 28),
-                Size = new Size(ContentW - 56, 34),
-                AutoSize = false
+                Location = new Point(14, 30),
+                AutoSize = true,
+                MaximumSize = new Size(ContentW - 56, 0)
             };
 
             _pnlBatteryActiveWarning.Controls.Add(lblWarnTitle);
             _pnlBatteryActiveWarning.Controls.Add(lblWarnDesc);
+
+            void AdjustWarningHeight()
+            {
+                _pnlBatteryActiveWarning.Height = Math.Max(84, lblWarnDesc.Bottom + 12);
+            }
+            lblWarnDesc.SizeChanged += (s, e) => AdjustWarningHeight();
+            _pnlBatteryActiveWarning.VisibleChanged += (s, e) => AdjustWarningHeight();
+            AdjustWarningHeight();
 
             _cboAiBackend = new ComboBox
             {
@@ -1325,13 +1335,14 @@ namespace EmailSummarizer.UI.Tabs
                 Text = title,
                 AutoSize = true,
                 AutoSizeMode = AutoSizeMode.GrowAndShrink,
-                Height = 34,
-                Padding = new Padding(14, 6, 14, 6),
-                Margin = new Padding(0, 0, 8, 6),
+                MinimumSize = new Size(0, 36),
+                Padding = new Padding(16, 7, 16, 7),
+                Margin = new Padding(0, 0, 8, 4),
                 Font = new Font("Segoe UI", 9F, FontStyle.Bold),
                 FlatStyle = FlatStyle.Flat,
                 Cursor = Cursors.Hand
             };
+            btn.FlatAppearance.BorderSize = 1;
             btn.Click += (s, e) =>
             {
                 _cboAiBackend.SelectedIndex = index;
