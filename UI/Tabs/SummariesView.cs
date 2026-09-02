@@ -44,7 +44,7 @@ namespace EmailSummarizer.UI.Tabs
         private readonly List<EmailItem> _selectedEmailsOrder = new List<EmailItem>();
 
         // Triage State & Debouncing
-        private enum TriageActionType { Archive, Delete }
+        private enum TriageActionType { Archive, Delete, MoveToInbox }
         private class PendingTriageItem
         {
             public EmailItem Email { get; set; } = null!;
@@ -74,7 +74,9 @@ namespace EmailSummarizer.UI.Tabs
         private Label _lblEmailSubject = null!;
         private Panel _pnlSubjectViewport = null!;
         private HScrollBar _sliderSubject = null!;
+        private Panel _pnlReplyBox = null!;
         private Button _btnReply = null!;
+        private Button _btnMoveToInbox = null!;
         private FlowLayoutPanel _pnlAttachments = null!;
         private Label _lblAttachmentsTitle = null!;
         private Label _lblInboxHeader = null!;
@@ -385,7 +387,7 @@ namespace EmailSummarizer.UI.Tabs
                 Padding = new Padding(0, 0, 0, 4)
             };
 
-            var pnlReplyBox = new Panel
+            _pnlReplyBox = new Panel
             {
                 Dock = DockStyle.Right,
                 Width = (int)(88 * scale),
@@ -411,7 +413,22 @@ namespace EmailSummarizer.UI.Tabs
                 }
             };
             _topBarToolTip.SetToolTip(_btnReply, "Reply: Compose a reply to this email thread");
-            pnlReplyBox.Controls.Add(_btnReply);
+
+            _btnMoveToInbox = new Button
+            {
+                Text = "📥 Move to Inbox",
+                Dock = DockStyle.Top,
+                Height = (int)(26 * scale),
+                FlatStyle = FlatStyle.System,
+                Cursor = Cursors.Hand,
+                Font = new Font("Segoe UI", 8.5F, FontStyle.Bold),
+                Visible = false
+            };
+            _btnMoveToInbox.Click += OnMoveToInboxClick;
+            _topBarToolTip.SetToolTip(_btnMoveToInbox, "Move to Inbox: Move selected email(s) from Spam back to Inbox");
+
+            _pnlReplyBox.Controls.Add(_btnMoveToInbox);
+            _pnlReplyBox.Controls.Add(_btnReply);
 
             var pnlSubjectContainer = new Panel
             {
@@ -473,7 +490,7 @@ namespace EmailSummarizer.UI.Tabs
             pnlSubjectContainer.Controls.Add(_pnlSubjectViewport);
 
             subjectRow.Controls.Add(pnlSubjectContainer);
-            subjectRow.Controls.Add(pnlReplyBox);
+            subjectRow.Controls.Add(_pnlReplyBox);
 
             _lblEmailMeta = new Label
             {
@@ -864,6 +881,7 @@ namespace EmailSummarizer.UI.Tabs
             {
                 ResetEmailPreview();
             }
+            UpdateActionButtonsVisibility();
 
             // 4. If this folder was never fetched from IMAP yet or forceRefresh is true, fetch it now!
             if (!_folderFetchedOnce[folder] || forceRefresh)
@@ -1333,6 +1351,7 @@ namespace EmailSummarizer.UI.Tabs
             _lblEmailSubject.Text = "Subject: (No email selected)";
             _lblEmailMeta.Text = "From: -   •   Date: -   •   Account: -";
             _btnReply.Visible = false;
+            _btnMoveToInbox.Visible = false;
             if (_sliderSubject != null)
             {
                 _sliderSubject.Visible = false;
@@ -1420,6 +1439,8 @@ namespace EmailSummarizer.UI.Tabs
                 _currentEmailLinkSpans.Clear();
                 _lblEmailSubject.Text = "Subject: (No email selected)";
                 _lblEmailMeta.Text = "From: -   •   Date: -   •   Account: -";
+                _btnReply.Visible = false;
+                _btnMoveToInbox.Visible = false;
             }
         }
 
@@ -1550,6 +1571,32 @@ namespace EmailSummarizer.UI.Tabs
             return _selectedEmailsOrder.LastOrDefault() ?? (_lvEmails.SelectedItems[_lvEmails.SelectedItems.Count - 1].Tag as EmailItem);
         }
 
+        private void UpdateActionButtonsVisibility()
+        {
+            var previewEmail = GetCurrentPreviewEmail();
+            if (previewEmail == null)
+            {
+                _btnReply.Visible = false;
+                _btnMoveToInbox.Visible = false;
+                return;
+            }
+
+            float scale = this.DeviceDpi / 96f;
+            if (_currentFolder == MailFolderType.Spam)
+            {
+                _btnReply.Visible = false;
+                _btnMoveToInbox.Visible = true;
+                _pnlReplyBox.Width = (int)(130 * scale);
+            }
+            else
+            {
+                _btnMoveToInbox.Visible = false;
+                _btnReply.Visible = true;
+                _pnlReplyBox.Width = (int)(88 * scale);
+            }
+            UpdateSubjectSlider();
+        }
+
         private void DisplayEmail(EmailItem email)
         {
             UpdateSummaryPaneVisibility(email);
@@ -1564,7 +1611,7 @@ namespace EmailSummarizer.UI.Tabs
             _lblEmailSubject.Text = $"Subject: {email.Subject}";
             UpdateSubjectSlider();
             _lblEmailMeta.Text = $"From: {email.Sender}   •   Date: {email.DateString}   •   Account: {email.AccountName}{priTag}   •   {readTag}";
-            _btnReply.Visible = true;
+            UpdateActionButtonsVisibility();
 
             try
             {
@@ -1942,6 +1989,92 @@ namespace EmailSummarizer.UI.Tabs
             }
         }
 
+        private void OnMoveToInboxClick(object? sender, EventArgs e)
+        {
+            var selected = GetSelectedEmailItems();
+            if (selected.Count == 0)
+            {
+                var current = GetCurrentPreviewEmail();
+                if (current != null) selected.Add(current);
+            }
+            if (selected.Count == 0) return;
+
+            ResetInboxToolTip();
+            _lvEmails.BeginUpdate();
+            foreach (var email in selected)
+            {
+                _emails.Remove(email);
+                _selectedEmailsOrder.Remove(email);
+
+                lock (_folderStorage)
+                {
+                    _folderStorage[_currentFolder].Remove(email);
+                    if (_folderStorage.TryGetValue(MailFolderType.Inbox, out var inboxList))
+                    {
+                        bool exists = email.UniqueId > 0
+                            ? inboxList.Any(i => i.UniqueId == email.UniqueId && string.Equals(i.AccountName, email.AccountName, StringComparison.OrdinalIgnoreCase))
+                            : inboxList.Contains(email);
+
+                        if (!exists)
+                        {
+                            var inboxCopy = email.Clone();
+                            inboxCopy.Folder = MailFolderType.Inbox;
+                            inboxList.Insert(0, inboxCopy);
+                        }
+                    }
+                }
+
+                ListViewItem? foundItem = null;
+                foreach (ListViewItem lvi in _lvEmails.Items)
+                {
+                    if (lvi.Tag == email)
+                    {
+                        foundItem = lvi;
+                        break;
+                    }
+                }
+                if (foundItem != null)
+                {
+                    _lvEmails.Items.Remove(foundItem);
+                }
+            }
+            _lvEmails.EndUpdate();
+
+            int unreadCount = _emails.Count(em => !em.IsRead);
+            UpdateHeaderTitle(_emails.Count, unreadCount);
+
+            if (_lvEmails.Items.Count > 0)
+            {
+                if (_lvEmails.SelectedItems.Count == 0)
+                {
+                    _lvEmails.Items[0].Selected = true;
+                }
+                else
+                {
+                    var previewEmail = GetCurrentPreviewEmail();
+                    if (previewEmail != null)
+                    {
+                        DisplayEmail(previewEmail);
+                    }
+                }
+            }
+            else
+            {
+                ResetEmailPreview();
+            }
+
+            var sourceFolder = _currentFolder;
+            if (selected.Count > 1)
+            {
+                var task = ExecuteImapTriageAsync(selected.Select(em => new PendingTriageItem { Email = em, Action = TriageActionType.MoveToInbox, SourceFolder = sourceFolder }).ToList());
+                TrackInFlightTask(task);
+            }
+            else
+            {
+                QueueSingleTriage(selected[0], TriageActionType.MoveToInbox, sourceFolder);
+            }
+        }
+
         private void QueueSingleTriage(EmailItem email, TriageActionType action, MailFolderType sourceFolder)
         {
             lock (_triageLock)
@@ -1981,6 +2114,7 @@ namespace EmailSummarizer.UI.Tabs
             var accounts = _configService.GetAccounts();
             var deleteItems = items.Where(i => i.Action == TriageActionType.Delete).ToList();
             var archiveItems = items.Where(i => i.Action == TriageActionType.Archive).ToList();
+            var moveToInboxItems = items.Where(i => i.Action == TriageActionType.MoveToInbox).ToList();
 
             var tasks = new List<Task>();
 
@@ -2000,6 +2134,15 @@ namespace EmailSummarizer.UI.Tabs
                     item.Email.Folder = item.SourceFolder;
                 }
                 tasks.Add(_imapService.ArchiveEmailsBatchAsync(archiveItems.Select(i => i.Email), accounts, _logger));
+            }
+
+            if (moveToInboxItems.Count > 0)
+            {
+                foreach (var item in moveToInboxItems)
+                {
+                    item.Email.Folder = item.SourceFolder;
+                }
+                tasks.Add(_imapService.MoveToInboxEmailsBatchAsync(moveToInboxItems.Select(i => i.Email), accounts, _logger));
             }
 
             await Task.WhenAll(tasks);

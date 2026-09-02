@@ -456,6 +456,119 @@ namespace EmailSummarizer.Services
             await Task.WhenAll(tasks);
         }
 
+        public async Task<bool> MoveToInboxEmailsAsync(
+            EmailAccount account,
+            IEnumerable<uint> uids,
+            MailFolderType sourceFolderType = MailFolderType.Spam,
+            IProgress<string>? logger = null,
+            CancellationToken ct = default)
+        {
+            var uidList = uids.Where(u => u > 0).Select(u => new UniqueId(u)).ToList();
+            if (uidList.Count == 0 || !account.IsEnabled) return true;
+
+            using var client = new ImapClient();
+            try
+            {
+                logger?.Report($"[*] Connecting to {account.Name} to move {uidList.Count} message(s) from {sourceFolderType.GetDisplayName()} to Inbox...");
+                client.Timeout = 15000;
+                var sslOption = account.UseSsl ? SecureSocketOptions.SslOnConnect : SecureSocketOptions.Auto;
+
+                await client.ConnectAsync(account.Host, account.Port, sslOption, ct);
+                await AuthenticateClientAsync(client, account, logger, ct);
+
+                var sourceFolder = await ResolveFolderAsync(client, sourceFolderType, ct);
+                if (sourceFolder == null)
+                {
+                    logger?.Report($"[!] {account.Name}: Could not resolve folder '{sourceFolderType.GetDisplayName()}' for move to Inbox.");
+                    return false;
+                }
+
+                await sourceFolder.OpenAsync(FolderAccess.ReadWrite, ct);
+
+                var targetFolder = await ResolveFolderAsync(client, MailFolderType.Inbox, ct);
+                if (targetFolder == null)
+                {
+                    logger?.Report($"[!] {account.Name}: Could not resolve Inbox folder.");
+                    return false;
+                }
+
+                bool moved = false;
+                if (targetFolder.FullName != sourceFolder.FullName)
+                {
+                    try
+                    {
+                        await sourceFolder.MoveToAsync(uidList, targetFolder, ct);
+                        moved = true;
+                    }
+                    catch (Exception ex)
+                    {
+                        logger?.Report($"[!] {account.Name}: Move to Inbox failed ({ex.Message}), attempting copy + delete fallback.");
+                        try
+                        {
+                            await sourceFolder.CopyToAsync(uidList, targetFolder, ct);
+                            await sourceFolder.AddFlagsAsync(uidList, MessageFlags.Deleted, true, ct);
+                            await sourceFolder.ExpungeAsync(ct);
+                            moved = true;
+                        }
+                        catch (Exception copyEx)
+                        {
+                            logger?.Report($"[!] {account.Name}: Copy fallback failed: {copyEx.Message}");
+                        }
+                    }
+                }
+
+                await client.DisconnectAsync(true, ct);
+                if (moved)
+                {
+                    logger?.Report($"[✓] {account.Name}: Successfully moved {uidList.Count} message(s) from {sourceFolderType.GetDisplayName()} to Inbox.");
+                }
+                return moved;
+            }
+            catch (OperationCanceledException)
+            {
+                logger?.Report($"[!] {account.Name}: Move to Inbox cancelled.");
+                return false;
+            }
+            catch (Exception ex)
+            {
+                logger?.Report($"[!] {account.Name} Move to Inbox Error: {ex.Message}");
+                return false;
+            }
+        }
+
+        public async Task MoveToInboxEmailsBatchAsync(
+            IEnumerable<EmailItem> emails,
+            IEnumerable<EmailAccount> accounts,
+            IProgress<string>? logger = null,
+            CancellationToken ct = default)
+        {
+            var emailList = emails.ToList();
+            if (emailList.Count == 0) return;
+
+            var accList = accounts.ToList();
+            var grouped = emailList.GroupBy(e => (
+                Account: accList.FirstOrDefault(a => 
+                    (!string.IsNullOrEmpty(e.AccountEmail) && string.Equals(a.Email, e.AccountEmail, StringComparison.OrdinalIgnoreCase)) ||
+                    (!string.IsNullOrEmpty(e.AccountName) && string.Equals(a.Name, e.AccountName, StringComparison.OrdinalIgnoreCase))),
+                Folder: e.Folder
+            ));
+
+            var tasks = new List<Task>();
+            foreach (var group in grouped)
+            {
+                var account = group.Key.Account;
+                var folder = group.Key.Folder;
+                if (account == null) continue;
+
+                var uids = group.Select(e => e.UniqueId).Where(u => u > 0).Distinct().ToList();
+                if (uids.Count == 0) continue;
+
+                tasks.Add(MoveToInboxEmailsAsync(account, uids, folder, logger, ct));
+            }
+
+            await Task.WhenAll(tasks);
+        }
+
         private static string ExtractAndCleanBody(MimeMessage message)
         {
             string raw = message.TextBody ?? string.Empty;
