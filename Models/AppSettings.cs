@@ -109,6 +109,8 @@ namespace EmailSummarizer.Models
         public bool CollapseSidebarByDefault { get; set; } = false;
         public double WindowWidthScale { get; set; } = 0.60;
         public double WindowHeightScale { get; set; } = 0.56;
+        public int WindowWidth { get; set; } = 0;
+        public int WindowHeight { get; set; } = 0;
 
         // System Tray Daemon & Notification Options
         public bool AlwaysKeepOn { get; set; } = true;

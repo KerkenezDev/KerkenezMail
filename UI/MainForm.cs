@@ -17,6 +17,7 @@ namespace EmailSummarizer.UI
         private readonly ImapService _imapService;
         private readonly LlamaServerManager _llamaManager;
         private readonly LlmSummarizerService _llmService;
+        private LiveImapService _liveImapService = null!;
 
         private SidebarNav _sidebar = null!;
         private Panel _contentPanel = null!;
@@ -116,8 +117,12 @@ namespace EmailSummarizer.UI
                 ? _configService.Settings.WindowHeightScale
                 : 0.56;
 
-            int targetWidth = (int)Math.Round(workingArea.Width * widthScale);
-            int targetHeight = (int)Math.Round(workingArea.Height * heightScale);
+            int targetWidth = _configService.Settings.WindowWidth >= 960
+                ? _configService.Settings.WindowWidth
+                : (int)Math.Round(workingArea.Width * widthScale);
+            int targetHeight = _configService.Settings.WindowHeight >= 540
+                ? _configService.Settings.WindowHeight
+                : (int)Math.Round(workingArea.Height * heightScale);
 
             int minWidth = Math.Min(960, workingArea.Width);
             int minHeight = Math.Min(540, workingArea.Height);
@@ -167,6 +172,10 @@ namespace EmailSummarizer.UI
             _logsView = new LogsView();
             var logger = new Progress<string>(msg => _logsView.AppendLog(msg));
 
+            // Initialize Live IMAP Service
+            _liveImapService = new LiveImapService(_configService, logger);
+            _liveImapService.NewEmailDetected += OnLiveImapNewEmailDetected;
+
             // 3. Tab Views
             _summariesView = new SummariesView(_configService, _imapService, _llamaManager, _llmService, logger);
             _summariesView.StatusUpdated += (status, vram) => UpdateStatusStrip(status, vram);
@@ -203,6 +212,7 @@ namespace EmailSummarizer.UI
             _sidebar.IsCollapsed = _configService.Settings.CollapseSidebarByDefault;
             _sidebar.TabChanged += OnSidebarTabChanged;
             _sidebar.MailFolderSelected += OnSidebarMailFolderSelected;
+            _sidebar.LiveImapToggled += OnSidebarLiveImapToggled;
 
             // Initial view
             ShowTab(0);
@@ -231,6 +241,46 @@ namespace EmailSummarizer.UI
             _sidebar.SelectedIndex = 0;
             ShowTab(0);
             await _summariesView.SwitchToFolderAsync(folder);
+        }
+
+        private async void OnSidebarLiveImapToggled(object? sender, bool isActive)
+        {
+            string metrics = _lblMetrics?.Text ?? "";
+            if (isActive)
+            {
+                UpdateStatusStrip("Live IMAP: Connecting...", metrics);
+                await _liveImapService.StartAsync();
+                UpdateStatusStrip(_liveImapService.IsRunning ? "Live IMAP: Connected & Listening" : "Live IMAP: Stopped", metrics);
+            }
+            else
+            {
+                UpdateStatusStrip("Live IMAP: Transmitting DONE signals...", metrics);
+                await _liveImapService.StopAsync();
+                UpdateStatusStrip("Live IMAP: Stopped", metrics);
+            }
+        }
+
+        private async void OnLiveImapNewEmailDetected(EmailAccount account, int count)
+        {
+            if (this.InvokeRequired)
+            {
+                this.BeginInvoke(new Action(() => OnLiveImapNewEmailDetected(account, count)));
+                return;
+            }
+
+            // 1. Toast Notification
+            NotificationService.ShowNotification(
+                "New Email Received",
+                $"{account.Name}: {count} new email(s) received in Inbox.");
+
+            // 2. Status Strip feedback
+            UpdateStatusStrip($"Live IMAP: New email arrived for {account.Name}", _lblMetrics?.Text ?? "");
+
+            // 3. Auto-refresh if currently looking at the Inbox folder in Summaries view
+            if (_sidebar.SelectedIndex == 0 && _sidebar.SelectedFolder == MailFolderType.Inbox)
+            {
+                await _summariesView.FetchAndAutoSummarizeAsync(MailFolderType.Inbox);
+            }
         }
 
         private void ShowTab(int index)
@@ -406,6 +456,16 @@ namespace EmailSummarizer.UI
             }
             catch { }
 
+            // Stop Live IMAP and transmit RFC 2177 DONE signals to servers immediately
+            if (_liveImapService != null && _liveImapService.IsRunning)
+            {
+                try
+                {
+                    Task.Run(async () => await _liveImapService.StopAsync()).Wait(2500);
+                }
+                catch { }
+            }
+
             // Abort active IMAP sync & LLM startup/summaries immediately
             _summariesView.CancelRunningOperations();
 
@@ -443,6 +503,13 @@ namespace EmailSummarizer.UI
                 return;
             }
 
+            if (this.WindowState == FormWindowState.Normal && this.Width >= 960 && this.Height >= 540)
+            {
+                _configService.Settings.WindowWidth = this.Width;
+                _configService.Settings.WindowHeight = this.Height;
+                _configService.SaveConfig();
+            }
+
             base.OnFormClosing(e);
             _llamaManager.Stop();
             ConfigService.CleanTempFolder();
@@ -453,6 +520,7 @@ namespace EmailSummarizer.UI
             if (disposing)
             {
                 _summariesView?.CancelRunningOperations();
+                _liveImapService?.Dispose();
                 _llamaManager?.Dispose();
                 ConfigService.CleanTempFolder();
             }

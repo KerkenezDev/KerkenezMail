@@ -1592,7 +1592,7 @@ namespace EmailSummarizer.UI.Tabs
                 double hScale = (double)_numWindowHeightScale.Value / 100.0;
                 int targetW = (int)Math.Round(wa.Width * wScale);
                 int targetH = (int)Math.Round(wa.Height * hScale);
-                _lblScalePreview.Text = $"Estimated resolution on active display: {targetW} × {targetH} px (Display working area: {wa.Width} × {wa.Height} px)";
+                _lblScalePreview.Text = $"Persistent launch dimensions: {targetW} × {targetH} px (Display working area: {wa.Width} × {wa.Height} px)";
             }
             catch
             {
@@ -1622,6 +1622,11 @@ namespace EmailSummarizer.UI.Tabs
                         wa.Left + Math.Max(0, (wa.Width - targetW) / 2),
                         wa.Top + Math.Max(0, (wa.Height - targetH) / 2)
                     );
+                    _configService.Settings.WindowWidth = targetW;
+                    _configService.Settings.WindowHeight = targetH;
+                    _configService.Settings.WindowWidthScale = wScale;
+                    _configService.Settings.WindowHeightScale = hScale;
+                    _configService.SaveConfig();
                 }
             }
             catch { }
@@ -1885,6 +1890,13 @@ namespace EmailSummarizer.UI.Tabs
             s.CollapseSidebarByDefault = _chkCollapseSidebarByDefault.Checked;
             s.WindowWidthScale = (double)_numWindowWidthScale.Value / 100.0;
             s.WindowHeightScale = (double)_numWindowHeightScale.Value / 100.0;
+
+            var screen = Screen.FromControl(this) ?? Screen.PrimaryScreen;
+            var wa = screen?.WorkingArea ?? (Screen.PrimaryScreen != null ? Screen.PrimaryScreen.WorkingArea : new Rectangle(0, 0, 1920, 1080));
+            int targetW = (int)Math.Round(wa.Width * s.WindowWidthScale);
+            int targetH = (int)Math.Round(wa.Height * s.WindowHeightScale);
+            s.WindowWidth = targetW;
+            s.WindowHeight = targetH;
 
             // System Tray settings
             s.AlwaysKeepOn = _chkAlwaysKeepOn.Checked;

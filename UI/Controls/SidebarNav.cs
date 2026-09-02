@@ -15,6 +15,7 @@ namespace EmailSummarizer.UI.Controls
         public event EventHandler<int>? TabChanged;
         public event EventHandler<MailFolderType>? MailFolderSelected;
         public event EventHandler<bool>? CollapsedChanged;
+        public event EventHandler<bool>? LiveImapToggled;
 
         private readonly string[] _tabTitles = new[]
         {
@@ -68,6 +69,8 @@ namespace EmailSummarizer.UI.Controls
         private MailFolderType _selectedFolder = MailFolderType.Inbox;
         private MailFolderType? _hoveredFolder = null;
         private bool _isChevronHovered = false;
+        private bool _isLiveImapActive = false;
+        private bool _isLiveImapHovered = false;
 
         private readonly System.Windows.Forms.Timer _animTimer;
         private int _startWidth;
@@ -146,6 +149,20 @@ namespace EmailSummarizer.UI.Controls
                     }
                     StartAnimation();
                     CollapsedChanged?.Invoke(this, _isCollapsed);
+                }
+            }
+        }
+
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public bool IsLiveImapActive
+        {
+            get => _isLiveImapActive;
+            set
+            {
+                if (_isLiveImapActive != value)
+                {
+                    _isLiveImapActive = value;
+                    Invalidate();
                 }
             }
         }
@@ -278,6 +295,16 @@ namespace EmailSummarizer.UI.Controls
             return new Rectangle((int)(8 * scale), itemY, this.Width - (int)(16 * scale), itemH - (int)(4 * scale));
         }
 
+        public Rectangle GetLiveImapBounds(float scale)
+        {
+            int btnH = (int)(40 * scale);
+            int bottomMargin = (int)(10 * scale);
+            int top = this.Height - btnH - bottomMargin;
+            int left = (int)(8 * scale);
+            int width = this.Width - (int)(16 * scale);
+            return new Rectangle(left, top, Math.Max(10, width), btnH);
+        }
+
         private void UpdateToolTip(string text, Point pt)
         {
             if (_currentToolTipText != text)
@@ -335,69 +362,95 @@ namespace EmailSummarizer.UI.Controls
 
             bool prevToggleHover = _isToggleHovered;
             bool prevChevronHover = _isChevronHovered;
+            bool prevLiveImapHover = _isLiveImapHovered;
             int prevHover = _hoveredIndex;
             MailFolderType? prevFolderHover = _hoveredFolder;
 
             var toggleRect = GetToggleButtonBounds(scale);
             var item0Rect = GetItemBounds(0, scale);
             var chevronRect = isWide ? GetChevronBounds(scale) : Rectangle.Empty;
+            var liveRect = GetLiveImapBounds(scale);
 
-            if (toggleRect.Contains(e.Location))
+            if (liveRect.Contains(e.Location))
             {
-                _isToggleHovered = true;
+                _isToggleHovered = false;
+                _isChevronHovered = false;
                 _hoveredIndex = -1;
-                _isChevronHovered = false;
                 _hoveredFolder = null;
+                _isLiveImapHovered = true;
                 this.Cursor = Cursors.Hand;
-                string toggleTip = _isCollapsed ? "Expand sidebar (Ctrl+B)" : "Collapse sidebar (Ctrl+B)";
-                UpdateToolTip(toggleTip, e.Location);
+                string liveTip = _isLiveImapActive
+                    ? (_isCollapsed ? "Live IMAP: Active (Click to turn off)" : "Live IMAP is active (Click to turn off)")
+                    : (_isCollapsed ? "Live IMAP: Off (Click to turn on)" : "Live IMAP is off (Click to turn on)");
+                UpdateToolTip(liveTip, e.Location);
             }
-            else if (isWide && chevronRect.Contains(e.Location))
+            else
             {
-                _isToggleHovered = false;
-                _hoveredIndex = 0;
-                _isChevronHovered = true;
-                _hoveredFolder = null;
-                this.Cursor = Cursors.Hand;
-                UpdateToolTip(_isInboxExpanded ? "Collapse mail folders" : "Expand mail folders (Sent, Archive, Trash...)", e.Location);
-            }
-            else if (item0Rect.Contains(e.Location))
-            {
-                _isToggleHovered = false;
-                _hoveredIndex = 0;
-                _isChevronHovered = false;
-                _hoveredFolder = null;
-                this.Cursor = Cursors.Hand;
-                if (_isCollapsed)
-                {
-                    string tip = _selectedFolder == MailFolderType.Inbox ? "Inbox" : $"Inbox ({_selectedFolder.GetDisplayName()})";
-                    UpdateToolTip(tip, e.Location);
-                }
-                else
-                {
-                    UpdateToolTip("", Point.Empty);
-                }
-            }
-            else if (isWide && _isInboxExpanded)
-            {
-                MailFolderType? matched = null;
-                for (int k = 0; k < SubFolders.Length; k++)
-                {
-                    if (GetSubFolderBounds(k, scale).Contains(e.Location))
-                    {
-                        matched = SubFolders[k].Folder;
-                        break;
-                    }
-                }
+                _isLiveImapHovered = false;
 
-                if (matched.HasValue)
+                if (toggleRect.Contains(e.Location))
                 {
-                    _isToggleHovered = false;
+                    _isToggleHovered = true;
                     _hoveredIndex = -1;
                     _isChevronHovered = false;
-                    _hoveredFolder = matched;
+                    _hoveredFolder = null;
                     this.Cursor = Cursors.Hand;
-                    UpdateToolTip("", Point.Empty);
+                    string toggleTip = _isCollapsed ? "Expand sidebar (Ctrl+B)" : "Collapse sidebar (Ctrl+B)";
+                    UpdateToolTip(toggleTip, e.Location);
+                }
+                else if (isWide && chevronRect.Contains(e.Location))
+                {
+                    _isToggleHovered = false;
+                    _hoveredIndex = 0;
+                    _isChevronHovered = true;
+                    _hoveredFolder = null;
+                    this.Cursor = Cursors.Hand;
+                    UpdateToolTip(_isInboxExpanded ? "Collapse mail folders" : "Expand mail folders (Sent, Archive, Trash...)", e.Location);
+                }
+                else if (item0Rect.Contains(e.Location))
+                {
+                    _isToggleHovered = false;
+                    _hoveredIndex = 0;
+                    _isChevronHovered = false;
+                    _hoveredFolder = null;
+                    this.Cursor = Cursors.Hand;
+                    if (_isCollapsed)
+                    {
+                        string tip = _selectedFolder == MailFolderType.Inbox ? "Inbox" : $"Inbox ({_selectedFolder.GetDisplayName()})";
+                        UpdateToolTip(tip, e.Location);
+                    }
+                    else
+                    {
+                        UpdateToolTip("", Point.Empty);
+                    }
+                }
+                else if (isWide && _isInboxExpanded)
+                {
+                    MailFolderType? matched = null;
+                    for (int k = 0; k < SubFolders.Length; k++)
+                    {
+                        if (GetSubFolderBounds(k, scale).Contains(e.Location))
+                        {
+                            matched = SubFolders[k].Folder;
+                            break;
+                        }
+                    }
+
+                    if (matched.HasValue)
+                    {
+                        _isToggleHovered = false;
+                        _hoveredIndex = -1;
+                        _isChevronHovered = false;
+                        _hoveredFolder = matched;
+                        this.Cursor = Cursors.Hand;
+                        UpdateToolTip("", Point.Empty);
+                    }
+                    else
+                    {
+                        _hoveredFolder = null;
+                        _isChevronHovered = false;
+                        CheckOtherTabs(e.Location, scale);
+                    }
                 }
                 else
                 {
@@ -406,17 +459,12 @@ namespace EmailSummarizer.UI.Controls
                     CheckOtherTabs(e.Location, scale);
                 }
             }
-            else
-            {
-                _hoveredFolder = null;
-                _isChevronHovered = false;
-                CheckOtherTabs(e.Location, scale);
-            }
 
             if (prevToggleHover != _isToggleHovered ||
                 prevChevronHover != _isChevronHovered ||
                 prevHover != _hoveredIndex ||
-                prevFolderHover != _hoveredFolder)
+                prevFolderHover != _hoveredFolder ||
+                prevLiveImapHover != _isLiveImapHovered)
             {
                 Invalidate();
             }
@@ -427,6 +475,7 @@ namespace EmailSummarizer.UI.Controls
             base.OnMouseLeave(e);
             _isToggleHovered = false;
             _isChevronHovered = false;
+            _isLiveImapHovered = false;
             _hoveredIndex = -1;
             _hoveredFolder = null;
             this.Cursor = Cursors.Default;
@@ -442,6 +491,13 @@ namespace EmailSummarizer.UI.Controls
 
             if (e.Button == MouseButtons.Left)
             {
+                var liveRect = GetLiveImapBounds(scale);
+                if (liveRect.Contains(e.Location) || _isLiveImapHovered)
+                {
+                    IsLiveImapActive = !IsLiveImapActive;
+                    LiveImapToggled?.Invoke(this, _isLiveImapActive);
+                    return;
+                }
                 var toggleRect = GetToggleButtonBounds(scale);
                 var item0Rect = GetItemBounds(0, scale);
                 var chevronRect = isWide ? GetChevronBounds(scale) : Rectangle.Empty;
@@ -657,6 +713,109 @@ namespace EmailSummarizer.UI.Controls
             for (int i = 1; i < _tabTitles.Length; i++)
             {
                 DrawTabItem(g, i, scale, isWide);
+            }
+
+            // 3. Draw Live IMAP Toggle Button at bottom of sidebar
+            DrawLiveImapButton(g, scale, isWide);
+        }
+
+        private void DrawLiveImapButton(Graphics g, float scale, bool isWide)
+        {
+            var liveRect = GetLiveImapBounds(scale);
+            int headerH = (int)(72 * scale);
+            int itemH = (int)(46 * scale);
+
+            // Subtle divider line above the Live IMAP button section
+            if (liveRect.Top > headerH + itemH * 2)
+            {
+                int sepY = liveRect.Top - (int)(10 * scale);
+                using var sepPen = new Pen(_borderColor, 1);
+                g.DrawLine(sepPen, isWide ? (int)(12 * scale) : (int)(8 * scale), sepY, this.Width - (isWide ? (int)(12 * scale) : (int)(8 * scale)), sepY);
+            }
+
+            // 1. Button Background & Surrounding Rectangle
+            if (_isLiveImapActive)
+            {
+                // Active Tab look: white background, thin border, blue accent indicator on the left
+                using var activeBrush = new SolidBrush(_activeBgColor);
+                using var activeBorderPen = new Pen(_borderColor, 1);
+                FillRoundedRectangle(g, activeBrush, liveRect, 5);
+                DrawRoundedRectangle(g, activeBorderPen, liveRect, 5);
+
+                // Left Accent Indicator
+                using var accentBrush = new SolidBrush(_accentColor);
+                g.FillRectangle(accentBrush, new Rectangle(liveRect.Left + 2, liveRect.Top + 6, isWide ? 4 : 3, liveRect.Height - 12));
+            }
+            else
+            {
+                // Inactive look: thin surrounding rectangle, subtle hover if mouse is over
+                if (_isLiveImapHovered)
+                {
+                    using var hoverBrush = new SolidBrush(_hoverBgColor);
+                    FillRoundedRectangle(g, hoverBrush, liveRect, 5);
+                }
+                else
+                {
+                    using var bgBrush = new SolidBrush(Color.FromArgb(244, 246, 249));
+                    FillRoundedRectangle(g, bgBrush, liveRect, 5);
+                }
+
+                using var borderPen = new Pen(_borderColor, 1);
+                DrawRoundedRectangle(g, borderPen, liveRect, 5);
+            }
+
+            // 2. Icon & Text
+            var textColor = _isLiveImapActive ? _activeTextColor : (_isLiveImapHovered ? Color.FromArgb(20, 24, 30) : _textColor);
+            var fontStyle = _isLiveImapActive ? FontStyle.Bold : FontStyle.Regular;
+            using var itemFont = new Font("Segoe UI", 9.25F, fontStyle);
+            using var textBrush = new SolidBrush(textColor);
+            using var iconFont = new Font(GetIconFontFamily(), 11F, FontStyle.Regular);
+
+            const string liveIcon = "\uE753"; // Broadcast / Signal waves icon
+
+            if (isWide)
+            {
+                var stringFormat = new StringFormat
+                {
+                    Alignment = StringAlignment.Near,
+                    LineAlignment = StringAlignment.Center,
+                    Trimming = StringTrimming.EllipsisCharacter,
+                    FormatFlags = StringFormatFlags.NoWrap
+                };
+
+                // Draw icon
+                int iconLeft = liveRect.Left + (int)(8 * scale);
+                int iconWidth = (int)(22 * scale);
+                g.DrawString(liveIcon, iconFont, textBrush, new Rectangle(iconLeft, liveRect.Top, iconWidth, liveRect.Height), stringFormat);
+
+                // Draw label text
+                int textLeft = iconLeft + iconWidth + (int)(6 * scale);
+                int textWidth = liveRect.Right - textLeft - (int)(18 * scale);
+                if (textWidth > 0)
+                {
+                    var textRect = new Rectangle(textLeft, liveRect.Top, textWidth, liveRect.Height);
+                    g.DrawString("Live IMAP", itemFont, textBrush, textRect, stringFormat);
+                }
+
+                // Live status indicator dot on far right
+                if (_isLiveImapActive)
+                {
+                    int dotSize = (int)(7 * scale);
+                    int dotX = liveRect.Right - (int)(16 * scale);
+                    int dotY = liveRect.Top + (liveRect.Height - dotSize) / 2;
+                    using var greenBrush = new SolidBrush(Color.FromArgb(46, 175, 75));
+                    g.FillEllipse(greenBrush, dotX, dotY, dotSize, dotSize);
+                }
+            }
+            else
+            {
+                // Centered icon in collapsed rail
+                var centerFormat = new StringFormat
+                {
+                    Alignment = StringAlignment.Center,
+                    LineAlignment = StringAlignment.Center
+                };
+                g.DrawString(liveIcon, iconFont, textBrush, liveRect, centerFormat);
             }
         }
 
