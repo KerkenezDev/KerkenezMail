@@ -57,6 +57,11 @@ namespace EmailSummarizer.Services
             AppSettings settings,
             CancellationToken ct = default)
         {
+            if (settings.IsAiDisabled)
+            {
+                return string.Empty;
+            }
+
             string emailContentForLlm = PrepareEmailBodyForSummary(email.CleanBody, settings.MaxSummaryEmailChars);
             string metadataNotice = GetEmailContextNotice(email);
 

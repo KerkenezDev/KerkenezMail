@@ -47,6 +47,7 @@ namespace EmailSummarizer.UI
             _llmService = new LlmSummarizerService();
 
             InitializeComponent();
+            Microsoft.Win32.SystemEvents.PowerModeChanged += OnSystemPowerModeChanged;
             string modelName = _configService.Settings.GetBackendDisplayName();
             UpdateStatusStrip($"Ready • Backend: {modelName}", "Ready");
 
@@ -179,6 +180,11 @@ namespace EmailSummarizer.UI
             };
 
             _settingsView = new SettingsView(_configService, _llmService, logger);
+            _settingsView.SettingsSaved += () =>
+            {
+                _summariesView.ApplyAiModeLayout();
+                UpdateMetrics();
+            };
 
             // 4. Content Panel (Holds active view)
             _contentPanel = new Panel
@@ -244,7 +250,11 @@ namespace EmailSummarizer.UI
             _settingsView.Visible = (index == 3);
             _logsView.Visible = (index == 4);
 
-            if (index == 0) _summariesView.BringToFront();
+            if (index == 0)
+            {
+                _summariesView.ApplyAiModeLayout();
+                _summariesView.BringToFront();
+            }
             else if (index == 1) _sendMailView!.BringToFront();
             else if (index == 2)
             {
@@ -323,11 +333,46 @@ namespace EmailSummarizer.UI
         private void UpdateMetrics()
         {
             int enabledCount = _configService.GetAccounts().Count(a => a.IsEnabled);
-            string backendType = _configService.Settings.AiBackend;
-            string status = string.Equals(backendType, "LlamaCpp", StringComparison.OrdinalIgnoreCase) 
-                ? (_configService.Settings.InstantVramUnload ? "On-Demand (VRAM Unload)" : "Model Loaded in VRAM") 
-                : (string.Equals(backendType, "Ollama", StringComparison.OrdinalIgnoreCase) ? "Ollama Active" : "Cloud Active");
+            string status;
+            if (_configService.Settings.IsBatterySaverActive)
+            {
+                status = "Battery Saver (No AI)";
+            }
+            else if (_configService.Settings.IsAiDisabled)
+            {
+                status = "Disabled (Classic Mail)";
+            }
+            else
+            {
+                string backendType = _configService.Settings.AiBackend;
+                status = string.Equals(backendType, "LlamaCpp", StringComparison.OrdinalIgnoreCase) 
+                    ? (_configService.Settings.InstantVramUnload ? "On-Demand (VRAM Unload)" : "Model Loaded in VRAM") 
+                    : (string.Equals(backendType, "Ollama", StringComparison.OrdinalIgnoreCase) ? "Ollama Active" : "Cloud Active");
+            }
             _lblMetrics.Text = $"Accounts: {enabledCount} | Backend: {status}";
+        }
+
+        private void OnSystemPowerModeChanged(object? sender, Microsoft.Win32.PowerModeChangedEventArgs e)
+        {
+            if (e.Mode == Microsoft.Win32.PowerModes.StatusChange)
+            {
+                try
+                {
+                    if (this.InvokeRequired)
+                    {
+                        this.BeginInvoke(new Action(() => OnSystemPowerModeChanged(sender, e)));
+                        return;
+                    }
+
+                    if (_configService.Settings.DisableAiOnBattery)
+                    {
+                        _summariesView.ApplyAiModeLayout();
+                        UpdateMetrics();
+                        _settingsView.UpdateBatteryNotice();
+                    }
+                }
+                catch { }
+            }
         }
 
         private async void OnFormKeyDown(object? sender, KeyEventArgs e)
@@ -350,6 +395,12 @@ namespace EmailSummarizer.UI
 
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
+            try
+            {
+                Microsoft.Win32.SystemEvents.PowerModeChanged -= OnSystemPowerModeChanged;
+            }
+            catch { }
+
             // Abort active IMAP sync & LLM startup/summaries immediately
             _summariesView.CancelRunningOperations();
 

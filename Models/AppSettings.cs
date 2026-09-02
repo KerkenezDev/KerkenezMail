@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.Json.Serialization;
+using System.Windows.Forms;
 using EmailSummarizer.Services;
 
 namespace EmailSummarizer.Models
@@ -10,8 +11,30 @@ namespace EmailSummarizer.Models
     {
         public List<string> AccountIds { get; set; } = new List<string>();
 
-        // AI Backend Selection ("LlamaCpp", "Ollama", "Cloud")
+        // AI Backend Selection ("LlamaCpp", "Ollama", "Cloud", "None")
         public string AiBackend { get; set; } = "LlamaCpp";
+
+        // Power Management: Auto No AI on Battery Power
+        public bool DisableAiOnBattery { get; set; } = false;
+
+        public bool IsExplicitAiDisabled => string.Equals(AiBackend, "None", StringComparison.OrdinalIgnoreCase) || 
+                                            string.Equals(AiBackend, "Disabled", StringComparison.OrdinalIgnoreCase);
+
+        public bool IsBatterySaverActive => DisableAiOnBattery && IsRunningOnBattery();
+
+        public bool IsAiDisabled => IsExplicitAiDisabled || IsBatterySaverActive;
+
+        public static bool IsRunningOnBattery()
+        {
+            try
+            {
+                return SystemInformation.PowerStatus.PowerLineStatus == PowerLineStatus.Offline;
+            }
+            catch
+            {
+                return false;
+            }
+        }
 
         // 1. llama.cpp (Local GGUF) Settings
         public string LlamaModelPath { get; set; } = "";
@@ -145,6 +168,19 @@ namespace EmailSummarizer.Models
 
         public string GetBackendDisplayName()
         {
+            if (IsBatterySaverActive)
+            {
+                return $"No AI (Battery Saver - {GetConfiguredBackendDisplayName()})";
+            }
+            if (IsExplicitAiDisabled)
+            {
+                return "No AI (Disabled)";
+            }
+            return GetConfiguredBackendDisplayName();
+        }
+
+        public string GetConfiguredBackendDisplayName()
+        {
             if (string.Equals(AiBackend, "Ollama", StringComparison.OrdinalIgnoreCase))
             {
                 return $"Ollama ({GetEffectiveModelName()})";
@@ -152,6 +188,10 @@ namespace EmailSummarizer.Models
             if (string.Equals(AiBackend, "Cloud", StringComparison.OrdinalIgnoreCase))
             {
                 return $"Cloud API ({GetEffectiveModelName()})";
+            }
+            if (IsExplicitAiDisabled)
+            {
+                return "No AI (Disabled)";
             }
             string modelName = string.IsNullOrWhiteSpace(LlamaModelPath) ? "Not Selected" : Path.GetFileName(LlamaModelPath);
             return $"llama.cpp ({modelName})";

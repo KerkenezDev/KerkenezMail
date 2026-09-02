@@ -17,10 +17,27 @@ namespace EmailSummarizer.UI.Tabs
         private readonly IProgress<string> _logger;
 
         // AI Backend Selection & Containers
+        public event Action? SettingsSaved;
+
         private ComboBox _cboAiBackend = null!;
+        private FlowLayoutPanel _barBackendOptions = null!;
+        private Button _btnBackendLlama = null!;
+        private Button _btnBackendOllama = null!;
+        private Button _btnBackendCloud = null!;
+        private Button _btnBackendNoAi = null!;
+        private Panel _pnlBatteryActiveWarning = null!;
         private FlowLayoutPanel _pnlLlamaContainer = null!;
         private FlowLayoutPanel _pnlOllamaContainer = null!;
         private FlowLayoutPanel _pnlCloudContainer = null!;
+        private FlowLayoutPanel _pnlNoAiContainer = null!;
+        private FlowLayoutPanel _pnlGlobalParams = null!;
+        private Label _lblTokenTip = null!;
+        private FlowLayoutPanel _pnlEmailLengthContainer = null!;
+        private FlowLayoutPanel _rowTestLlm = null!;
+
+        // 1.5. Battery Saver controls
+        private CheckBox _chkDisableAiOnBattery = null!;
+        private Label _lblBatteryStatusBadge = null!;
 
         // 1. llama.cpp controls
         private TextBox _txtModelPath = null!;
@@ -131,19 +148,78 @@ namespace EmailSummarizer.UI.Tabs
                 AutoSize = true,
                 Font = new Font("Segoe UI", 9F, FontStyle.Bold),
                 ForeColor = Color.FromArgb(40, 40, 40),
-                Margin = new Padding(0, 0, 0, 4)
+                Margin = new Padding(0, 0, 0, 6)
             };
+
+            // 4 Top Bar Backend Option Buttons (side-by-side)
+            _barBackendOptions = new FlowLayoutPanel
+            {
+                Width = ContentW - 28,
+                AutoSize = true,
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = true,
+                Margin = new Padding(0, 0, 0, 8)
+            };
+
+            _btnBackendLlama = CreateBackendOptionButton("🦙  Local llama.cpp", 0);
+            _btnBackendOllama = CreateBackendOptionButton("🦙  Local Ollama", 1);
+            _btnBackendCloud = CreateBackendOptionButton("☁️  Cloud / Custom API", 2);
+            _btnBackendNoAi = CreateBackendOptionButton("🚫  No AI (Disabled)", 3);
+
+            _barBackendOptions.Controls.Add(_btnBackendLlama);
+            _barBackendOptions.Controls.Add(_btnBackendOllama);
+            _barBackendOptions.Controls.Add(_btnBackendCloud);
+            _barBackendOptions.Controls.Add(_btnBackendNoAi);
+
+            // ------------------ Battery Saver Active Warning ------------------
+            _pnlBatteryActiveWarning = new Panel
+            {
+                Width = ContentW - 28,
+                Height = 68,
+                BackColor = Color.FromArgb(254, 249, 231),
+                Margin = new Padding(0, 0, 0, 10),
+                Visible = false
+            };
+            _pnlBatteryActiveWarning.Paint += (s, e) =>
+            {
+                using var pen = new Pen(Color.FromArgb(245, 190, 80), 1);
+                e.Graphics.DrawRectangle(pen, 0, 0, _pnlBatteryActiveWarning.Width - 1, _pnlBatteryActiveWarning.Height - 1);
+            };
+
+            var lblWarnTitle = new Label
+            {
+                Text = "⚡  Running in No AI Mode (Battery Saver Active)",
+                Font = new Font("Segoe UI", 9F, FontStyle.Bold),
+                ForeColor = Color.FromArgb(145, 95, 0),
+                Location = new Point(12, 8),
+                AutoSize = true
+            };
+
+            var lblWarnDesc = new Label
+            {
+                Text = "AI summarization and priority ranking are temporarily suspended because this device is running on battery power. Your configured settings below remain saved and will automatically resume when plugged into AC power.",
+                Font = new Font("Segoe UI", 8.5F),
+                ForeColor = Color.FromArgb(115, 75, 0),
+                Location = new Point(12, 28),
+                Size = new Size(ContentW - 56, 34),
+                AutoSize = false
+            };
+
+            _pnlBatteryActiveWarning.Controls.Add(lblWarnTitle);
+            _pnlBatteryActiveWarning.Controls.Add(lblWarnDesc);
 
             _cboAiBackend = new ComboBox
             {
                 DropDownStyle = ComboBoxStyle.DropDownList,
                 Width = ContentW - 28,
                 Font = new Font("Segoe UI", 9.5F, FontStyle.Bold),
-                Margin = new Padding(0, 0, 0, 12)
+                Margin = new Padding(0),
+                Visible = false
             };
             _cboAiBackend.Items.Add("🦙  Local llama.cpp (Embedded GGUF)");
             _cboAiBackend.Items.Add("🦙  Local Ollama (localhost:11434)");
             _cboAiBackend.Items.Add("☁️  Cloud / Custom API (OpenAI, OpenRouter, Groq, DeepSeek)");
+            _cboAiBackend.Items.Add("🚫  No AI (Disable Priority & Summarizing)");
             _cboAiBackend.SelectedIndex = 0;
             _cboAiBackend.SelectedIndexChanged += (s, e) => UpdateAiBackendPanelsVisibility();
 
@@ -440,8 +516,61 @@ namespace EmailSummarizer.UI.Tabs
             _pnlCloudContainer.Controls.Add(lblCloudModel);
             _pnlCloudContainer.Controls.Add(_txtCloudModel);
 
-            // ------------------ 1D. Global Inference Settings ------------------
-            var pnlGlobalParams = new FlowLayoutPanel
+            // ------------------ 1D. No AI Custom Settings & Disclaimer ------------------
+            _pnlNoAiContainer = new FlowLayoutPanel
+            {
+                Width = ContentW - 28,
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                FlowDirection = FlowDirection.TopDown,
+                WrapContents = false,
+                Visible = false,
+                Margin = new Padding(0, 0, 0, 8)
+            };
+
+            var pnlNoticeBox = new Panel
+            {
+                Width = ContentW - 28,
+                Height = 175,
+                BackColor = Color.FromArgb(248, 250, 252),
+                Margin = new Padding(0, 4, 0, 8)
+            };
+            pnlNoticeBox.Paint += (s, e) =>
+            {
+                using var pen = new Pen(Color.FromArgb(210, 222, 235), 1);
+                e.Graphics.DrawRectangle(pen, 0, 0, pnlNoticeBox.Width - 1, pnlNoticeBox.Height - 1);
+            };
+
+            var lblNoticeHeader = new Label
+            {
+                Text = "🚫  No AI Mode (Classic Email Client Mode)",
+                Font = new Font("Segoe UI", 9.75F, FontStyle.Bold),
+                ForeColor = Color.FromArgb(30, 45, 65),
+                Location = new Point(16, 14),
+                AutoSize = true
+            };
+
+            var lblNoticeText = new Label
+            {
+                Text = "Disclaimer & Mode Information:\r\n" +
+                       "• Zero AI Overhead: LLM servers, background inference, and GPU/VRAM model loading are completely disabled.\r\n" +
+                       "• Full Reading Pane: The AI Summary box is hidden, allowing the email body viewer to expand to 100% height.\r\n" +
+                       "• Clean Inbox: The Priority ranking column (⚡) is removed from the inbox list for a clean, classic view.\r\n" +
+                       "• Instant Fetching: Emails are synced directly via IMAP without prompt generation or summarization delays.\r\n\r\n" +
+                       "Click '💾 Save Settings' at the bottom to apply and save this configuration.",
+                Font = new Font("Segoe UI", 8.75F),
+                ForeColor = Color.FromArgb(70, 82, 98),
+                Location = new Point(16, 40),
+                Size = new Size(ContentW - 60, 125),
+                AutoSize = false
+            };
+
+            pnlNoticeBox.Controls.Add(lblNoticeHeader);
+            pnlNoticeBox.Controls.Add(lblNoticeText);
+            _pnlNoAiContainer.Controls.Add(pnlNoticeBox);
+
+            // ------------------ 1E. Global Inference Settings ------------------
+            _pnlGlobalParams = new FlowLayoutPanel
             {
                 Width = ContentW - 28,
                 AutoSize = true,
@@ -470,10 +599,12 @@ namespace EmailSummarizer.UI.Tabs
                 Value = 0.2m,
                 Font = new Font("Segoe UI", 9.5F)
             };
+            var lblTempDesc = new Label { Text = "0.0 = Deterministic, 1.0+ = Creative", AutoSize = true, Font = new Font("Segoe UI", 7.5F), ForeColor = Color.FromArgb(120, 120, 120), Margin = new Padding(0, 2, 0, 0) };
             pnlTemp.Controls.Add(lblTemp);
             pnlTemp.Controls.Add(_numTemperature);
+            pnlTemp.Controls.Add(lblTempDesc);
 
-            var pnlMaxTokens = new FlowLayoutPanel
+            var pnlTokens = new FlowLayoutPanel
             {
                 Width = 220,
                 AutoSize = true,
@@ -481,62 +612,66 @@ namespace EmailSummarizer.UI.Tabs
                 WrapContents = false,
                 Margin = new Padding(0)
             };
-            var lblMaxTokens = new Label { Text = "Max Output Tokens:", AutoSize = true, Font = new Font("Segoe UI", 8.75F), Margin = new Padding(0, 0, 0, 4) };
+            var lblTokens = new Label { Text = "Max Response Tokens:", AutoSize = true, Font = new Font("Segoe UI", 8.75F), Margin = new Padding(0, 0, 0, 4) };
             _numMaxTokens = new NumericUpDown
             {
                 Width = 150,
                 Height = 28,
-                Minimum = 16,
-                Maximum = 8192,
+                Minimum = 64,
+                Maximum = 4096,
+                Increment = 64,
                 Value = 350,
                 Font = new Font("Segoe UI", 9.5F)
             };
-            pnlMaxTokens.Controls.Add(lblMaxTokens);
-            pnlMaxTokens.Controls.Add(_numMaxTokens);
+            var lblTokensDesc = new Label { Text = "Budget for summary length", AutoSize = true, Font = new Font("Segoe UI", 7.5F), ForeColor = Color.FromArgb(120, 120, 120), Margin = new Padding(0, 2, 0, 0) };
+            pnlTokens.Controls.Add(lblTokens);
+            pnlTokens.Controls.Add(_numMaxTokens);
+            pnlTokens.Controls.Add(lblTokensDesc);
 
-            pnlGlobalParams.Controls.Add(pnlTemp);
-            pnlGlobalParams.Controls.Add(pnlMaxTokens);
+            _pnlGlobalParams.Controls.Add(pnlTemp);
+            _pnlGlobalParams.Controls.Add(pnlTokens);
 
-            var lblTokenTip = new Label
+            _lblTokenTip = new Label
             {
-                Text = "💡 Tip: For reasoning/thinking models (e.g. DeepSeek-R1, QwQ), set at least 2,048 tokens to prevent thought truncation. Standard models operate efficiently at 350.",
+                Text = "💡 Tip: Lower temperature (0.1 - 0.3) produces consistent, objective executive summaries.",
                 AutoSize = true,
-                Font = new Font("Segoe UI", 8.25F),
-                ForeColor = Color.FromArgb(100, 100, 100),
-                Margin = new Padding(0, 0, 0, 6)
+                Font = new Font("Segoe UI", 8F, FontStyle.Italic),
+                ForeColor = Color.FromArgb(90, 110, 140),
+                Margin = new Padding(0, 0, 0, 10)
             };
 
-            // ------------------ 1E. Email Ingestion Length Limit ------------------
-            var pnlEmailLengthContainer = new FlowLayoutPanel
+            // ------------------ 1F. Email Ingestion Length Limit ------------------
+            _pnlEmailLengthContainer = new FlowLayoutPanel
             {
                 Width = ContentW - 28,
                 AutoSize = true,
                 FlowDirection = FlowDirection.TopDown,
                 WrapContents = false,
-                Margin = new Padding(0, 4, 0, 10)
+                Margin = new Padding(0, 0, 0, 12)
             };
 
             var lblSummaryCharsHeader = new Label
             {
-                Text = "Max Email Length Sent to AI (Character Context Limit):",
+                Text = "Email Ingestion Character Limit:",
                 AutoSize = true,
-                Font = new Font("Segoe UI", 8.75F, FontStyle.Bold),
+                Font = new Font("Segoe UI", 9F, FontStyle.Bold),
                 ForeColor = Color.FromArgb(40, 40, 40),
                 Margin = new Padding(0, 0, 0, 3)
             };
 
             var lblSummaryCharsDesc = new Label
             {
-                Text = "Controls how many characters of the email body are sent to the AI for summarization. Full email text is always fetched and viewable in the app regardless of this limit.",
-                AutoSize = true,
-                Font = new Font("Segoe UI", 8.25F),
-                ForeColor = Color.FromArgb(110, 110, 110),
+                Text = "Limits the raw email body length sent to the AI model. Truncation keeps prompts fast and prevents VRAM context overflows.",
+                AutoSize = false,
+                Width = ContentW - 32,
+                Height = 32,
+                Font = new Font("Segoe UI", 8F),
+                ForeColor = Color.FromArgb(100, 100, 100),
                 Margin = new Padding(0, 0, 0, 6)
             };
 
             var rowCharControls = new FlowLayoutPanel
             {
-                Width = ContentW - 28,
                 AutoSize = true,
                 FlowDirection = FlowDirection.LeftToRight,
                 WrapContents = false,
@@ -545,24 +680,22 @@ namespace EmailSummarizer.UI.Tabs
 
             _numMaxSummaryChars = new NumericUpDown
             {
-                Width = 150,
+                Width = 140,
                 Height = 28,
                 Minimum = 500,
-                Maximum = 1000000,
+                Maximum = 500000,
                 Increment = 500,
                 Value = 4000,
-                Font = new Font("Segoe UI", 9.5F),
-                Margin = new Padding(0, 0, 14, 0)
+                Font = new Font("Segoe UI", 9.5F)
             };
 
             _chkUnlimitedEmailChars = new CheckBox
             {
-                Text = "♾️ Unlimited (Send entire email body to AI)",
+                Text = "Unlimited (Send Full Body)",
                 AutoSize = true,
-                Font = new Font("Segoe UI", 9F, FontStyle.Bold),
-                ForeColor = Color.FromArgb(30, 41, 59),
-                Margin = new Padding(0, 4, 0, 0),
-                Cursor = Cursors.Hand
+                Font = new Font("Segoe UI", 9F),
+                ForeColor = Color.FromArgb(50, 50, 50),
+                Margin = new Padding(12, 4, 0, 0)
             };
             _chkUnlimitedEmailChars.CheckedChanged += (s, e) =>
             {
@@ -574,10 +707,9 @@ namespace EmailSummarizer.UI.Tabs
 
             var rowCharPresets = new FlowLayoutPanel
             {
-                Width = ContentW - 28,
                 AutoSize = true,
                 FlowDirection = FlowDirection.LeftToRight,
-                WrapContents = true,
+                WrapContents = false,
                 Margin = new Padding(0, 0, 0, 4)
             };
 
@@ -585,15 +717,15 @@ namespace EmailSummarizer.UI.Tabs
             {
                 Text = "Presets:",
                 AutoSize = true,
-                Margin = new Padding(0, 3, 6, 0),
-                Font = new Font("Segoe UI", 8.25F, FontStyle.Bold),
-                ForeColor = Color.FromArgb(80, 80, 80)
+                Font = new Font("Segoe UI", 8F, FontStyle.Bold),
+                ForeColor = Color.FromArgb(100, 100, 100),
+                Margin = new Padding(0, 5, 6, 0)
             };
 
             var btnPreset4k = CreateCharLimitPresetChip("4,000 chars (Default)", 4000);
-            var btnPreset8k = CreateCharLimitPresetChip("8,000 chars (Medium)", 8000);
-            var btnPreset16k = CreateCharLimitPresetChip("16,000 chars (Long)", 16000);
-            var btnPreset32k = CreateCharLimitPresetChip("32,000 chars (Very Long)", 32000);
+            var btnPreset8k = CreateCharLimitPresetChip("8,000 chars", 8000);
+            var btnPreset16k = CreateCharLimitPresetChip("16,000 chars", 16000);
+            var btnPreset32k = CreateCharLimitPresetChip("32,000 chars", 32000);
             var btnPresetInf = CreateCharLimitPresetChip("♾️ Unlimited", 0);
 
             rowCharPresets.Controls.Add(lblCharPresets);
@@ -603,13 +735,13 @@ namespace EmailSummarizer.UI.Tabs
             rowCharPresets.Controls.Add(btnPreset32k);
             rowCharPresets.Controls.Add(btnPresetInf);
 
-            pnlEmailLengthContainer.Controls.Add(lblSummaryCharsHeader);
-            pnlEmailLengthContainer.Controls.Add(lblSummaryCharsDesc);
-            pnlEmailLengthContainer.Controls.Add(rowCharControls);
-            pnlEmailLengthContainer.Controls.Add(rowCharPresets);
+            _pnlEmailLengthContainer.Controls.Add(lblSummaryCharsHeader);
+            _pnlEmailLengthContainer.Controls.Add(lblSummaryCharsDesc);
+            _pnlEmailLengthContainer.Controls.Add(rowCharControls);
+            _pnlEmailLengthContainer.Controls.Add(rowCharPresets);
 
             // ------------------ Test Connection Row ------------------
-            var rowTestLlm = new FlowLayoutPanel
+            _rowTestLlm = new FlowLayoutPanel
             {
                 Width = ContentW - 28,
                 AutoSize = true,
@@ -639,19 +771,63 @@ namespace EmailSummarizer.UI.Tabs
                 Font = new Font("Segoe UI", 8.75F)
             };
 
-            rowTestLlm.Controls.Add(_btnTestLlm);
-            rowTestLlm.Controls.Add(_lblLlmTestResult);
+            _rowTestLlm.Controls.Add(_btnTestLlm);
+            _rowTestLlm.Controls.Add(_lblLlmTestResult);
 
             pnlLlmCard.Controls.Add(lblSec1);
             pnlLlmCard.Controls.Add(lblBackend);
+            pnlLlmCard.Controls.Add(_barBackendOptions);
+            pnlLlmCard.Controls.Add(_pnlBatteryActiveWarning);
             pnlLlmCard.Controls.Add(_cboAiBackend);
             pnlLlmCard.Controls.Add(_pnlLlamaContainer);
             pnlLlmCard.Controls.Add(_pnlOllamaContainer);
             pnlLlmCard.Controls.Add(_pnlCloudContainer);
-            pnlLlmCard.Controls.Add(pnlGlobalParams);
-            pnlLlmCard.Controls.Add(lblTokenTip);
-            pnlLlmCard.Controls.Add(pnlEmailLengthContainer);
-            pnlLlmCard.Controls.Add(rowTestLlm);
+            pnlLlmCard.Controls.Add(_pnlNoAiContainer);
+            pnlLlmCard.Controls.Add(_pnlGlobalParams);
+            pnlLlmCard.Controls.Add(_lblTokenTip);
+            pnlLlmCard.Controls.Add(_pnlEmailLengthContainer);
+            pnlLlmCard.Controls.Add(_rowTestLlm);
+
+            // ==================== 1.5. Battery Saver Section ====================
+            var pnlBatteryCard = CreateCardPanel(ContentW);
+            
+            var lblSecBattery = CreateSectionHeader("🔋  Battery Saver Mode");
+
+            _chkDisableAiOnBattery = new CheckBox
+            {
+                Text = "Disable AI when on battery power (Auto No AI Mode)",
+                AutoSize = true,
+                Font = new Font("Segoe UI", 9F, FontStyle.Bold),
+                ForeColor = Color.FromArgb(40, 40, 40),
+                Margin = new Padding(0, 0, 0, 4),
+                Cursor = Cursors.Hand
+            };
+            _chkDisableAiOnBattery.CheckedChanged += (s, e) => UpdateBatteryNotice();
+
+            var lblBatteryDesc = new Label
+            {
+                Text = "When enabled, the app automatically switches to No AI mode whenever your laptop is running on battery power to conserve battery life. Your configured AI backend is preserved and will resume when connected to AC power.",
+                AutoSize = false,
+                Width = ContentW - 32,
+                Height = 34,
+                Font = new Font("Segoe UI", 8.25F),
+                ForeColor = Color.FromArgb(100, 100, 100),
+                Margin = new Padding(0, 0, 0, 4)
+            };
+
+            _lblBatteryStatusBadge = new Label
+            {
+                Text = "",
+                AutoSize = true,
+                Font = new Font("Segoe UI", 8.5F, FontStyle.Italic),
+                ForeColor = Color.FromArgb(80, 90, 100),
+                Margin = new Padding(0, 2, 0, 0)
+            };
+
+            pnlBatteryCard.Controls.Add(lblSecBattery);
+            pnlBatteryCard.Controls.Add(_chkDisableAiOnBattery);
+            pnlBatteryCard.Controls.Add(lblBatteryDesc);
+            pnlBatteryCard.Controls.Add(_lblBatteryStatusBadge);
 
             // ==================== 2. Email Options Section ====================
             var pnlEmailCard = CreateCardPanel(ContentW);
@@ -1095,6 +1271,7 @@ namespace EmailSummarizer.UI.Tabs
             pnlButtons.Controls.Add(_btnReset);
 
             _mainFlow.Controls.Add(pnlLlmCard);
+            _mainFlow.Controls.Add(pnlBatteryCard);
             _mainFlow.Controls.Add(pnlEmailCard);
             _mainFlow.Controls.Add(pnlAttachmentCard);
             _mainFlow.Controls.Add(pnlUiCard);
@@ -1141,13 +1318,97 @@ namespace EmailSummarizer.UI.Tabs
             };
         }
 
+        private Button CreateBackendOptionButton(string title, int index)
+        {
+            var btn = new Button
+            {
+                Text = title,
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                Height = 34,
+                Padding = new Padding(14, 6, 14, 6),
+                Margin = new Padding(0, 0, 8, 6),
+                Font = new Font("Segoe UI", 9F, FontStyle.Bold),
+                FlatStyle = FlatStyle.Flat,
+                Cursor = Cursors.Hand
+            };
+            btn.Click += (s, e) =>
+            {
+                _cboAiBackend.SelectedIndex = index;
+            };
+            return btn;
+        }
+
+        private static void UpdateButtonState(Button? btn, bool isSelected)
+        {
+            if (btn == null) return;
+            if (isSelected)
+            {
+                btn.BackColor = Color.FromArgb(0, 102, 204);
+                btn.ForeColor = Color.White;
+                btn.FlatAppearance.BorderColor = Color.FromArgb(0, 90, 180);
+                btn.FlatAppearance.MouseOverBackColor = Color.FromArgb(0, 115, 230);
+            }
+            else
+            {
+                btn.BackColor = Color.FromArgb(245, 247, 250);
+                btn.ForeColor = Color.FromArgb(45, 55, 72);
+                btn.FlatAppearance.BorderColor = Color.FromArgb(215, 225, 235);
+                btn.FlatAppearance.MouseOverBackColor = Color.FromArgb(235, 242, 250);
+            }
+        }
+
         private void UpdateAiBackendPanelsVisibility()
         {
             int idx = _cboAiBackend.SelectedIndex;
+
+            UpdateButtonState(_btnBackendLlama, idx == 0);
+            UpdateButtonState(_btnBackendOllama, idx == 1);
+            UpdateButtonState(_btnBackendCloud, idx == 2);
+            UpdateButtonState(_btnBackendNoAi, idx == 3);
+
             _pnlLlamaContainer.Visible = (idx == 0);
             _pnlOllamaContainer.Visible = (idx == 1);
             _pnlCloudContainer.Visible = (idx == 2);
+            _pnlNoAiContainer.Visible = (idx == 3);
+            _pnlGlobalParams.Visible = (idx != 3);
+            _lblTokenTip.Visible = (idx != 3);
+            _pnlEmailLengthContainer.Visible = (idx != 3);
+            _rowTestLlm.Visible = (idx != 3);
             _lblLlmTestResult.Text = "";
+
+            UpdateBatteryNotice();
+        }
+
+        public void UpdateBatteryNotice()
+        {
+            if (this.IsDisposed) return;
+
+            bool onBattery = AppSettings.IsRunningOnBattery();
+            bool disableOnBat = _chkDisableAiOnBattery?.Checked ?? _configService.Settings.DisableAiOnBattery;
+            bool isBatterySaverActive = disableOnBat && onBattery;
+
+            if (_lblBatteryStatusBadge != null)
+            {
+                if (onBattery)
+                {
+                    _lblBatteryStatusBadge.Text = isBatterySaverActive 
+                        ? "🔋 Status: Running on battery power — Auto No AI mode is currently ACTIVE." 
+                        : "🔋 Status: Running on battery power (Battery Saver disabled).";
+                    _lblBatteryStatusBadge.ForeColor = isBatterySaverActive ? Color.FromArgb(180, 100, 0) : Color.FromArgb(90, 90, 90);
+                }
+                else
+                {
+                    _lblBatteryStatusBadge.Text = "🔌 Status: Connected to AC power — Configured AI backend is active.";
+                    _lblBatteryStatusBadge.ForeColor = Color.FromArgb(40, 130, 40);
+                }
+            }
+
+            if (_pnlBatteryActiveWarning != null)
+            {
+                int idx = _cboAiBackend.SelectedIndex;
+                _pnlBatteryActiveWarning.Visible = isBatterySaverActive && idx != 3;
+            }
         }
 
         private void OnCloudPresetChanged(object? sender, EventArgs e)
@@ -1179,8 +1440,12 @@ namespace EmailSummarizer.UI.Tabs
         {
             var s = _configService.Settings;
 
-            // AI Backend Selection
-            if (string.Equals(s.AiBackend, "Ollama", StringComparison.OrdinalIgnoreCase))
+            // AI Backend Selection (preserving user's configured backend even if currently on battery)
+            if (s.IsExplicitAiDisabled)
+            {
+                _cboAiBackend.SelectedIndex = 3;
+            }
+            else if (string.Equals(s.AiBackend, "Ollama", StringComparison.OrdinalIgnoreCase))
             {
                 _cboAiBackend.SelectedIndex = 1;
             }
@@ -1193,6 +1458,9 @@ namespace EmailSummarizer.UI.Tabs
                 _cboAiBackend.SelectedIndex = 0;
             }
             UpdateAiBackendPanelsVisibility();
+
+            _chkDisableAiOnBattery.Checked = s.DisableAiOnBattery;
+            UpdateBatteryNotice();
 
             // llama.cpp settings
             _txtModelPath.Text = s.LlamaModelPath;
@@ -1560,10 +1828,17 @@ namespace EmailSummarizer.UI.Tabs
             {
                 s.AiBackend = "Cloud";
             }
+            else if (_cboAiBackend.SelectedIndex == 3)
+            {
+                s.AiBackend = "None";
+            }
             else
             {
                 s.AiBackend = "LlamaCpp";
             }
+
+            // Power Management
+            s.DisableAiOnBattery = _chkDisableAiOnBattery.Checked;
 
             // llama.cpp settings
             s.LlamaModelPath = _txtModelPath.Text.Trim();
@@ -1623,6 +1898,7 @@ namespace EmailSummarizer.UI.Tabs
 
             MessageBox.Show("Settings saved successfully!", "Saved", MessageBoxButtons.OK, MessageBoxIcon.Information);
             _logger.Report("[✓] Configuration saved to config.json.");
+            SettingsSaved?.Invoke();
         }
 
         private void OnResetDefaultsClick(object? sender, EventArgs e)
@@ -1633,6 +1909,7 @@ namespace EmailSummarizer.UI.Tabs
                 defaults.AccountIds = _configService.Settings.AccountIds;
                 _configService.SaveConfig(defaults);
                 LoadSettings();
+                SettingsSaved?.Invoke();
             }
         }
     }

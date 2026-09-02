@@ -80,6 +80,7 @@ namespace EmailSummarizer.UI.Tabs
         private Label _lblInboxHeader = null!;
         private ProgressBar _progressBar = null!;
         private SplitContainer _mainSplit = null!;
+        private SplitContainer _middleSplit = null!;
         private int _inboxPanelWidth = 440;
         private bool _isInitialSplitSet = false;
 
@@ -352,7 +353,7 @@ namespace EmailSummarizer.UI.Tabs
             };
 
             // LEFT/MIDDLE: Email Body (Top) and AI Summary (Bottom)
-            var middleSplit = new SplitContainer
+            _middleSplit = new SplitContainer
             {
                 Dock = DockStyle.Fill,
                 Orientation = Orientation.Horizontal,
@@ -534,7 +535,7 @@ namespace EmailSummarizer.UI.Tabs
             emailViewerPanel.Controls.Add(_rtbEmailBody);
             emailViewerPanel.Controls.Add(_pnlAttachments);
             emailViewerPanel.Controls.Add(metaHeader);
-            middleSplit.Panel1.Controls.Add(emailViewerPanel);
+            _middleSplit.Panel1.Controls.Add(emailViewerPanel);
 
             // --- Middle-Bottom: AI Executive Summary ---
             var summaryCard = new Panel
@@ -592,9 +593,9 @@ namespace EmailSummarizer.UI.Tabs
 
             summaryCard.Controls.Add(_txtSummary);
             summaryCard.Controls.Add(summaryHeader);
-            middleSplit.Panel2.Controls.Add(summaryCard);
+            _middleSplit.Panel2.Controls.Add(summaryCard);
 
-            _mainSplit.Panel1.Controls.Add(middleSplit);
+            _mainSplit.Panel1.Controls.Add(_middleSplit);
 
             // --- RIGHT PANEL: Grouped Inbox Email List ---
             var rightListPanel = new Panel
@@ -627,11 +628,7 @@ namespace EmailSummarizer.UI.Tabs
                 ShowGroups = true,
                 MultiSelect = true
             };
-            _lvEmails.Columns.Add("⚡", 44);
-            _lvEmails.Columns.Add("Subject", 190);
-            _lvEmails.Columns.Add("Account", 95);
-            _lvEmails.Columns.Add("From", 120);
-            _lvEmails.Columns.Add("Date", 85);
+            SetupListViewColumns();
             _lvEmails.ItemSelectionChanged += OnEmailItemSelectionChanged;
             _lvEmails.SelectedIndexChanged += OnEmailSelected;
 
@@ -658,8 +655,56 @@ namespace EmailSummarizer.UI.Tabs
             this.Controls.Add(_mainSplit);
             this.Controls.Add(_topPanel);
 
-            this.Load += (s, e) => AdjustSplitter();
+            this.Load += (s, e) => 
+            {
+                ApplyAiModeLayout();
+                AdjustSplitter();
+            };
             this.Resize += (s, e) => AdjustSplitter();
+        }
+
+        public void SetupListViewColumns()
+        {
+            _lvEmails.BeginUpdate();
+            _lvEmails.Columns.Clear();
+            if (!_configService.Settings.IsAiDisabled)
+            {
+                _lvEmails.Columns.Add("⚡", 44);
+                _lvEmails.Columns.Add("Subject", 190);
+            }
+            else
+            {
+                _lvEmails.Columns.Add("Subject", 234);
+            }
+            _lvEmails.Columns.Add("Account", 95);
+            _lvEmails.Columns.Add("From", 120);
+            _lvEmails.Columns.Add("Date", 85);
+            _lvEmails.EndUpdate();
+        }
+
+        public void ApplyAiModeLayout()
+        {
+            if (this.IsDisposed) return;
+
+            bool isAiDisabled = _configService.Settings.IsAiDisabled;
+
+            if (_middleSplit != null)
+            {
+                _middleSplit.Panel2Collapsed = isAiDisabled;
+            }
+
+            SetupListViewColumns();
+
+            if (this.IsHandleCreated)
+            {
+                PopulateListView();
+
+                var current = GetCurrentPreviewEmail();
+                if (current != null)
+                {
+                    DisplayEmail(current);
+                }
+            }
         }
 
         private void AdjustSplitter()
@@ -762,10 +807,22 @@ namespace EmailSummarizer.UI.Tabs
             PopulateListView();
 
             int unreadCount = _emails.Count(e => !e.IsRead);
-            string backendType = _configService.Settings.AiBackend;
-            string status = string.Equals(backendType, "LlamaCpp", StringComparison.OrdinalIgnoreCase) 
-                ? (_configService.Settings.InstantVramUnload ? "VRAM Free" : "Model Loaded in VRAM") 
-                : (string.Equals(backendType, "Ollama", StringComparison.OrdinalIgnoreCase) ? "Ollama Active" : "Cloud Active");
+            string status;
+            if (_configService.Settings.IsBatterySaverActive)
+            {
+                status = "Battery Saver (No AI)";
+            }
+            else if (_configService.Settings.IsAiDisabled)
+            {
+                status = "AI Disabled";
+            }
+            else
+            {
+                string backendType = _configService.Settings.AiBackend;
+                status = string.Equals(backendType, "LlamaCpp", StringComparison.OrdinalIgnoreCase) 
+                    ? (_configService.Settings.InstantVramUnload ? "VRAM Free" : "Model Loaded in VRAM") 
+                    : (string.Equals(backendType, "Ollama", StringComparison.OrdinalIgnoreCase) ? "Ollama Active" : "Cloud Active");
+            }
 
             string metric = folder == MailFolderType.Inbox
                 ? $"Ready • {_emails.Count} emails in inbox ({unreadCount} unread)"
@@ -844,9 +901,9 @@ namespace EmailSummarizer.UI.Tabs
 
             try
             {
-                // 1. Launch LLM Server in parallel background task ONLY if using local llama.cpp
+                // 1. Launch LLM Server in parallel background task ONLY if using local llama.cpp and AI is enabled
                 Task<bool>? serverTask = null;
-                if (string.Equals(settings.AiBackend, "LlamaCpp", StringComparison.OrdinalIgnoreCase) && settings.AutoStartLlamaServer)
+                if (!settings.IsAiDisabled && string.Equals(settings.AiBackend, "LlamaCpp", StringComparison.OrdinalIgnoreCase) && settings.AutoStartLlamaServer)
                 {
                     serverTask = _llamaManager.StartAsync(
                         settings.LlamaModelPath,
@@ -914,7 +971,7 @@ namespace EmailSummarizer.UI.Tabs
                             }
                             catch { }
 
-                            if (!emailItem.IsRead && folderToFetch == MailFolderType.Inbox)
+                            if (!settings.IsAiDisabled && !emailItem.IsRead && folderToFetch == MailFolderType.Inbox)
                             {
                                 activeSummaryTasks.Add(SummarizeUnreadEmailInBackgroundAsync(emailItem, settings, serverTask, ct));
                             }
@@ -938,29 +995,32 @@ namespace EmailSummarizer.UI.Tabs
                     int unreadCount = _emails.Count(e => !e.IsRead);
                     _logger.Report($"[✓] {folderName} sync complete. Loaded {_emails.Count} total email(s) ({unreadCount} unread).");
 
-                    string metricMsg = (folderToFetch == MailFolderType.Inbox)
-                        ? $"Ready • {_emails.Count} emails in inbox ({unreadCount} unread)"
-                        : $"Ready • {_emails.Count} emails in {folderName}";
-
-                    // Handle Instant VRAM Unload setting after entire batch is fetched & summarized
-                    if (string.Equals(settings.AiBackend, "LlamaCpp", StringComparison.OrdinalIgnoreCase) && settings.AutoStartLlamaServer)
+                    if (!settings.IsAiDisabled && string.Equals(settings.AiBackend, "LlamaCpp", StringComparison.OrdinalIgnoreCase) && settings.AutoStartLlamaServer)
                     {
                         if (settings.InstantVramUnload)
                         {
                             _llamaManager.Stop(_logger);
-                            StatusUpdated?.Invoke(metricMsg, "VRAM Free");
+                            StatusUpdated?.Invoke("Sync complete", "VRAM Free");
                         }
                         else
                         {
-                            StatusUpdated?.Invoke(metricMsg, "Model Loaded in VRAM");
+                            StatusUpdated?.Invoke("Sync complete", "Model Loaded in VRAM");
                         }
+                    }
+                    else if (settings.IsBatterySaverActive)
+                    {
+                        StatusUpdated?.Invoke("Sync complete", "Battery Saver (No AI)");
+                    }
+                    else if (settings.IsAiDisabled)
+                    {
+                        StatusUpdated?.Invoke("Sync complete", "AI Disabled");
                     }
                     else
                     {
                         string backendMetric = string.Equals(settings.AiBackend, "Ollama", StringComparison.OrdinalIgnoreCase) 
                             ? "Ollama Active" 
                             : "Cloud Active";
-                        StatusUpdated?.Invoke(metricMsg, backendMetric);
+                        StatusUpdated?.Invoke("Sync complete", backendMetric);
                     }
                 }
             }
@@ -1059,6 +1119,55 @@ namespace EmailSummarizer.UI.Tabs
 
         private ListViewItem CreateListViewItemForEmail(EmailItem email, ListViewGroup group)
         {
+            string subjectPrefix = email.IsArchived ? "📥 " : (email.IsRead ? "" : "● ");
+            if (email.HasAttachments) subjectPrefix += "📎 ";
+
+            bool isAiDisabled = _configService.Settings.IsAiDisabled;
+
+            if (isAiDisabled)
+            {
+                var item = new ListViewItem(subjectPrefix + email.Subject, group)
+                {
+                    UseItemStyleForSubItems = false,
+                    Tag = email
+                };
+
+                var subAccount = item.SubItems.Add(email.AccountName);
+                var subSender = item.SubItems.Add(email.Sender);
+                var subDate = item.SubItems.Add(email.DateString);
+
+                if (email.IsArchived)
+                {
+                    var archivedColor = Color.FromArgb(150, 155, 165);
+                    var regFont = new Font("Segoe UI", 8.75F, FontStyle.Regular);
+                    item.ForeColor = archivedColor; item.Font = regFont;
+                    subAccount.ForeColor = archivedColor; subAccount.Font = regFont;
+                    subSender.ForeColor = archivedColor; subSender.Font = regFont;
+                    subDate.ForeColor = archivedColor; subDate.Font = regFont;
+                }
+                else if (email.IsRead)
+                {
+                    var readColor = Color.FromArgb(130, 135, 145);
+                    var regFont = new Font("Segoe UI", 8.75F, FontStyle.Regular);
+                    item.ForeColor = readColor; item.Font = regFont;
+                    subAccount.ForeColor = readColor; subAccount.Font = regFont;
+                    subSender.ForeColor = readColor; subSender.Font = regFont;
+                    subDate.ForeColor = readColor; subDate.Font = regFont;
+                }
+                else
+                {
+                    var unreadColor = Color.FromArgb(15, 15, 15);
+                    var boldFont = new Font("Segoe UI", 9F, FontStyle.Bold);
+                    var regFont = new Font("Segoe UI", 8.75F, FontStyle.Regular);
+                    item.ForeColor = unreadColor; item.Font = boldFont;
+                    subAccount.ForeColor = Color.FromArgb(70, 75, 85); subAccount.Font = regFont;
+                    subSender.ForeColor = Color.FromArgb(60, 65, 75); subSender.Font = regFont;
+                    subDate.ForeColor = Color.FromArgb(90, 95, 105); subDate.Font = regFont;
+                }
+
+                return item;
+            }
+
             string priText;
             Color priColor;
             Font priFont;
@@ -1092,7 +1201,7 @@ namespace EmailSummarizer.UI.Tabs
                 priFont = new Font("Segoe UI", 8.5F, FontStyle.Regular);
             }
 
-            var item = new ListViewItem(priText, group)
+            var itemNormal = new ListViewItem(priText, group)
             {
                 UseItemStyleForSubItems = false,
                 Tag = email,
@@ -1100,30 +1209,28 @@ namespace EmailSummarizer.UI.Tabs
                 Font = priFont
             };
 
-            string subjectPrefix = email.IsArchived ? "📥 " : (email.IsRead ? "" : "● ");
-            if (email.HasAttachments) subjectPrefix += "📎 ";
-            var subSubject = item.SubItems.Add(subjectPrefix + email.Subject);
-            var subAccount = item.SubItems.Add(email.AccountName);
-            var subSender = item.SubItems.Add(email.Sender);
-            var subDate = item.SubItems.Add(email.DateString);
+            var subSubject = itemNormal.SubItems.Add(subjectPrefix + email.Subject);
+            var subAccNormal = itemNormal.SubItems.Add(email.AccountName);
+            var subSendNormal = itemNormal.SubItems.Add(email.Sender);
+            var subDateNormal = itemNormal.SubItems.Add(email.DateString);
 
             if (email.IsArchived)
             {
                 var archivedColor = Color.FromArgb(150, 155, 165);
                 var regFont = new Font("Segoe UI", 8.75F, FontStyle.Regular);
                 subSubject.ForeColor = archivedColor; subSubject.Font = regFont;
-                subAccount.ForeColor = archivedColor; subAccount.Font = regFont;
-                subSender.ForeColor = archivedColor; subSender.Font = regFont;
-                subDate.ForeColor = archivedColor; subDate.Font = regFont;
+                subAccNormal.ForeColor = archivedColor; subAccNormal.Font = regFont;
+                subSendNormal.ForeColor = archivedColor; subSendNormal.Font = regFont;
+                subDateNormal.ForeColor = archivedColor; subDateNormal.Font = regFont;
             }
             else if (email.IsRead)
             {
                 var readColor = Color.FromArgb(130, 135, 145);
                 var regFont = new Font("Segoe UI", 8.75F, FontStyle.Regular);
                 subSubject.ForeColor = readColor; subSubject.Font = regFont;
-                subAccount.ForeColor = readColor; subAccount.Font = regFont;
-                subSender.ForeColor = readColor; subSender.Font = regFont;
-                subDate.ForeColor = readColor; subDate.Font = regFont;
+                subAccNormal.ForeColor = readColor; subAccNormal.Font = regFont;
+                subSendNormal.ForeColor = readColor; subSendNormal.Font = regFont;
+                subDateNormal.ForeColor = readColor; subDateNormal.Font = regFont;
             }
             else
             {
@@ -1131,12 +1238,12 @@ namespace EmailSummarizer.UI.Tabs
                 var boldFont = new Font("Segoe UI", 9F, FontStyle.Bold);
                 var regFont = new Font("Segoe UI", 8.75F, FontStyle.Regular);
                 subSubject.ForeColor = unreadColor; subSubject.Font = boldFont;
-                subAccount.ForeColor = Color.FromArgb(70, 75, 85); subAccount.Font = regFont;
-                subSender.ForeColor = Color.FromArgb(60, 65, 75); subSender.Font = regFont;
-                subDate.ForeColor = Color.FromArgb(90, 95, 105); subDate.Font = regFont;
+                subAccNormal.ForeColor = Color.FromArgb(70, 75, 85); subAccNormal.Font = regFont;
+                subSendNormal.ForeColor = Color.FromArgb(60, 65, 75); subSendNormal.Font = regFont;
+                subDateNormal.ForeColor = Color.FromArgb(90, 95, 105); subDateNormal.Font = regFont;
             }
 
-            return item;
+            return itemNormal;
         }
 
         private void AddEmailItemToListView(EmailItem email)
@@ -1340,6 +1447,12 @@ namespace EmailSummarizer.UI.Tabs
                 return;
             }
 
+            // If AI is disabled, do not run summarization or start LLM servers
+            if (_configService.Settings.IsAiDisabled)
+            {
+                return;
+            }
+
             if (string.IsNullOrWhiteSpace(email.Summary) || 
                 email.Summary.Contains("Loading model", StringComparison.OrdinalIgnoreCase) ||
                 email.Summary.StartsWith("(LLM Error", StringComparison.OrdinalIgnoreCase) ||
@@ -1414,7 +1527,7 @@ namespace EmailSummarizer.UI.Tabs
             string readTag = email.IsRead ? "[Read]" : "[Unread]";
             if (email.IsArchived) readTag = "[Archived] • " + readTag;
 
-            string priTag = email.Priority.HasValue
+            string priTag = (!_configService.Settings.IsAiDisabled && email.Priority.HasValue)
                 ? $"   •   Priority: {email.Priority.Value} ({(email.Priority.Value == 1 ? "High" : email.Priority.Value == 2 ? "Normal" : "Low")})"
                 : "";
 
@@ -1430,16 +1543,19 @@ namespace EmailSummarizer.UI.Tabs
             }
             catch { }
 
-            string summaryText = string.IsNullOrWhiteSpace(email.Summary) 
-                ? "✨ Generating AI summary for this email..." 
-                : email.Summary;
-
-            if (email.IsArchived && !summaryText.StartsWith("📥 ", StringComparison.OrdinalIgnoreCase) && !summaryText.StartsWith("[Archived] ", StringComparison.OrdinalIgnoreCase))
+            if (!_configService.Settings.IsAiDisabled)
             {
-                summaryText = "📥 " + summaryText;
-            }
+                string summaryText = string.IsNullOrWhiteSpace(email.Summary) 
+                    ? "✨ Generating AI summary for this email..." 
+                    : email.Summary;
 
-            _txtSummary.Text = summaryText;
+                if (email.IsArchived && !summaryText.StartsWith("📥 ", StringComparison.OrdinalIgnoreCase) && !summaryText.StartsWith("[Archived] ", StringComparison.OrdinalIgnoreCase))
+                {
+                    summaryText = "📥 " + summaryText;
+                }
+
+                _txtSummary.Text = summaryText;
+            }
 
             if (!string.IsNullOrWhiteSpace(email.DisplayRtf))
             {
@@ -1562,58 +1678,88 @@ namespace EmailSummarizer.UI.Tabs
         {
             if (this.IsDisposed || !this.IsHandleCreated) return;
 
+            bool isAiDisabled = _configService.Settings.IsAiDisabled;
+
             foreach (ListViewItem item in _lvEmails.Items)
             {
                 if (item.Tag == email)
                 {
-                    if (email.Priority.HasValue)
-                    {
-                        switch (email.Priority.Value)
-                        {
-                            case 1:
-                                item.Text = " 1 ";
-                                item.ForeColor = Color.FromArgb(215, 30, 30);
-                                item.Font = new Font("Segoe UI", 9.5F, FontStyle.Bold);
-                                break;
-                            case 2:
-                                item.Text = " 2 ";
-                                item.ForeColor = Color.FromArgb(0, 102, 204);
-                                item.Font = new Font("Segoe UI", 9.5F, FontStyle.Bold);
-                                break;
-                            case 3:
-                            default:
-                                item.Text = " 3 ";
-                                item.ForeColor = Color.FromArgb(115, 120, 130);
-                                item.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
-                                break;
-                        }
-                    }
-                    else
-                    {
-                        item.Text = email.Status == SummaryState.Summarizing ? "⏳" : "-";
-                        item.ForeColor = Color.FromArgb(160, 165, 175);
-                        item.Font = new Font("Segoe UI", 8.5F, FontStyle.Regular);
-                    }
+                    string subjectPrefix = email.IsArchived ? "📥 " : (email.IsRead ? "" : "● ");
+                    if (email.HasAttachments) subjectPrefix += "📎 ";
 
-                    if (item.SubItems.Count > 1)
+                    if (isAiDisabled)
                     {
-                        string subjectPrefix = email.IsArchived ? "📥 " : (email.IsRead ? "" : "● ");
-                        item.SubItems[1].Text = subjectPrefix + email.Subject;
-
+                        item.Text = subjectPrefix + email.Subject;
                         if (email.IsArchived)
                         {
-                            item.SubItems[1].ForeColor = Color.FromArgb(150, 155, 165);
-                            item.SubItems[1].Font = new Font("Segoe UI", 8.75F, FontStyle.Regular);
+                            item.ForeColor = Color.FromArgb(150, 155, 165);
+                            item.Font = new Font("Segoe UI", 8.75F, FontStyle.Regular);
                         }
                         else if (email.IsRead)
                         {
-                            item.SubItems[1].ForeColor = Color.FromArgb(130, 135, 145);
-                            item.SubItems[1].Font = new Font("Segoe UI", 8.75F, FontStyle.Regular);
+                            item.ForeColor = Color.FromArgb(130, 135, 145);
+                            item.Font = new Font("Segoe UI", 8.75F, FontStyle.Regular);
                         }
                         else
                         {
-                            item.SubItems[1].ForeColor = Color.FromArgb(15, 15, 15);
-                            item.SubItems[1].Font = new Font("Segoe UI", 9F, FontStyle.Bold);
+                            item.ForeColor = Color.FromArgb(15, 15, 15);
+                            item.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
+                        }
+
+                        if (item.SubItems.Count > 1) item.SubItems[1].Text = email.AccountName;
+                        if (item.SubItems.Count > 2) item.SubItems[2].Text = email.Sender;
+                        if (item.SubItems.Count > 3) item.SubItems[3].Text = email.DateString;
+                    }
+                    else
+                    {
+                        if (email.Priority.HasValue)
+                        {
+                            switch (email.Priority.Value)
+                            {
+                                case 1:
+                                    item.Text = " 1 ";
+                                    item.ForeColor = Color.FromArgb(215, 30, 30);
+                                    item.Font = new Font("Segoe UI", 9.5F, FontStyle.Bold);
+                                    break;
+                                case 2:
+                                    item.Text = " 2 ";
+                                    item.ForeColor = Color.FromArgb(0, 102, 204);
+                                    item.Font = new Font("Segoe UI", 9.5F, FontStyle.Bold);
+                                    break;
+                                case 3:
+                                default:
+                                    item.Text = " 3 ";
+                                    item.ForeColor = Color.FromArgb(115, 120, 130);
+                                    item.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
+                                    break;
+                            }
+                        }
+                        else
+                        {
+                            item.Text = email.Status == SummaryState.Summarizing ? "⏳" : "-";
+                            item.ForeColor = Color.FromArgb(160, 165, 175);
+                            item.Font = new Font("Segoe UI", 8.5F, FontStyle.Regular);
+                        }
+
+                        if (item.SubItems.Count > 1)
+                        {
+                            item.SubItems[1].Text = subjectPrefix + email.Subject;
+
+                            if (email.IsArchived)
+                            {
+                                item.SubItems[1].ForeColor = Color.FromArgb(150, 155, 165);
+                                item.SubItems[1].Font = new Font("Segoe UI", 8.75F, FontStyle.Regular);
+                            }
+                            else if (email.IsRead)
+                            {
+                                item.SubItems[1].ForeColor = Color.FromArgb(130, 135, 145);
+                                item.SubItems[1].Font = new Font("Segoe UI", 8.75F, FontStyle.Regular);
+                            }
+                            else
+                            {
+                                item.SubItems[1].ForeColor = Color.FromArgb(15, 15, 15);
+                                item.SubItems[1].Font = new Font("Segoe UI", 9F, FontStyle.Bold);
+                            }
                         }
                     }
                     break;
@@ -2332,15 +2478,31 @@ namespace EmailSummarizer.UI.Tabs
 
         private string GetToolTipTextForCell(EmailItem email, int colIndex, int screenWidth)
         {
-            string raw = colIndex switch
+            bool isAiDisabled = _configService.Settings.IsAiDisabled;
+            string raw;
+            if (isAiDisabled)
             {
-                0 => GetPriorityToolTipText(email),
-                1 => string.IsNullOrWhiteSpace(email.Subject) ? "(No Subject)" : email.Subject.Trim(),
-                2 => GetAccountToolTipText(email),
-                3 => string.IsNullOrWhiteSpace(email.Sender) ? "(Unknown Sender)" : email.Sender.Trim(),
-                4 => GetDateToolTipText(email),
-                _ => string.Empty
-            };
+                raw = colIndex switch
+                {
+                    0 => string.IsNullOrWhiteSpace(email.Subject) ? "(No Subject)" : email.Subject.Trim(),
+                    1 => GetAccountToolTipText(email),
+                    2 => string.IsNullOrWhiteSpace(email.Sender) ? "(Unknown Sender)" : email.Sender.Trim(),
+                    3 => GetDateToolTipText(email),
+                    _ => string.Empty
+                };
+            }
+            else
+            {
+                raw = colIndex switch
+                {
+                    0 => GetPriorityToolTipText(email),
+                    1 => string.IsNullOrWhiteSpace(email.Subject) ? "(No Subject)" : email.Subject.Trim(),
+                    2 => GetAccountToolTipText(email),
+                    3 => string.IsNullOrWhiteSpace(email.Sender) ? "(Unknown Sender)" : email.Sender.Trim(),
+                    4 => GetDateToolTipText(email),
+                    _ => string.Empty
+                };
+            }
             return WrapTextForToolTip(raw, screenWidth);
         }
 
