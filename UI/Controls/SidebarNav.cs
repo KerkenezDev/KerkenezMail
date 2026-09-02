@@ -1,4 +1,5 @@
 using System;
+using System.ComponentModel;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Windows.Forms;
@@ -86,6 +87,7 @@ namespace EmailSummarizer.UI.Controls
         private readonly Color _accentColor = Color.FromArgb(0, 120, 215);
         private readonly Color _borderColor = Color.FromArgb(218, 222, 228);
 
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public int SelectedIndex
         {
             get => _selectedIndex;
@@ -100,6 +102,7 @@ namespace EmailSummarizer.UI.Controls
             }
         }
 
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public MailFolderType SelectedFolder
         {
             get => _selectedFolder;
@@ -113,6 +116,7 @@ namespace EmailSummarizer.UI.Controls
             }
         }
 
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public bool IsInboxExpanded
         {
             get => _isInboxExpanded;
@@ -126,6 +130,7 @@ namespace EmailSummarizer.UI.Controls
             }
         }
 
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public bool IsCollapsed
         {
             get => _isCollapsed;
