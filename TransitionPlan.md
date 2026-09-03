@@ -52,8 +52,9 @@ flowchart LR
 ### The Rebranding Scope
 * **Application Binary & Executable Name:** `KerkenezMail.exe`
 * **Application Title & Branding:** `Kerkenez Mail (Win32)` / `Kerkenez Mail`
-* **Roaming AppData Directory:** `%APPDATA%\KerkenezMail`
-* **DPAPI Cryptographic Entropies:** `KerkenezMail.SecureAccounts.v1` & `KerkenezMail.SecureSecrets.v1`
+* **Kerkenez Suite Shared AppData Directory:** `%APPDATA%\Kerkenez\` (shared suite root; holds `accounts.dat` shared with **KerkenezCalendar**)
+* **Kerkenez Mail AppData Directory:** `%APPDATA%\Kerkenez\mail\` (holds mail-specific `config.json`, logs, and cache)
+* **DPAPI Cryptographic Entropies:** `Kerkenez.SecureAccounts.v1` (shared suite entropy for `accounts.dat`) & `KerkenezMail.SecureSecrets.v1` (mail app secrets)
 * **Windows Registry Uninstall Key:** `HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\KerkenezMail`
 * **Windows Logon Startup Run Key:** `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\KerkenezMailTray`
 * **Windows Kernel Mutexes & Events:** `Global\KerkenezMail_MainUI_Mutex`, `Global\KerkenezMail_TrayDaemon_Mutex`, `Global\KerkenezMail_TrayDaemon_ExitEvent`
@@ -68,7 +69,7 @@ flowchart LR
 1. **Stage 1: Release `v0.5.0-bridge` under the OLD WinGet Identifier (`ismlEraslan.EmailSummarizer`)**
    - Published as version `0.5.0`.
    - Embeds the comprehensive, fault-tolerant `MigrationService` that carries out the entire state migration on the user's machine automatically upon first launch.
-   - Migrates encrypted accounts, preferences, registry keys, and shortcuts to the new `KerkenezMail` locations.
+   - Migrates encrypted accounts to the shared `%APPDATA%\Kerkenez\accounts.dat`, preferences to `%APPDATA%\Kerkenez\mail\config.json`, and updates registry keys and shortcuts.
    - Displays a persistent, informative Rebranding Modal & Banner at startup informing users of the rebranding and providing one-click instructions to switch their WinGet package to `ismlEraslan.KerkenezMail`.
 2. **Stage 2: Official Launch of `Kerkenez Mail v1.0.0`**
    - Target Version: `v1.0.0`
@@ -89,13 +90,14 @@ flowchart LR
 
 ### 2.2 Data Persistence & DPAPI Cryptography
 * **`ConfigService.cs`**:
-  * Stores settings in `%APPDATA%\EmailSummarizer\config.json`.
+  * Legacy: Stored settings in `%APPDATA%\EmailSummarizer\config.json` and `%APPDATA%\EmailSummarizer\accounts.dat`.
+  * Target: Decoupled into shared suite accounts (`%APPDATA%\Kerkenez\accounts.dat` shared with **KerkenezCalendar**) and mail app config (`%APPDATA%\Kerkenez\mail\config.json`).
   * Manages account IDs and general preferences.
   * Contains legacy plain-text migration routines for backward compatibility.
 * **`AccountCryptoService.cs`**:
   * Windows DPAPI encryption (`ProtectedData.Protect` / `ProtectedData.Unprotect`) with `DataProtectionScope.CurrentUser`.
-  * Encrypts `accounts.dat` using application entropy.
-  * Encrypts `CloudApiKeyEncrypted` in `config.json`.
+  * Encrypts shared `accounts.dat` using suite-level entropy (`Kerkenez.SecureAccounts.v1`), allowing seamless access across Kerkenez suite applications (Kerkenez Mail, KerkenezCalendar).
+  * Encrypts mail-specific `CloudApiKeyEncrypted` in `config.json` using `KerkenezMail.SecureSecrets.v1`.
   * Atomic file writes using temporary file swap (`.tmp` $\rightarrow$ rename).
 * **`AppSettings.cs`**:
   * Strongly typed configuration model (LLM backend parameters, inference options, display scaling, email fetching limits, system prompt).
@@ -146,12 +148,13 @@ flowchart LR
 
 | Subsystem / Area | Current Legacy Value | Target Kerkenez Mail Value |
 | :--- | :--- | :--- |
-| **AppData Directory** | `%APPDATA%\EmailSummarizer` | `%APPDATA%\KerkenezMail` |
-| **Config File** | `%APPDATA%\EmailSummarizer\config.json` | `%APPDATA%\KerkenezMail\config.json` |
-| **Accounts Storage** | `%APPDATA%\EmailSummarizer\accounts.dat` | `%APPDATA%\KerkenezMail\accounts.dat` |
+| **Shared Suite Directory** | `%APPDATA%\EmailSummarizer` | `%APPDATA%\Kerkenez` (shared across Kerkenez suite) |
+| **Mail AppData Directory** | `%APPDATA%\EmailSummarizer` | `%APPDATA%\Kerkenez\mail` |
+| **Config File** | `%APPDATA%\EmailSummarizer\config.json` | `%APPDATA%\Kerkenez\mail\config.json` |
+| **Accounts Storage** | `%APPDATA%\EmailSummarizer\accounts.dat` | `%APPDATA%\Kerkenez\accounts.dat` *(Shared with KerkenezCalendar)* |
 | **Registry Uninstall Key** | `HKCU\...\Uninstall\EmailSummarizer` | `HKCU\...\Uninstall\KerkenezMail` |
 | **Registry Run Key Value** | `EmailSummarizerTray` | `KerkenezMailTray` |
-| **DPAPI Accounts Entropy** | `EmailSummarizer.SecureAccounts.v1` | `KerkenezMail.SecureAccounts.v1` |
+| **DPAPI Accounts Entropy** | `EmailSummarizer.SecureAccounts.v1` | `Kerkenez.SecureAccounts.v1` *(Shared suite entropy)* |
 | **DPAPI Secrets Entropy** | `EmailSummarizer.SecureSecrets.v1` | `KerkenezMail.SecureSecrets.v1` |
 | **Main UI Mutex** | `Global\EmailSummarizer_MainUI_Mutex` | `Global\KerkenezMail_MainUI_Mutex` |
 | **Tray Daemon Mutex** | `Global\EmailSummarizer_TrayDaemon_Mutex` | `Global\KerkenezMail_TrayDaemon_Mutex` |
@@ -186,17 +189,31 @@ public static class MigrationService
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
         "EmailSummarizer");
 
-    public static readonly string NewAppDataFolder = Path.Combine(
+    public static readonly string SharedKerkenezFolder = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-        "KerkenezMail");
+        "Kerkenez");
+
+    public static readonly string MailAppDataFolder = Path.Combine(
+        SharedKerkenezFolder,
+        "mail");
+
+    public static readonly string SharedAccountsFilePath = Path.Combine(
+        SharedKerkenezFolder,
+        "accounts.dat");
+
+    public static readonly string MailConfigFilePath = Path.Combine(
+        MailAppDataFolder,
+        "config.json");
 
     public static MigrationResult ExecuteMigrationIfNeeded()
     {
         // 1. Stop legacy daemon if active
-        // 2. Migrate and re-encrypt AppData files
-        // 3. Migrate Windows Registry entries (Uninstall & Run)
-        // 4. Migrate Desktop and Start Menu shortcuts
-        // 5. Verify integrity before deleting legacy directory
+        // 2. Ensure directories %APPDATA%\Kerkenez and %APPDATA%\Kerkenez\mail exist
+        // 3. Migrate and re-encrypt accounts.dat -> %APPDATA%\Kerkenez\accounts.dat (shared with KerkenezCalendar)
+        // 4. Migrate and re-encrypt config.json -> %APPDATA%\Kerkenez\mail\config.json
+        // 5. Migrate Windows Registry entries (Uninstall & Run)
+        // 6. Migrate Desktop and Start Menu shortcuts
+        // 7. Verify integrity before deleting legacy directory
     }
 }
 ```
@@ -208,24 +225,33 @@ sequenceDiagram
     participant OldDir as %APPDATA%\EmailSummarizer
     participant Migrator as MigrationService
     participant DPAPI as Windows DPAPI
-    participant NewDir as %APPDATA%\KerkenezMail
+    participant SharedDir as %APPDATA%\Kerkenez (Shared)
+    participant MailDir as %APPDATA%\Kerkenez\mail
 
+    Note over SharedDir: Shared with KerkenezCalendar
     Migrator->>OldDir: Read accounts.dat (binary)
     Migrator->>DPAPI: Unprotect with Legacy Entropy ("EmailSummarizer.SecureAccounts.v1")
     DPAPI-->>Migrator: Plaintext JSON (EmailAccount List)
     Migrator->>Migrator: Validate JSON Structure
-    Migrator->>DPAPI: Protect with New Entropy ("KerkenezMail.SecureAccounts.v1")
+    Migrator->>DPAPI: Protect with Suite Entropy ("Kerkenez.SecureAccounts.v1")
     DPAPI-->>Migrator: New Ciphertext Binary
-    Migrator->>NewDir: Write accounts.dat.tmp -> Move to accounts.dat
-    Migrator->>NewDir: Verify Decryption with New Entropy
+    Migrator->>SharedDir: Write accounts.dat.tmp -> Move to accounts.dat
+    Migrator->>SharedDir: Verify Decryption with Suite Entropy
+
+    Migrator->>OldDir: Read config.json
+    Migrator->>Migrator: Re-encrypt CloudApiKey if present ("KerkenezMail.SecureSecrets.v1")
+    Migrator->>MailDir: Write config.json
+    Migrator->>MailDir: Verify config.json parsing
     Migrator->>OldDir: Delete %APPDATA%\EmailSummarizer
 ```
 
 ### 4.4 Roaming AppData Atomic Cutover & Verification Protocol
-1. `%APPDATA%\KerkenezMail` is created.
-2. `accounts.dat` and `config.json` are decrypted using legacy entropy and re-encrypted using new entropy.
-3. Newly written files are test-decrypted and validated in memory.
-4. **Safety Guarantee:** If and only if verification passes 100%, `%APPDATA%\EmailSummarizer` is cleanly deleted. If any verification step fails, the legacy directory is preserved as a backup.
+1. `%APPDATA%\Kerkenez` and `%APPDATA%\Kerkenez\mail` directories are created.
+2. `accounts.dat` is decrypted using legacy entropy (`EmailSummarizer.SecureAccounts.v1`) and re-encrypted using the shared suite entropy (`Kerkenez.SecureAccounts.v1`), then saved to `%APPDATA%\Kerkenez\accounts.dat` to allow **KerkenezCalendar** and Kerkenez Mail to share accounts.
+   - *Coexistence Guard:* If `%APPDATA%\Kerkenez\accounts.dat` already exists (e.g., KerkenezCalendar was configured first), `MigrationService` parses both account sets and merges any missing legacy accounts non-destructively.
+3. `config.json` is migrated and re-encrypted (for cloud API keys) and written to `%APPDATA%\Kerkenez\mail\config.json`.
+4. Newly written files are test-decrypted and validated in memory.
+5. **Safety Guarantee:** If and only if verification passes 100%, `%APPDATA%\EmailSummarizer` is cleanly deleted. If any verification step fails, the legacy directory is preserved as a backup.
 
 ### 4.5 Windows Registry & Startup Run Key Seamless Migration
 1. **Uninstall Key:**
@@ -245,8 +271,9 @@ On boot of `v0.5.0-bridge`, `MainForm` presents an informative modal / banner:
 ```
 +---------------------------------------------------------------------------------------+
 | ⚠️ REBRANDING NOTICE: Email Summarizer is now Kerkenez Mail!                           |
-| All your accounts, settings, and encryption keys have been safely migrated to:        |
-| %APPDATA%\KerkenezMail                                                                |
+| All your accounts and settings have been safely migrated to:                          |
+| • Shared Accounts: %APPDATA%\Kerkenez\accounts.dat (Shared with KerkenezCalendar)     |
+| • Mail Config:     %APPDATA%\Kerkenez\mail\config.json                                |
 |                                                                                       |
 | To continue receiving future updates, please install the official Kerkenez Mail:      |
 | > winget install ismlEraslan.KerkenezMail                                             |
@@ -260,7 +287,8 @@ Executing `EmailSummarizer.exe --uninstall` on the bridge release cleans up:
 - Both `KerkenezMail` and `EmailSummarizer` registry uninstall entries.
 - Both `KerkenezMailTray` and `EmailSummarizerTray` startup run entries.
 - Both `Kerkenez Mail.lnk` and `Email Summarizer.lnk` shortcuts.
-- Both `%APPDATA%\KerkenezMail` and `%APPDATA%\EmailSummarizer` directories.
+- `%APPDATA%\Kerkenez\mail` and legacy `%APPDATA%\EmailSummarizer` directories.
+- *Shared Directory Protection:* Does **not** blindly delete `%APPDATA%\Kerkenez\accounts.dat` or `%APPDATA%\Kerkenez` if **KerkenezCalendar** is installed on the system (verified via Registry or active calendar installation check). If no other Kerkenez app is present and uninstallation is complete, the user is offered a choice to remove or keep shared accounts.
 
 ### 4.9 Bridge WinGet Manifest for `ismlEraslan.EmailSummarizer`
 - Version: `0.5.0`
@@ -285,8 +313,8 @@ EmailSummerizer/ (Root)
 │   └── EmailItem.cs                       <-- namespace KerkenezMail.Models
 │
 ├── Services/
-│   ├── ConfigService.cs                   <-- %APPDATA%\KerkenezMail
-│   ├── AccountCryptoService.cs            <-- KerkenezMail.Secure* entropy
+│   ├── ConfigService.cs                   <-- %APPDATA%\Kerkenez\mail & %APPDATA%\Kerkenez\accounts.dat
+│   ├── AccountCryptoService.cs            <-- Kerkenez.Secure* suite entropy
 │   ├── MigrationService.cs                <-- Autonomous legacy migration engine
 │   ├── ImapService.cs                     <-- MailKit IMAP engine
 │   ├── LlamaServerManager.cs              <-- llama-server Job Object manager
@@ -312,7 +340,7 @@ EmailSummerizer/ (Root)
 ```
 
 ### 5.2 Permanent Legacy Auto-Import Safeguard in v1.0.0
-Even in `v1.0.0`, `MigrationService.ExecuteMigrationIfNeeded()` runs on first boot. If a user skipped `v0.5.0-bridge` and upgraded directly from `v0.4.x` to `v1.0.0`, their data and registry entries are automatically detected, re-encrypted, and migrated to `%APPDATA%\KerkenezMail`.
+Even in `v1.0.0`, `MigrationService.ExecuteMigrationIfNeeded()` runs on first boot. If a user skipped `v0.5.0-bridge` and upgraded directly from `v0.4.x` to `v1.0.0`, their data and registry entries are automatically detected, re-encrypted, and migrated to `%APPDATA%\Kerkenez\accounts.dat` and `%APPDATA%\Kerkenez\mail\config.json`.
 
 ### 5.3 New WinGet Package Manifest: `ismlEraslan.KerkenezMail`
 - Package Identifier: `ismlEraslan.KerkenezMail`
@@ -370,6 +398,11 @@ gantt
 ## 7. Edge Cases, Safety Guards & Recovery Protocols
 
 * **Zero Data Loss Guarantee:** No legacy files are deleted until newly encrypted files pass structural parsing and test-decryption.
+* **Shared Suite Architecture & KerkenezCalendar Interoperability:**
+  * **Unified Credential Store:** Both Kerkenez Mail and KerkenezCalendar access `%APPDATA%\Kerkenez\accounts.dat`.
+  * **Shared Cryptographic Entropy:** Uses `Kerkenez.SecureAccounts.v1` as entropy for DPAPI `ProtectedData.Protect/Unprotect`, allowing seamless cross-app decryption under the same Windows user session.
+  * **Concurrent File Access:** File read/write operations use `FileShare.ReadWrite` and temporary file swap (`.tmp` $\rightarrow$ atomic rename) to avoid lock contention when both Mail and Calendar daemons or apps are running concurrently.
+  * **Selective Uninstallation Cleanup:** Uninstalling Kerkenez Mail deletes `%APPDATA%\Kerkenez\mail`, but checks if KerkenezCalendar is installed before modifying `%APPDATA%\Kerkenez\accounts.dat` or the shared `%APPDATA%\Kerkenez` folder.
 * **Legacy Daemon Conflict:** Active legacy daemons listening on `Global\EmailSummarizer_TrayDaemon_Mutex` are signaled via `Global\EmailSummarizer_TrayDaemon_ExitEvent` and gracefully shut down before the new daemon starts.
 * **No Admin Elevation Required:** All registry operations target `HKEY_CURRENT_USER` (HKCU) and roaming user profile folders, requiring zero UAC prompts.
 * **Corrupt Data Healing:** If legacy `config.json` is partially corrupt, `HealAndNormalizeSettings()` restores defaults while salvaging valid account IDs.
@@ -380,10 +413,11 @@ gantt
 
 | Test Scenario | Action | Expected Outcome |
 | :--- | :--- | :--- |
-| **Fresh Install (v1.0.0)** | Launch on clean machine | `%APPDATA%\KerkenezMail` created, clean registry registration, zero legacy files. |
-| **Bridge Upgrade (v0.4.x $\rightarrow$ v0.5.0)** | Run v0.5.0 over existing v0.4.x | Data decrypted and re-encrypted into `%APPDATA%\KerkenezMail`, legacy folder removed, rebranding modal shown. |
-| **Direct Upgrade (v0.4.x $\rightarrow$ v1.0.0)** | Run v1.0.0 skipping bridge | Autonomous migration fires on boot, imports all accounts and settings seamlessly. |
-| **Uninstaller Test** | Run `--uninstall` (and `--quiet`) | Cleans all registry keys, shortcuts, and AppData directories for both names. |
+| **Fresh Install (v1.0.0)** | Launch on clean machine | `%APPDATA%\Kerkenez\` and `%APPDATA%\Kerkenez\mail\` created, clean registry registration, zero legacy files. |
+| **Bridge Upgrade (v0.4.x $\rightarrow$ v0.5.0)** | Run v0.5.0 over existing v0.4.x | Accounts decrypted & re-encrypted into `%APPDATA%\Kerkenez\accounts.dat`, config into `%APPDATA%\Kerkenez\mail\config.json`, legacy folder removed, rebranding modal shown. |
+| **Direct Upgrade (v0.4.x $\rightarrow$ v1.0.0)** | Run v1.0.0 skipping bridge | Autonomous migration fires on boot, imports all accounts into `%APPDATA%\Kerkenez\accounts.dat` and settings into `%APPDATA%\Kerkenez\mail\config.json`. |
+| **KerkenezCalendar Coexistence** | Run with KerkenezCalendar already installed | Both apps successfully read/write `%APPDATA%\Kerkenez\accounts.dat` without lock errors; Mail config stays isolated in `%APPDATA%\Kerkenez\mail`. |
+| **Uninstaller Test** | Run `--uninstall` (and `--quiet`) | Cleans mail registry keys, shortcuts, and `%APPDATA%\Kerkenez\mail`. Preserves `%APPDATA%\Kerkenez\accounts.dat` if KerkenezCalendar is present. |
 
 ---
 
