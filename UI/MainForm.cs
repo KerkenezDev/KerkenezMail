@@ -162,7 +162,7 @@ namespace KerkenezMail.UI
 
             _lblMetrics = new ToolStripStatusLabel
             {
-                Text = "Accounts: 0 | VRAM: Model Loaded in VRAM",
+                Text = Lang.Format(StringKeys.StatusAccountsCount, 0, Lang.T(StringKeys.StatusVramFree)),
                 TextAlign = ContentAlignment.MiddleRight,
                 ForeColor = Color.FromArgb(80, 80, 80)
             };
@@ -399,7 +399,9 @@ namespace KerkenezMail.UI
             {
                 string backendType = _configService.Settings.AiBackend;
                 status = string.Equals(backendType, "LlamaCpp", StringComparison.OrdinalIgnoreCase) 
-                    ? (_configService.Settings.InstantVramUnload ? Lang.T(StringKeys.StatusOnDemandVram) : Lang.T(StringKeys.StatusModelLoaded)) 
+                    ? (_llamaManager.IsRunning
+                        ? (_configService.Settings.InstantVramUnload ? Lang.T(StringKeys.StatusOnDemandVram) : Lang.T(StringKeys.StatusModelLoaded))
+                        : Lang.T(StringKeys.StatusVramFree))
                     : (string.Equals(backendType, "Ollama", StringComparison.OrdinalIgnoreCase) ? Lang.T(StringKeys.StatusOllamaActive) : Lang.T(StringKeys.StatusCloudActive));
             }
             _lblMetrics.Text = Lang.Format(StringKeys.StatusAccountsBackend, enabledCount, status);

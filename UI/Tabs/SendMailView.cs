@@ -446,13 +446,20 @@ namespace KerkenezMail.UI.Tabs
 
             _lblDropHint = new Label
             {
-                Text = Lang.T(StringKeys.SendDropHint),
+                Text = "📎 " + Lang.T(StringKeys.SendDropHint),
                 AutoSize = true,
                 Dock = DockStyle.Left,
                 ForeColor = Color.FromArgb(0, 95, 195),
                 Font = new Font("Segoe UI", 9F, FontStyle.Regular),
-                Padding = new Padding(0, (int)(7 * scale), 0, 0)
+                Padding = new Padding(0, (int)(7 * scale), 0, 0),
+                Cursor = Cursors.Hand,
+                AllowDrop = true
             };
+            _lblDropHint.Click += (s, e) => BrowseAttachments();
+            _lblDropHint.DragEnter += OnDropZoneDragEnter;
+            _lblDropHint.DragOver += OnDropZoneDragOver;
+            _lblDropHint.DragLeave += OnDropZoneDragLeave;
+            _lblDropHint.DragDrop += OnDropZoneDragDrop;
 
             _btnBrowseFiles = new Button
             {
@@ -1205,7 +1212,7 @@ namespace KerkenezMail.UI.Tabs
             if (_btnViewPlaintext != null) _btnViewPlaintext.Text = "👁️ " + Lang.T(StringKeys.SendTabPlaintext);
             if (_btnViewHtml != null) _btnViewHtml.Text = "🌐 " + Lang.T(StringKeys.SendTabHtml);
 
-            if (_lblDropHint != null) _lblDropHint.Text = Lang.T(StringKeys.SendDropHint);
+            if (_lblDropHint != null) _lblDropHint.Text = "📎 " + Lang.T(StringKeys.SendDropHint);
             if (_btnBrowseFiles != null) _btnBrowseFiles.Text = Lang.T(StringKeys.SendBrowseFiles);
             if (_txtBodyMarkdown != null) _txtBodyMarkdown.PlaceholderText = Lang.T(StringKeys.SendBodyPlaceholder);
             if (_lblStatusText != null && !_isSending) _lblStatusText.Text = Lang.T(StringKeys.SendStatusHint);

@@ -195,7 +195,7 @@ public sealed class SpanishLanguage : BaseLanguage
         Set(StringKeys.SendTabHtml,                  "Vista previa HTML");
         Set(StringKeys.SendFormatMultipart,          "Markdown (Multiparte Texto + HTML)");
         Set(StringKeys.SendFormatPlaintext,          "Solo texto plano (RFC sin formato)");
-        Set(StringKeys.SendDropHint,                 "Arrastre y suelte adjuntos aquí (o clic en Examinar)");
+        Set(StringKeys.SendDropHint,                 "Adjuntar archivos");
         Set(StringKeys.SendBrowseFiles,              "Examinar archivos...");
         Set(StringKeys.SendAttachmentSummary,        "{0} adjunto(s) ({1} KB)");
         Set(StringKeys.SendStatusHint,               "Listo para redactar. Admite formato Markdown.");
@@ -408,6 +408,7 @@ public sealed class SpanishLanguage : BaseLanguage
         Set(StringKeys.StatusLiveNewEmail,           "IMAP en vivo: Nuevo correo para {0}");
         Set(StringKeys.StatusStartingUp,             "Iniciando...");
         Set(StringKeys.StatusDisabledClassic,        "Desactivado (Correo clásico)");
+        Set(StringKeys.StatusModelLoadFailed,        "No se pudo cargar el modelo");
     }
 }
 ```

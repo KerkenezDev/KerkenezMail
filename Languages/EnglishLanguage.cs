@@ -157,7 +157,7 @@ namespace KerkenezMail.Languages
             Set(StringKeys.SendTabHtml,                  "HTML Preview");
             Set(StringKeys.SendFormatMultipart,          "Markdown (Text + HTML Multipart)");
             Set(StringKeys.SendFormatPlaintext,          "Plaintext Only (Raw RFC Text)");
-            Set(StringKeys.SendDropHint,                 "Drag & drop attachments here (or click Browse to attach files)");
+            Set(StringKeys.SendDropHint,                 "Attach files");
             Set(StringKeys.SendBrowseFiles,              "Browse Files...");
             Set(StringKeys.SendAttachmentSummary,        "{0} attachments ({1} KB)");
             Set(StringKeys.SendStatusHint,               "Ready to compose. Markdown formatting supported.");
@@ -362,6 +362,7 @@ namespace KerkenezMail.Languages
             Set(StringKeys.StatusLiveNewEmail,           "Live IMAP: New email arrived for {0}");
             Set(StringKeys.StatusStartingUp,             "Starting up...");
             Set(StringKeys.StatusDisabledClassic,        "Disabled (Classic Mail)");
+            Set(StringKeys.StatusModelLoadFailed,        "Model could not be loaded");
         }
     }
 }

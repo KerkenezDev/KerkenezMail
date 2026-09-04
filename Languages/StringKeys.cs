@@ -369,5 +369,6 @@ namespace KerkenezMail.Languages
         public const string StatusLiveNewEmail = "Status.LiveNewEmail";
         public const string StatusStartingUp = "Status.StartingUp";
         public const string StatusDisabledClassic = "Status.DisabledClassic";
+        public const string StatusModelLoadFailed = "Status.ModelLoadFailed";
     }
 }

@@ -935,7 +935,9 @@ namespace KerkenezMail.UI.Tabs
             {
                 string backendType = _configService.Settings.AiBackend;
                 status = string.Equals(backendType, "LlamaCpp", StringComparison.OrdinalIgnoreCase) 
-                    ? (_configService.Settings.InstantVramUnload ? Lang.T(StringKeys.StatusVramFree) : Lang.T(StringKeys.StatusModelLoaded)) 
+                    ? (_llamaManager.IsRunning 
+                        ? (_configService.Settings.InstantVramUnload ? Lang.T(StringKeys.StatusVramFree) : Lang.T(StringKeys.StatusModelLoaded))
+                        : Lang.T(StringKeys.StatusVramFree))
                     : (string.Equals(backendType, "Ollama", StringComparison.OrdinalIgnoreCase) ? Lang.T(StringKeys.StatusOllamaActive) : Lang.T(StringKeys.StatusCloudActive));
             }
 
@@ -959,6 +961,24 @@ namespace KerkenezMail.UI.Tabs
             {
                 await FetchAndAutoSummarizeAsync(folder);
             }
+        }
+
+        private static string GetLlamaFailureExplanation(AppSettings settings)
+        {
+            if (string.IsNullOrWhiteSpace(settings.LlamaModelPath))
+            {
+                return "No GGUF model selected. Go to Settings > AI Backend to select a model.";
+            }
+
+            if (!File.Exists(settings.LlamaModelPath))
+            {
+                string fileName = Path.GetFileName(settings.LlamaModelPath);
+                return string.IsNullOrWhiteSpace(fileName)
+                    ? "Model file not found. Please verify the GGUF model path in Settings."
+                    : $"Model file not found ({fileName}). Please verify the GGUF model path in Settings.";
+            }
+
+            return "Could not start llama-server. Please check Live Logs for details.";
         }
 
         public async Task FetchAndAutoSummarizeAsync(MailFolderType? targetFolder = null)
@@ -1017,17 +1037,27 @@ namespace KerkenezMail.UI.Tabs
 
             try
             {
-                // 1. Launch LLM Server in parallel background task ONLY if using local llama.cpp and AI is enabled
+                bool isLlama = string.Equals(settings.AiBackend, "LlamaCpp", StringComparison.OrdinalIgnoreCase);
+                bool hasValidLlamaModel = !string.IsNullOrWhiteSpace(settings.LlamaModelPath) && File.Exists(settings.LlamaModelPath);
+
+                // 1. Launch LLM Server in parallel background task ONLY if using local llama.cpp, AI is enabled, and model file exists
                 Task<bool>? serverTask = null;
-                if (!settings.IsAiDisabled && string.Equals(settings.AiBackend, "LlamaCpp", StringComparison.OrdinalIgnoreCase) && settings.AutoStartLlamaServer)
+                if (!settings.IsAiDisabled && isLlama && settings.AutoStartLlamaServer)
                 {
-                    serverTask = _llamaManager.StartAsync(
-                        settings.LlamaModelPath,
-                        settings.LlamaServerPort,
-                        settings.LlamaGpuLayers,
-                        contextSize: settings.LlamaContextSize,
-                        logger: _logger,
-                        ct: ct);
+                    if (hasValidLlamaModel)
+                    {
+                        serverTask = _llamaManager.StartAsync(
+                            settings.LlamaModelPath,
+                            settings.LlamaServerPort,
+                            settings.LlamaGpuLayers,
+                            contextSize: settings.LlamaContextSize,
+                            logger: _logger,
+                            ct: ct);
+                    }
+                    else
+                    {
+                        _logger.Report("[!] No valid GGUF model configured for llama.cpp. Background summarization skipped.");
+                    }
                 }
 
                 // 2. Concurrently fetch all IMAP accounts in parallel tasks, streaming emails to UI as they arrive!
@@ -1089,7 +1119,15 @@ namespace KerkenezMail.UI.Tabs
 
                             if (!settings.IsAiDisabled && !emailItem.IsRead && folderToFetch == MailFolderType.Inbox)
                             {
-                                activeSummaryTasks.Add(SummarizeUnreadEmailInBackgroundAsync(emailItem, settings, serverTask, ct));
+                                if (isLlama && !hasValidLlamaModel)
+                                {
+                                    emailItem.Status = SummaryState.Failed;
+                                    emailItem.Summary = GetLlamaFailureExplanation(settings);
+                                }
+                                else
+                                {
+                                    activeSummaryTasks.Add(SummarizeUnreadEmailInBackgroundAsync(emailItem, settings, serverTask, ct));
+                                }
                             }
                         }
                     },
@@ -1097,11 +1135,32 @@ namespace KerkenezMail.UI.Tabs
                     folderType: folderToFetch);
 
                 await fetchTask;
-                if (serverTask != null) await serverTask;
 
-                if (!activeSummaryTasks.IsEmpty)
+                bool modelLoadFailed = false;
+                if (serverTask != null)
+                {
+                    bool serverReady = await serverTask;
+                    if (!serverReady)
+                    {
+                        modelLoadFailed = true;
+                    }
+                }
+                else if (!settings.IsAiDisabled && isLlama && !hasValidLlamaModel)
+                {
+                    modelLoadFailed = true;
+                }
+
+                if (!modelLoadFailed && !activeSummaryTasks.IsEmpty)
                 {
                     await Task.WhenAll(activeSummaryTasks);
+                }
+                else if (modelLoadFailed)
+                {
+                    foreach (var email in _emails.Where(e => !e.IsRead && (string.IsNullOrWhiteSpace(e.Summary) || e.Status != SummaryState.Completed)))
+                    {
+                        email.Status = SummaryState.Failed;
+                        email.Summary = GetLlamaFailureExplanation(settings);
+                    }
                 }
 
                 _folderFetchedOnce[folderToFetch] = true;
@@ -1111,7 +1170,11 @@ namespace KerkenezMail.UI.Tabs
                     int unreadCount = _emails.Count(e => !e.IsRead);
                     _logger.Report($"[✓] {folderName} sync complete. Loaded {_emails.Count} total email(s) ({unreadCount} unread).");
 
-                    if (!settings.IsAiDisabled && string.Equals(settings.AiBackend, "LlamaCpp", StringComparison.OrdinalIgnoreCase) && settings.AutoStartLlamaServer)
+                    if (modelLoadFailed)
+                    {
+                        StatusUpdated?.Invoke(Lang.T(StringKeys.StatusModelLoadFailed), Lang.T(StringKeys.StatusVramFree));
+                    }
+                    else if (!settings.IsAiDisabled && isLlama && settings.AutoStartLlamaServer)
                     {
                         if (settings.InstantVramUnload)
                         {
@@ -1137,6 +1200,15 @@ namespace KerkenezMail.UI.Tabs
                             ? Lang.T(StringKeys.StatusOllamaActive) 
                             : Lang.T(StringKeys.StatusCloudActive);
                         StatusUpdated?.Invoke(Lang.T(StringKeys.StatusSyncComplete), backendMetric);
+                    }
+
+                    if (_lvEmails.SelectedItems.Count > 0)
+                    {
+                        var curEmail = GetCurrentPreviewEmail();
+                        if (curEmail != null)
+                        {
+                            DisplayEmail(curEmail);
+                        }
                     }
                 }
             }
@@ -1167,7 +1239,17 @@ namespace KerkenezMail.UI.Tabs
 
                 if (serverTask != null)
                 {
-                    await serverTask;
+                    bool serverReady = await serverTask;
+                    if (!serverReady)
+                    {
+                        email.Status = SummaryState.Failed;
+                        email.Summary = GetLlamaFailureExplanation(settings);
+                        if (this.IsHandleCreated && !this.IsDisposed)
+                        {
+                            this.BeginInvoke(new Action(() => UpdateListViewItemForEmail(email)));
+                        }
+                        return;
+                    }
                 }
 
                 if (ct.IsCancellationRequested || this.IsDisposed)
@@ -1200,9 +1282,21 @@ namespace KerkenezMail.UI.Tabs
 
                     string summary = await _llmService.SummarizeEmailAsync(email, settings, ct);
                     email.Summary = summary;
-                    email.Status = SummaryState.Completed;
+                    email.Status = summary.StartsWith("llama-server", StringComparison.OrdinalIgnoreCase) || 
+                                   summary.StartsWith("Could not", StringComparison.OrdinalIgnoreCase) || 
+                                   summary.StartsWith("No GGUF", StringComparison.OrdinalIgnoreCase) || 
+                                   summary.StartsWith("Model file", StringComparison.OrdinalIgnoreCase)
+                        ? SummaryState.Failed
+                        : SummaryState.Completed;
 
-                    _logger.Report($"[✓] Background summary generated for: \"{email.Subject}\" (Priority {email.Priority ?? 2})");
+                    if (email.Status == SummaryState.Completed)
+                    {
+                        _logger.Report($"[✓] Background summary generated for: \"{email.Subject}\" (Priority {email.Priority ?? 2})");
+                    }
+                    else
+                    {
+                        _logger.Report($"[!] Background summary skipped/failed for: \"{email.Subject}\" ({email.Summary})");
+                    }
 
                     if (this.IsDisposed || !this.IsHandleCreated) return;
 
@@ -1582,10 +1676,27 @@ namespace KerkenezMail.UI.Tabs
                 return;
             }
 
-            if (string.IsNullOrWhiteSpace(email.Summary) || 
-                email.Summary.Contains("Loading model", StringComparison.OrdinalIgnoreCase) ||
-                email.Summary.StartsWith("(LLM Error", StringComparison.OrdinalIgnoreCase) ||
-                email.Summary.StartsWith("(Could not reach LLM", StringComparison.OrdinalIgnoreCase))
+            var settings = _configService.Settings;
+            bool isLlama = string.Equals(settings.AiBackend, "LlamaCpp", StringComparison.OrdinalIgnoreCase);
+
+            // Fast-check: if using llama.cpp and no valid model exists, do not attempt to start or summarize
+            if (isLlama && (string.IsNullOrWhiteSpace(settings.LlamaModelPath) || !File.Exists(settings.LlamaModelPath)))
+            {
+                email.Status = SummaryState.Failed;
+                email.Summary = GetLlamaFailureExplanation(settings);
+                _txtSummary.Text = email.Summary;
+                UpdateListViewItemForEmail(email);
+                StatusUpdated?.Invoke(Lang.T(StringKeys.StatusModelLoadFailed), Lang.T(StringKeys.StatusVramFree));
+                return;
+            }
+
+            bool needsSummary = string.IsNullOrWhiteSpace(email.Summary) || 
+                                email.Summary.Contains("Loading model", StringComparison.OrdinalIgnoreCase) ||
+                                email.Summary.StartsWith("(LLM Error", StringComparison.OrdinalIgnoreCase) ||
+                                email.Summary.StartsWith("(Could not reach LLM", StringComparison.OrdinalIgnoreCase) ||
+                                email.Summary.StartsWith("Could not reach", StringComparison.OrdinalIgnoreCase);
+
+            if (needsSummary)
             {
                 _txtSummary.Text = "✨ Generating AI summary for this email...";
                 StatusUpdated?.Invoke($"Summarizing \"{email.Subject}\"...", "In Use (GPU)");
@@ -1593,20 +1704,34 @@ namespace KerkenezMail.UI.Tabs
                 email.Status = SummaryState.Summarizing;
                 UpdateListViewItemForEmail(email);
 
-                var settings = _configService.Settings;
-                if (string.Equals(settings.AiBackend, "LlamaCpp", StringComparison.OrdinalIgnoreCase) && settings.AutoStartLlamaServer)
+                if (isLlama && settings.AutoStartLlamaServer)
                 {
-                    await _llamaManager.StartAsync(
+                    bool serverStarted = await _llamaManager.StartAsync(
                         settings.LlamaModelPath,
                         settings.LlamaServerPort,
                         settings.LlamaGpuLayers,
                         contextSize: settings.LlamaContextSize,
                         logger: _logger);
+
+                    if (!serverStarted)
+                    {
+                        email.Status = SummaryState.Failed;
+                        email.Summary = GetLlamaFailureExplanation(settings);
+                        _txtSummary.Text = email.Summary;
+                        UpdateListViewItemForEmail(email);
+                        StatusUpdated?.Invoke(Lang.T(StringKeys.StatusModelLoadFailed), Lang.T(StringKeys.StatusVramFree));
+                        return;
+                    }
                 }
 
                 string summary = await _llmService.SummarizeEmailAsync(email, settings);
                 email.Summary = summary;
-                email.Status = SummaryState.Completed;
+                email.Status = summary.StartsWith("llama-server", StringComparison.OrdinalIgnoreCase) || 
+                               summary.StartsWith("Could not", StringComparison.OrdinalIgnoreCase) || 
+                               summary.StartsWith("No GGUF", StringComparison.OrdinalIgnoreCase) || 
+                               summary.StartsWith("Model file", StringComparison.OrdinalIgnoreCase)
+                    ? SummaryState.Failed
+                    : SummaryState.Completed;
 
                 UpdateListViewItemForEmail(email);
 
@@ -1616,24 +1741,24 @@ namespace KerkenezMail.UI.Tabs
                 }
 
                 // If InstantVramUnload is requested and we are using local llama.cpp, free VRAM now
-                if (string.Equals(settings.AiBackend, "LlamaCpp", StringComparison.OrdinalIgnoreCase) && settings.AutoStartLlamaServer)
+                if (isLlama && settings.AutoStartLlamaServer)
                 {
                     if (settings.InstantVramUnload && !_isBatchSyncing)
                     {
                         _llamaManager.Stop(_logger);
-                        StatusUpdated?.Invoke("Summary ready", "VRAM Free");
+                        StatusUpdated?.Invoke(Lang.T(StringKeys.StatusSummaryReady), Lang.T(StringKeys.StatusVramFree));
                     }
                     else
                     {
-                        StatusUpdated?.Invoke("Summary ready", "Model Loaded in VRAM");
+                        StatusUpdated?.Invoke(Lang.T(StringKeys.StatusSummaryReady), Lang.T(StringKeys.StatusModelLoaded));
                     }
                 }
                 else
                 {
                     string backendMetric = string.Equals(settings.AiBackend, "Ollama", StringComparison.OrdinalIgnoreCase) 
-                        ? "Ollama Active" 
-                        : "Cloud Active";
-                    StatusUpdated?.Invoke("Summary ready", backendMetric);
+                        ? Lang.T(StringKeys.StatusOllamaActive) 
+                        : Lang.T(StringKeys.StatusCloudActive);
+                    StatusUpdated?.Invoke(Lang.T(StringKeys.StatusSummaryReady), backendMetric);
                 }
             }
         }
@@ -1700,16 +1825,26 @@ namespace KerkenezMail.UI.Tabs
             }
             catch { }
 
-            bool hasValidSummary = !string.IsNullOrWhiteSpace(email.Summary) && 
-                                   !email.Summary.StartsWith("✨", StringComparison.OrdinalIgnoreCase) &&
-                                   !email.Summary.StartsWith("(LLM Error", StringComparison.OrdinalIgnoreCase) &&
-                                   !email.Summary.StartsWith("(Could not reach", StringComparison.OrdinalIgnoreCase);
-
-            if (!_configService.Settings.IsAiDisabled || hasValidSummary)
+            if (!_configService.Settings.IsAiDisabled)
             {
-                string summaryText = string.IsNullOrWhiteSpace(email.Summary) 
-                    ? "✨ Generating AI summary for this email..." 
-                    : email.Summary;
+                string summaryText;
+                if (email.Status == SummaryState.Summarizing)
+                {
+                    summaryText = "✨ Generating AI summary for this email...";
+                }
+                else if (!string.IsNullOrWhiteSpace(email.Summary))
+                {
+                    summaryText = email.Summary;
+                }
+                else if (string.Equals(_configService.Settings.AiBackend, "LlamaCpp", StringComparison.OrdinalIgnoreCase) &&
+                         (string.IsNullOrWhiteSpace(_configService.Settings.LlamaModelPath) || !File.Exists(_configService.Settings.LlamaModelPath)))
+                {
+                    summaryText = GetLlamaFailureExplanation(_configService.Settings);
+                }
+                else
+                {
+                    summaryText = "No summary available for this email.";
+                }
 
                 if (email.IsArchived && !summaryText.StartsWith("📥 ", StringComparison.OrdinalIgnoreCase) && !summaryText.StartsWith("[Archived] ", StringComparison.OrdinalIgnoreCase))
                 {

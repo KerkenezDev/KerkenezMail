@@ -157,7 +157,7 @@ namespace KerkenezMail.Languages
             Set(StringKeys.SendTabHtml,                  "HTML Önizleme");
             Set(StringKeys.SendFormatMultipart,          "Markdown (Metin + HTML Çok Parçalı)");
             Set(StringKeys.SendFormatPlaintext,          "Yalnızca Düz Metin (Ham RFC Metni)");
-            Set(StringKeys.SendDropHint,                 "Ekleri buraya sürükleyip bırakın (veya Dosya Seç'e tıklayın)");
+            Set(StringKeys.SendDropHint,                 "Dosya ekle");
             Set(StringKeys.SendBrowseFiles,              "Dosya Seç...");
             Set(StringKeys.SendAttachmentSummary,        "{0} ek ({1} KB)");
             Set(StringKeys.SendStatusHint,               "Yazmaya hazır. Markdown biçimlendirme desteklenir.");
@@ -362,6 +362,7 @@ namespace KerkenezMail.Languages
             Set(StringKeys.StatusLiveNewEmail,           "Canlı IMAP: {0} için yeni e-posta geldi");
             Set(StringKeys.StatusStartingUp,             "Başlatılıyor...");
             Set(StringKeys.StatusDisabledClassic,        "Devre Dışı (Klasik Posta)");
+            Set(StringKeys.StatusModelLoadFailed,        "Model yüklenemedi");
         }
     }
 }
