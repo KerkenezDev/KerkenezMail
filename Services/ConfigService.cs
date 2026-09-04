@@ -3,22 +3,24 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
-using EmailSummarizer.Models;
+using KerkenezMail.Models;
 
-namespace EmailSummarizer.Services
+namespace KerkenezMail.Services
 {
     public class ConfigService
     {
-        public static readonly string AppDataFolder = Path.Combine(
+        public static readonly string SuiteFolder = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "EmailSummarizer");
+            "Kerkenez");
+
+        public static readonly string AppDataFolder = Path.Combine(SuiteFolder, "mail");
 
         public static readonly string TempFolder = Path.Combine(
             Path.GetTempPath(),
-            "EmailSummarizer");
+            "Kerkenez", "mail");
 
         public static readonly string ConfigFilePath = Path.Combine(AppDataFolder, "config.json");
-        public static readonly string AccountsFilePath = Path.Combine(AppDataFolder, "accounts.dat");
+        public static readonly string AccountsFilePath = Path.Combine(SuiteFolder, "accounts.dat");
 
         private static readonly JsonSerializerOptions JsonOptions = new JsonSerializerOptions
         {
@@ -45,6 +47,11 @@ namespace EmailSummarizer.Services
         {
             try
             {
+                if (!Directory.Exists(SuiteFolder))
+                {
+                    Directory.CreateDirectory(SuiteFolder);
+                }
+
                 if (!Directory.Exists(AppDataFolder))
                 {
                     Directory.CreateDirectory(AppDataFolder);
@@ -334,6 +341,7 @@ namespace EmailSummarizer.Services
                 try
                 {
                     using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run", true);
+                    key?.DeleteValue("KerkenezMailTray", false);
                     key?.DeleteValue("EmailSummarizerTray", false);
                 }
                 catch { }
@@ -362,7 +370,7 @@ namespace EmailSummarizer.Services
         }
 
         /// <summary>
-        /// Cleans up temporary preview and cache files stored in %TEMP%\EmailSummarizer.
+        /// Cleans up temporary preview and cache files stored in %TEMP%\Kerkenez\mail.
         /// Handles locked files gracefully without throwing exceptions.
         /// </summary>
         public static void CleanTempFolder()

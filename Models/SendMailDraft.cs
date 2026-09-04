@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace EmailSummarizer.Models
+namespace KerkenezMail.Models
 {
     public class SendMailDraft
     {

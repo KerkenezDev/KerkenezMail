@@ -3,22 +3,24 @@ using System.IO;
 using System.Windows.Forms;
 using Microsoft.Win32;
 
-namespace EmailSummarizer.Services
+namespace KerkenezMail.Services
 {
     public static class UninstallRegistrationService
     {
-        private const string UninstallKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Uninstall\EmailSummarizer";
+        private const string UninstallKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Uninstall\KerkenezMail";
+        private const string LegacyUninstallKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Uninstall\EmailSummarizer";
         private const string RunKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
-        private const string RunValueName = "EmailSummarizerTray";
-        private const string LegacyRunValueName = "EmailSummarizer";
-        private const string DisplayName = "Email Summarizer";
-        private const string DisplayVersion = "0.4.0";
+        private const string RunValueName = "KerkenezMailTray";
+        private const string LegacyRunValueName1 = "EmailSummarizerTray";
+        private const string LegacyRunValueName2 = "EmailSummarizer";
+        private const string DisplayName = "Kerkenez Mail";
+        private const string DisplayVersion = "1.0.0";
         private const string Publisher = "ismlEraslan";
-        private const string UrlInfoAbout = "https://github.com/ismlEraslan/EmailSummarizer";
-        private const string HelpLink = "https://github.com/ismlEraslan/EmailSummarizer";
+        private const string UrlInfoAbout = "https://github.com/ismlEraslan/KerkenezMail";
+        private const string HelpLink = "https://github.com/ismlEraslan/KerkenezMail";
 
         /// <summary>
-        /// Registers or updates the application in HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\EmailSummarizer
+        /// Registers or updates the application in HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\KerkenezMail
         /// and checks/updates the HKCU Run startup entry if the app executable path was moved.
         /// </summary>
         public static void RegisterOrUpdate()
@@ -107,10 +109,11 @@ namespace EmailSummarizer.Services
                 if (runKey == null) return;
 
                 var currentVal = runKey.GetValue(RunValueName) as string;
-                var legacyVal = runKey.GetValue(LegacyRunValueName) as string;
+                var legacyVal1 = runKey.GetValue(LegacyRunValueName1) as string;
+                var legacyVal2 = runKey.GetValue(LegacyRunValueName2) as string;
 
                 // Check if startup was configured under modern or legacy key name
-                if (!string.IsNullOrWhiteSpace(currentVal) || !string.IsNullOrWhiteSpace(legacyVal))
+                if (!string.IsNullOrWhiteSpace(currentVal) || !string.IsNullOrWhiteSpace(legacyVal1) || !string.IsNullOrWhiteSpace(legacyVal2))
                 {
                     string expectedVal = $"\"{exePath}\" --daemon";
 
@@ -119,10 +122,14 @@ namespace EmailSummarizer.Services
                         runKey.SetValue(RunValueName, expectedVal);
                     }
 
-                    // Clean up legacy key name if it existed
-                    if (!string.IsNullOrWhiteSpace(legacyVal))
+                    // Clean up legacy key names if they existed
+                    if (!string.IsNullOrWhiteSpace(legacyVal1))
                     {
-                        runKey.DeleteValue(LegacyRunValueName, false);
+                        runKey.DeleteValue(LegacyRunValueName1, false);
+                    }
+                    if (!string.IsNullOrWhiteSpace(legacyVal2))
+                    {
+                        runKey.DeleteValue(LegacyRunValueName2, false);
                     }
                 }
             }
@@ -145,6 +152,12 @@ namespace EmailSummarizer.Services
             {
                 System.Diagnostics.Debug.WriteLine($"[UninstallRegistrationService] Error unregistering app: {ex.Message}");
             }
+
+            try
+            {
+                Registry.CurrentUser.DeleteSubKeyTree(LegacyUninstallKeyPath, false);
+            }
+            catch { }
         }
     }
 }

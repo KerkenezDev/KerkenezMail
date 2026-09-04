@@ -2,11 +2,11 @@ using System;
 using System.Drawing;
 using System.IO;
 using System.Windows.Forms;
-using EmailSummarizer.Models;
-using EmailSummarizer.Services;
-using EmailSummarizer.UI.Tabs;
+using KerkenezMail.Models;
+using KerkenezMail.Services;
+using KerkenezMail.UI.Tabs;
 
-namespace EmailSummarizer.UI
+namespace KerkenezMail.UI
 {
     public class SendMailForm : Form
     {
@@ -23,7 +23,7 @@ namespace EmailSummarizer.UI
 
             try
             {
-                using var stream = typeof(MainForm).Assembly.GetManifestResourceStream("EmailSummarizer.app.ico");
+                using var stream = typeof(MainForm).Assembly.GetManifestResourceStream("KerkenezMail.app.ico");
                 if (stream != null) this.Icon = new Icon(stream);
                 else if (File.Exists("app.ico")) this.Icon = new Icon("app.ico");
             }

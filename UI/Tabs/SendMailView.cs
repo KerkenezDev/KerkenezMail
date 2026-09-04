@@ -8,10 +8,10 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-using EmailSummarizer.Models;
-using EmailSummarizer.Services;
+using KerkenezMail.Models;
+using KerkenezMail.Services;
 
-namespace EmailSummarizer.UI.Tabs
+namespace KerkenezMail.UI.Tabs
 {
     public class SendMailView : UserControl
     {

@@ -7,7 +7,7 @@ using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace EmailSummarizer.Services
+namespace KerkenezMail.Services
 {
     public class LlamaServerManager : IDisposable
     {

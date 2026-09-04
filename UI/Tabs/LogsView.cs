@@ -3,7 +3,7 @@ using System.Drawing;
 using System.Text;
 using System.Windows.Forms;
 
-namespace EmailSummarizer.UI.Tabs
+namespace KerkenezMail.UI.Tabs
 {
     public class LogsView : UserControl
     {

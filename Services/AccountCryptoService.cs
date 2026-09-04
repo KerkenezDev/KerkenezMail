@@ -4,15 +4,21 @@ using System.IO;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using EmailSummarizer.Models;
+using KerkenezMail.Models;
 
-namespace EmailSummarizer.Services
+namespace KerkenezMail.Services
 {
     public static class AccountCryptoService
     {
-        // Custom entropy for DPAPI encryption to add an extra layer of application-specific separation
-        private static readonly byte[] Entropy = Encoding.UTF8.GetBytes("EmailSummarizer.SecureAccounts.v1");
-        private static readonly byte[] StringEntropy = Encoding.UTF8.GetBytes("EmailSummarizer.SecureSecrets.v1");
+        // Custom entropy for DPAPI encryption:
+        // Shared suite entropy for accounts.dat (interoperable across Kerkenez Mail and KerkenezCalendar)
+        private static readonly byte[] PrimaryAccountsEntropy = Encoding.UTF8.GetBytes("Kerkenez.SecureAccounts.v1");
+        private static readonly byte[] LegacyEmailSummarizerEntropy = Encoding.UTF8.GetBytes("EmailSummarizer.SecureAccounts.v1");
+        private static readonly byte[] LegacyKerkenezMailAccountsEntropy = Encoding.UTF8.GetBytes("KerkenezMail.SecureAccounts.v1");
+
+        // Mail-specific entropy for secrets (e.g. Cloud API keys in config.json)
+        private static readonly byte[] PrimaryStringEntropy = Encoding.UTF8.GetBytes("KerkenezMail.SecureSecrets.v1");
+        private static readonly byte[] LegacyStringEntropy = Encoding.UTF8.GetBytes("EmailSummarizer.SecureSecrets.v1");
 
         private static readonly JsonSerializerOptions JsonOptions = new JsonSerializerOptions
         {
@@ -34,7 +40,7 @@ namespace EmailSummarizer.Services
             try
             {
                 byte[] plainBytes = Encoding.UTF8.GetBytes(plainText);
-                byte[] cipherBytes = ProtectedData.Protect(plainBytes, StringEntropy, DataProtectionScope.CurrentUser);
+                byte[] cipherBytes = ProtectedData.Protect(plainBytes, PrimaryStringEntropy, DataProtectionScope.CurrentUser);
                 return Convert.ToBase64String(cipherBytes);
             }
             catch (Exception ex)
@@ -57,8 +63,23 @@ namespace EmailSummarizer.Services
             try
             {
                 byte[] cipherBytes = Convert.FromBase64String(cipherText);
-                byte[] plainBytes = ProtectedData.Unprotect(cipherBytes, StringEntropy, DataProtectionScope.CurrentUser);
-                return Encoding.UTF8.GetString(plainBytes);
+
+                // Try primary string entropy first, then legacy fallback
+                byte[][] candidateEntropies = { PrimaryStringEntropy, LegacyStringEntropy };
+                foreach (var entropy in candidateEntropies)
+                {
+                    try
+                    {
+                        byte[] plainBytes = ProtectedData.Unprotect(cipherBytes, entropy, DataProtectionScope.CurrentUser);
+                        return Encoding.UTF8.GetString(plainBytes);
+                    }
+                    catch
+                    {
+                        // Try next candidate
+                    }
+                }
+
+                return cipherText;
             }
             catch (Exception ex)
             {
@@ -70,6 +91,7 @@ namespace EmailSummarizer.Services
 
         /// <summary>
         /// Encrypts a list of EmailAccount objects into a DPAPI-protected binary payload.
+        /// Uses suite-level entropy "Kerkenez.SecureAccounts.v1" for cross-app sharing with KerkenezCalendar.
         /// </summary>
         public static byte[] EncryptAccounts(List<EmailAccount> accounts)
         {
@@ -81,12 +103,14 @@ namespace EmailSummarizer.Services
             string json = JsonSerializer.Serialize(accounts, JsonOptions);
             byte[] plainBytes = Encoding.UTF8.GetBytes(json);
 
-            // Encrypt using Windows DPAPI tied to the current interactive Windows user account
-            return ProtectedData.Protect(plainBytes, Entropy, DataProtectionScope.CurrentUser);
+            // Encrypt using Windows DPAPI tied to current interactive user with suite entropy
+            return ProtectedData.Protect(plainBytes, PrimaryAccountsEntropy, DataProtectionScope.CurrentUser);
         }
 
         /// <summary>
         /// Decrypts a DPAPI-protected binary payload into a list of EmailAccount objects.
+        /// Supports multi-entropy fallback to ensure seamless compatibility with accounts
+        /// saved by Kerkenez Mail, KerkenezCalendar, or legacy versions.
         /// </summary>
         public static List<EmailAccount> DecryptAccounts(byte[] encryptedBytes)
         {
@@ -95,20 +119,29 @@ namespace EmailSummarizer.Services
                 return new List<EmailAccount>();
             }
 
-            try
-            {
-                // Decrypt using Windows DPAPI
-                byte[] plainBytes = ProtectedData.Unprotect(encryptedBytes, Entropy, DataProtectionScope.CurrentUser);
-                string json = Encoding.UTF8.GetString(plainBytes);
+            byte[][] candidateEntropies = { PrimaryAccountsEntropy, LegacyEmailSummarizerEntropy, LegacyKerkenezMailAccountsEntropy };
 
-                var accounts = JsonSerializer.Deserialize<List<EmailAccount>>(json, JsonOptions);
-                return accounts ?? new List<EmailAccount>();
-            }
-            catch (Exception ex)
+            foreach (var entropy in candidateEntropies)
             {
-                System.Diagnostics.Debug.WriteLine($"[AccountCryptoService] Decryption failed: {ex.Message}");
-                return new List<EmailAccount>();
+                try
+                {
+                    byte[] plainBytes = ProtectedData.Unprotect(encryptedBytes, entropy, DataProtectionScope.CurrentUser);
+                    string json = Encoding.UTF8.GetString(plainBytes);
+
+                    var accounts = JsonSerializer.Deserialize<List<EmailAccount>>(json, JsonOptions);
+                    if (accounts != null)
+                    {
+                        return accounts;
+                    }
+                }
+                catch
+                {
+                    // Continue to next entropy candidate
+                }
             }
+
+            System.Diagnostics.Debug.WriteLine("[AccountCryptoService] Decryption failed for all candidate entropies.");
+            return new List<EmailAccount>();
         }
 
         /// <summary>

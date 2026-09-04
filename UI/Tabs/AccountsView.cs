@@ -3,10 +3,10 @@ using System.Drawing;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-using EmailSummarizer.Models;
-using EmailSummarizer.Services;
+using KerkenezMail.Models;
+using KerkenezMail.Services;
 
-namespace EmailSummarizer.UI.Tabs
+namespace KerkenezMail.UI.Tabs
 {
     public class AccountsView : UserControl
     {

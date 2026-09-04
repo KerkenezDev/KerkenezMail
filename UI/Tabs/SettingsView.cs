@@ -5,10 +5,10 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-using EmailSummarizer.Models;
-using EmailSummarizer.Services;
+using KerkenezMail.Models;
+using KerkenezMail.Services;
 
-namespace EmailSummarizer.UI.Tabs
+namespace KerkenezMail.UI.Tabs
 {
     public class SettingsView : UserControl
     {
@@ -1122,7 +1122,7 @@ namespace EmailSummarizer.UI.Tabs
                 bool ok = ShortcutService.CreateShortcuts();
                 if (ok)
                 {
-                    MessageBox.Show("Shortcuts for Email Summarizer were successfully added to your Desktop and Start Menu!", "Shortcuts Created", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    MessageBox.Show("Shortcuts for Kerkenez Mail were successfully added to your Desktop and Start Menu!", "Shortcuts Created", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
                 else
                 {
@@ -1768,7 +1768,7 @@ namespace EmailSummarizer.UI.Tabs
                 // Check if already running via mutex (only if not a restart)
                 if (!restart)
                 {
-                    bool alreadyRunning = Mutex.TryOpenExisting(@"Global\EmailSummarizer_TrayDaemon_Mutex", out var existingMutex);
+                    bool alreadyRunning = Mutex.TryOpenExisting(@"Global\KerkenezMail_TrayDaemon_Mutex", out var existingMutex);
                     if (alreadyRunning)
                     {
                         existingMutex?.Dispose();
@@ -1798,8 +1798,10 @@ namespace EmailSummarizer.UI.Tabs
             try
             {
                 using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run", false);
-                var val = key?.GetValue("EmailSummarizerTray") as string;
-                return !string.IsNullOrWhiteSpace(val);
+                var val = key?.GetValue("KerkenezMailTray") as string;
+                if (!string.IsNullOrWhiteSpace(val)) return true;
+                var legacyVal = key?.GetValue("EmailSummarizerTray") as string;
+                return !string.IsNullOrWhiteSpace(legacyVal);
             }
             catch
             {
@@ -1817,10 +1819,12 @@ namespace EmailSummarizer.UI.Tabs
                 {
                     if (enable)
                     {
-                        key.SetValue("EmailSummarizerTray", $"\"{Application.ExecutablePath}\" --daemon");
+                        key.SetValue("KerkenezMailTray", $"\"{Application.ExecutablePath}\" --daemon");
+                        key.DeleteValue("EmailSummarizerTray", false);
                     }
                     else
                     {
+                        key.DeleteValue("KerkenezMailTray", false);
                         key.DeleteValue("EmailSummarizerTray", false);
                     }
                 }

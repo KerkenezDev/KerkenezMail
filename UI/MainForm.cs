@@ -4,12 +4,12 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-using EmailSummarizer.Models;
-using EmailSummarizer.Services;
-using EmailSummarizer.UI.Controls;
-using EmailSummarizer.UI.Tabs;
+using KerkenezMail.Models;
+using KerkenezMail.Services;
+using KerkenezMail.UI.Controls;
+using KerkenezMail.UI.Tabs;
 
-namespace EmailSummarizer.UI
+namespace KerkenezMail.UI
 {
     public class MainForm : Form
     {
@@ -63,8 +63,8 @@ namespace EmailSummarizer.UI
                     {
                         var res = MessageBox.Show(
                             this,
-                            "Welcome to Email Summarizer!\r\n\r\nWould you like to create shortcuts on your Desktop and Start Menu for easy access?",
-                            "Email Summarizer Shortcuts",
+                            "Welcome to Kerkenez Mail!\r\n\r\nWould you like to create shortcuts on your Desktop and Start Menu for easy access?",
+                            "Kerkenez Mail Shortcuts",
                             MessageBoxButtons.YesNo,
                             MessageBoxIcon.Question);
 
@@ -82,12 +82,12 @@ namespace EmailSummarizer.UI
 
         private void InitializeComponent()
         {
-            this.Text = "Email Summarizer (Win32)";
+            this.Text = "Kerkenez Mail (Win32)";
             
             // Set window icon for Title Bar and Windows Taskbar
             try
             {
-                using var stream = typeof(MainForm).Assembly.GetManifestResourceStream("EmailSummarizer.app.ico");
+                using var stream = typeof(MainForm).Assembly.GetManifestResourceStream("KerkenezMail.app.ico");
                 if (stream != null)
                 {
                     this.Icon = new Icon(stream);

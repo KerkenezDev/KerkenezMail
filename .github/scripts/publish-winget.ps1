@@ -6,19 +6,19 @@ param(
 $ErrorActionPreference = "Stop"
 
 $version = $Tag.TrimStart('v')
-$manifestDir = "manifests/i/ismlEraslan/EmailSummarizer/$version"
+$manifestDir = "manifests/i/ismlEraslan/KerkenezMail/$version"
 New-Item -ItemType Directory -Path $manifestDir -Force | Out-Null
 
-$downloadUrl = "https://github.com/ismlEraslan/email-summarizer-win32/releases/download/$Tag/EmailSummarizer.zip"
+$downloadUrl = "https://github.com/ismlEraslan/email-summarizer-win32/releases/download/$Tag/KerkenezMail.zip"
 Write-Host "Downloading release asset from: $downloadUrl"
-$zipFile = "$env:TEMP\EmailSummarizer.zip"
+$zipFile = "$env:TEMP\KerkenezMail.zip"
 Invoke-WebRequest -Uri $downloadUrl -OutFile $zipFile
 $sha256 = (Get-FileHash -Path $zipFile -Algorithm SHA256).Hash
 Write-Host "Calculated SHA256: $sha256"
 
 $versionYaml = @"
 # yaml-language-server: `$schema=https://aka.ms/winget-manifest.version.1.6.0.schema.json
-PackageIdentifier: ismlEraslan.EmailSummarizer
+PackageIdentifier: ismlEraslan.KerkenezMail
 PackageVersion: $version
 DefaultLocale: en-US
 ManifestType: version
@@ -27,19 +27,19 @@ ManifestVersion: 1.6.0
 
 $installerYaml = @"
 # yaml-language-server: `$schema=https://aka.ms/winget-manifest.installer.1.6.0.schema.json
-PackageIdentifier: ismlEraslan.EmailSummarizer
+PackageIdentifier: ismlEraslan.KerkenezMail
 PackageVersion: $version
 InstallerType: zip
 NestedInstallerType: portable
 NestedInstallerFiles:
-  - RelativeFilePath: EmailSummarizer.exe
-    PortableCommandAlias: EmailSummarizer
+  - RelativeFilePath: KerkenezMail.exe
+    PortableCommandAlias: KerkenezMail
 Commands:
-  - EmailSummarizer
+  - KerkenezMail
 ReleaseDate: $(Get-Date -Format "yyyy-MM-dd")
 Dependencies:
   PackageDependencies:
-    - PackageIdentifier: Microsoft.DotNet.DesktopRuntime.8
+    - PackageIdentifier: Microsoft.DotNet.DesktopRuntime.10
 Installers:
   - Architecture: x64
     InstallerUrl: $downloadUrl
@@ -50,20 +50,20 @@ ManifestVersion: 1.6.0
 
 $localeYaml = @"
 # yaml-language-server: `$schema=https://aka.ms/winget-manifest.defaultLocale.1.6.0.schema.json
-PackageIdentifier: ismlEraslan.EmailSummarizer
+PackageIdentifier: ismlEraslan.KerkenezMail
 PackageVersion: $version
 PackageLocale: en-US
 Publisher: ismlEraslan
 PublisherUrl: https://github.com/ismlEraslan
 PublisherSupportUrl: https://github.com/ismlEraslan/email-summarizer-win32/issues
-PackageName: Email Summarizer
+PackageName: Kerkenez Mail
 PackageUrl: https://github.com/ismlEraslan/email-summarizer-win32
 License: MIT
 LicenseUrl: https://github.com/ismlEraslan/email-summarizer-win32/blob/main/LICENSE
 Copyright: Copyright (c) 2026 ismlEraslan
-ShortDescription: Local AI-powered IMAP email summarizer with llama.cpp, priority triage, and system tray daemon.
-Description: Email Summarizer is a native Win32/Windows desktop application for managing and summarizing emails from multiple IMAP accounts using local AI (llama.cpp) or cloud providers with DPAPI encryption.
-Moniker: emailsummarizer
+ShortDescription: Local AI-powered IMAP email assistant with llama.cpp, priority triage, and system tray daemon.
+Description: Kerkenez Mail is a native Win32/Windows desktop application for managing and summarizing emails from multiple IMAP accounts using local AI (llama.cpp) or cloud providers with DPAPI encryption.
+Moniker: kerkenezmail
 Tags:
   - email
   - imap
@@ -71,14 +71,15 @@ Tags:
   - summarizer
   - llama-cpp
   - win32
+  - kerkenez
 ReleaseNotesUrl: https://github.com/ismlEraslan/email-summarizer-win32/releases/tag/$Tag
 ManifestType: defaultLocale
 ManifestVersion: 1.6.0
 "@
 
-Set-Content -Path "$manifestDir/ismlEraslan.EmailSummarizer.yaml" -Value $versionYaml -Encoding utf8
-Set-Content -Path "$manifestDir/ismlEraslan.EmailSummarizer.installer.yaml" -Value $installerYaml -Encoding utf8
-Set-Content -Path "$manifestDir/ismlEraslan.EmailSummarizer.locale.en-US.yaml" -Value $localeYaml -Encoding utf8
+Set-Content -Path "$manifestDir/ismlEraslan.KerkenezMail.yaml" -Value $versionYaml -Encoding utf8
+Set-Content -Path "$manifestDir/ismlEraslan.KerkenezMail.installer.yaml" -Value $installerYaml -Encoding utf8
+Set-Content -Path "$manifestDir/ismlEraslan.KerkenezMail.locale.en-US.yaml" -Value $localeYaml -Encoding utf8
 
 Write-Host "Validating manifests with winget..."
 winget validate --manifest $manifestDir

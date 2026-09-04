@@ -1,6 +1,6 @@
 using System;
 
-namespace EmailSummarizer.Models
+namespace KerkenezMail.Models
 {
     public enum MailFolderType
     {

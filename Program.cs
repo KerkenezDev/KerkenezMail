@@ -4,15 +4,15 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Windows.Forms;
-using EmailSummarizer.Services;
-using EmailSummarizer.UI;
+using KerkenezMail.Services;
+using KerkenezMail.UI;
 
-namespace EmailSummarizer
+namespace KerkenezMail
 {
     static class Program
     {
-        private const string TrayDaemonMutexName = @"Global\EmailSummarizer_TrayDaemon_Mutex";
-        private const string MainUiMutexName = @"Global\EmailSummarizer_MainUI_Mutex";
+        private const string TrayDaemonMutexName = @"Global\KerkenezMail_TrayDaemon_Mutex";
+        private const string MainUiMutexName = @"Global\KerkenezMail_MainUI_Mutex";
 
         [STAThread]
         static void Main(string[] args)
@@ -181,8 +181,8 @@ namespace EmailSummarizer
             }
 
             var res = MessageBox.Show(
-                "Are you sure you want to uninstall Email Summarizer?\n\nThis will remove Desktop and Start Menu shortcuts, Windows startup entries, Add/Remove Programs registration, and delete all configuration and cached data from %APPDATA%\\EmailSummarizer.",
-                "Uninstall Email Summarizer",
+                "Are you sure you want to uninstall Kerkenez Mail?\n\nThis will remove Desktop and Start Menu shortcuts, Windows startup entries, Add/Remove Programs registration, and delete all configuration and cached data from %APPDATA%\\Kerkenez\\mail.",
+                "Uninstall Kerkenez Mail",
                 MessageBoxButtons.YesNo,
                 MessageBoxIcon.Warning);
 
@@ -192,7 +192,7 @@ namespace EmailSummarizer
                 if (success)
                 {
                     MessageBox.Show(
-                        "Email Summarizer shortcuts, startup entries, Windows Add/Remove registration, configuration, and data have been successfully removed.",
+                        "Kerkenez Mail shortcuts, startup entries, Windows Add/Remove registration, configuration, and data have been successfully removed.",
                         "Uninstall Complete",
                         MessageBoxButtons.OK,
                         MessageBoxIcon.Information);

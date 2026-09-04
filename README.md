@@ -1,9 +1,9 @@
-# Email Summarizer (Win32) 📬🤖
+# Kerkenez Mail (Win32) 📬🤖
 *Local AI-Powered IMAP Email Assistant with llama.cpp, Ollama, Cloud LLMs & Encrypted Security*
 
 [![Target](https://img.shields.io/badge/Platform-Windows%2010%20%2F%2011%20(x64)-0078D6?logo=windows&logoColor=white)](https://microsoft.com)
-[![Framework](https://img.shields.io/badge/.NET-8.0%20(Desktop%20Runtime)-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com)
-[![WinGet](https://img.shields.io/badge/WinGet-ismlEraslan.EmailSummarizer-0078D6?logo=windows-terminal&logoColor=white)](https://github.com/microsoft/winget-pkgs)
+[![Framework](https://img.shields.io/badge/.NET-10.0%20(Desktop%20Runtime)-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com)
+[![WinGet](https://img.shields.io/badge/WinGet-ismlEraslan.KerkenezMail-0078D6?logo=windows-terminal&logoColor=white)](https://github.com/microsoft/winget-pkgs)
 [![Mail Engine](https://img.shields.io/badge/IMAP-MailKit%204.17-orange)](https://github.com/jstedfast/MailKit)
 [![LLM Backend](https://img.shields.io/badge/AI%20Engine-llama.cpp%20%2F%20Ollama%20%2F%20Cloud-blue)](https://github.com/ggerganov/llama.cpp)
 [![Security](https://img.shields.io/badge/Security-Windows%20DPAPI%20Encrypted-green)](https://learn.microsoft.com/en-us/dotnet/api/system.security.cryptography.protecteddata)
@@ -27,12 +27,12 @@ A high-performance, privacy-first **Windows desktop application** built with nat
 ### 📦 Option 1: Install via WinGet (Recommended)
 Install directly using Windows Package Manager in Windows Terminal / PowerShell:
 ```powershell
-winget install ismlEraslan.EmailSummarizer
+winget install ismlEraslan.KerkenezMail
 ```
 
 ### ⚡ Option 2: Standalone Download (GitHub Releases)
-1. Download **`EmailSummarizer.zip`** (or `EmailSummarizer.exe`) from [GitHub Releases](https://github.com/ismlEraslan/email-summarizer-win32/releases/latest).
-2. Unzip and run **`EmailSummarizer.exe`**.
+1. Download **`KerkenezMail.zip`** (or `KerkenezMail.exe`) from [GitHub Releases](https://github.com/ismlEraslan/email-summarizer-win32/releases/latest).
+2. Unzip and run **`KerkenezMail.exe`**.
 3. In the **Accounts** tab, click **➕ Add Account**, enter your credentials, and click **⚡ Test Connection**!
 
 ---
@@ -66,7 +66,7 @@ winget install ismlEraslan.EmailSummarizer
 
 ### 🔒 Bank-Grade Encrypted Credential Security
 - **Windows DPAPI Encryption**: All email account credentials, App Passwords, and Cloud AI API keys are encrypted using native Windows Data Protection API (`ProtectedData.Protect` / `DataProtectionScope.CurrentUser`).
-- **Encrypted Storage**: Credentials and keys are stored encrypted on your SSD in `%APPDATA%\EmailSummarizer\accounts.dat` and `%APPDATA%\EmailSummarizer\config.json`.
+- **Encrypted Storage**: Credentials and keys are stored encrypted on your SSD in `%APPDATA%\Kerkenez\accounts.dat` (shared with KerkenezCalendar) and `%APPDATA%\Kerkenez\mail\config.json`.
 - **In-Memory Decryption**: Decrypted credentials exist in memory *only* during active API / IMAP requests.
 - **Clean Config**: The unencrypted portions of `config.json` store only general preferences and `AccountIds` references.
 - **Seamless Backward Compatibility**: Automatically detects and migrates legacy plain-text configs into encrypted storage on startup.
@@ -92,7 +92,7 @@ winget install ismlEraslan.EmailSummarizer
 ## 💻 System Requirements
 
 - **Operating System**: Windows 10 (Build 19041+) or Windows 11 (64-bit).
-- **Runtime**: [.NET 8.0 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0) (x64).
+- **Runtime**: [.NET 10.0 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0) (x64).
 - **AI Model Backend**: Any GGUF LLM for local inference (`llama-server.exe`), local **Ollama**, or any OpenAI-compatible Cloud API endpoint.
 
 ---
@@ -101,10 +101,10 @@ winget install ismlEraslan.EmailSummarizer
 
 | Switch | Description |
 | :--- | :--- |
-| `EmailSummarizer.exe` | Launches the main graphical interface. |
-| `EmailSummarizer.exe --daemon` *(or `--tray`)* | Launches the background system tray daemon directly. |
-| `EmailSummarizer.exe --uninstall` | Prompts to cleanly remove Desktop & Start Menu shortcuts, startup registry keys, Windows Add/Remove registration, and `%APPDATA%\EmailSummarizer`. |
-| `EmailSummarizer.exe --uninstall --quiet` *(or `--silent`)* | Performs a silent/unattended uninstall without dialog prompts. |
+| `KerkenezMail.exe` | Launches the main graphical interface. |
+| `KerkenezMail.exe --daemon` *(or `--tray`)* | Launches the background system tray daemon directly. |
+| `KerkenezMail.exe --uninstall` | Prompts to cleanly remove Desktop & Start Menu shortcuts, startup registry keys, Windows Add/Remove registration, and `%APPDATA%\Kerkenez\mail`. |
+| `KerkenezMail.exe --uninstall --quiet` *(or `--silent`)* | Performs a silent/unattended uninstall without dialog prompts. |
 
 ---
 
@@ -115,9 +115,9 @@ Gmail IMAP requires a 16-character **Google App Password** when 2FA is active:
 1. Open your [Google Account Security Settings](https://myaccount.google.com/security).
 2. Ensure **2-Step Verification** is enabled.
 3. Navigate to **App Passwords** ([myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords)).
-4. Create an app password named `Email Summarizer`.
+4. Create an app password named `Kerkenez Mail`.
 5. Copy the 16-letter password (e.g. `abcd efgh ijkl mnop`).
-6. In **Email Summarizer**, switch to **Accounts** ➔ **➕ Add Account** ➔ Select **Gmail** ➔ Paste App Password ➔ Click **⚡ Test Connection**.
+6. In **Kerkenez Mail**, switch to **Accounts** ➔ **➕ Add Account** ➔ Select **Gmail** ➔ Paste App Password ➔ Click **⚡ Test Connection**.
 
 ### 🔹 Yahoo Mail Setup
 - Generate an App Password in your Yahoo Account Security settings.
@@ -146,8 +146,8 @@ Gmail IMAP requires a 16-character **Google App Password** when 2FA is active:
 ## 📁 Configuration & Storage Paths
 
 All persistent application data is isolated within standard Windows user roaming profile:
-- **`%APPDATA%\EmailSummarizer\config.json`**: Application preferences, model settings, and account IDs.
-- **`%APPDATA%\EmailSummarizer\accounts.dat`**: DPAPI-encrypted email account credentials and passwords.
+- **`%APPDATA%\Kerkenez\mail\config.json`**: Application preferences, model settings, and account IDs.
+- **`%APPDATA%\Kerkenez\accounts.dat`**: DPAPI-encrypted email account credentials and passwords (shared with KerkenezCalendar).
 
 ---
 
@@ -166,4 +166,4 @@ dotnet publish -c Release -r win-x64 --self-contained false -p:PublishSingleFile
 ---
 
 ## 📄 License
-MIT License. Built with ❤️ using .NET 8, MailKit, and llama.cpp.
+MIT License. Built with ❤️ using .NET 10, MailKit, and llama.cpp.

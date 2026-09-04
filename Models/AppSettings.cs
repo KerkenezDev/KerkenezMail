@@ -3,9 +3,9 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text.Json.Serialization;
 using System.Windows.Forms;
-using EmailSummarizer.Services;
+using KerkenezMail.Services;
 
-namespace EmailSummarizer.Models
+namespace KerkenezMail.Models
 {
     public class AppSettings
     {

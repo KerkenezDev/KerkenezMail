@@ -4,9 +4,9 @@ using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Windows.Forms;
-using EmailSummarizer.Services;
+using KerkenezMail.Services;
 
-namespace EmailSummarizer.UI
+namespace KerkenezMail.UI
 {
     public class TrayDaemonContext : ApplicationContext
     {
@@ -29,7 +29,7 @@ namespace EmailSummarizer.UI
             _notifyIcon = new NotifyIcon
             {
                 Icon = TrayIconHelper.GetNormalIcon(),
-                Text = "Email Summarizer",
+                Text = "Kerkenez Mail",
                 ContextMenuStrip = _contextMenu,
                 Visible = true
             };
@@ -62,7 +62,7 @@ namespace EmailSummarizer.UI
         {
             _contextMenu.Font = new Font("Segoe UI", 9F);
 
-            var itemOpen = new ToolStripMenuItem("📬  Open Email Summarizer")
+            var itemOpen = new ToolStripMenuItem("📬  Open Kerkenez Mail")
             {
                 Font = new Font("Segoe UI", 9F, FontStyle.Bold)
             };
@@ -71,7 +71,7 @@ namespace EmailSummarizer.UI
             var itemCheckNow = new ToolStripMenuItem("🔄  Check Emails Now");
             itemCheckNow.Click += async (s, e) =>
             {
-                SetTooltip("Email Summarizer - Checking...");
+                SetTooltip("Kerkenez Mail - Checking...");
                 await _daemonService.TriggerCheckNowAsync();
             };
 
@@ -112,12 +112,12 @@ namespace EmailSummarizer.UI
                 if (unreadCount > 0)
                 {
                     _notifyIcon.Icon = TrayIconHelper.GetUnreadIcon();
-                    SetTooltip($"Email Summarizer: {unreadCount} unread");
+                    SetTooltip($"Kerkenez Mail: {unreadCount} unread");
                 }
                 else
                 {
                     _notifyIcon.Icon = TrayIconHelper.GetNormalIcon();
-                    SetTooltip("Email Summarizer: 0 unread");
+                    SetTooltip("Kerkenez Mail: 0 unread");
                 }
             }
             catch

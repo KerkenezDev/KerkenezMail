@@ -3,7 +3,7 @@ using System.Diagnostics;
 using System.Drawing;
 using System.Runtime.InteropServices;
 
-namespace EmailSummarizer.Services
+namespace KerkenezMail.Services
 {
     public static class NativeMethods
     {

@@ -1,7 +1,7 @@
 using System;
 using System.Text.Json.Serialization;
 
-namespace EmailSummarizer.Models
+namespace KerkenezMail.Models
 {
     public class EmailAccount
     {

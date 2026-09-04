@@ -3,9 +3,9 @@ using System.ComponentModel;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Windows.Forms;
-using EmailSummarizer.Models;
+using KerkenezMail.Models;
 
-namespace EmailSummarizer.UI.Controls
+namespace KerkenezMail.UI.Controls
 {
     public class SidebarNav : Panel
     {
@@ -595,7 +595,7 @@ namespace EmailSummarizer.UI.Controls
                     {
                         var titleRect = new RectangleF(12 * scale, 14 * scale, titleMaxWidth, 22 * scale);
                         var subRect = new RectangleF(12 * scale, 38 * scale, titleMaxWidth, 18 * scale);
-                        g.DrawString("Email Summarizer", titleFont, titleBrush, titleRect, textFormat);
+                        g.DrawString("Kerkenez Mail", titleFont, titleBrush, titleRect, textFormat);
                         g.DrawString("Win32 AI Assistant", subFont, subBrush, subRect, textFormat);
                     }
                 }

@@ -4,7 +4,7 @@ using System.Net;
 using System.Text;
 using System.Text.RegularExpressions;
 
-namespace EmailSummarizer.Services
+namespace KerkenezMail.Services
 {
     public static class MarkdownEmailConverter
     {

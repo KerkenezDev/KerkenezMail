@@ -14,9 +14,9 @@ using System.Threading;
 using System.Threading.Tasks;
 using MailKit;
 using MailKit.Security;
-using EmailSummarizer.Models;
+using KerkenezMail.Models;
 
-namespace EmailSummarizer.Services
+namespace KerkenezMail.Services
 {
     public class OutlookTokenResult
     {
@@ -132,7 +132,7 @@ namespace EmailSummarizer.Services
   <div style='max-width:440px;margin:auto;background:#fff;padding:32px;border-radius:10px;box-shadow:0 4px 16px rgba(0,0,0,0.08);'>
     <div style='font-size:44px;color:#28a745;margin-bottom:12px;'>✓</div>
     <h2 style='color:#1a1f36;margin:0 0 10px;'>Authentication Successful</h2>
-    <p style='color:#4f566b;font-size:14px;line-height:1.5;'>You have connected your Outlook account to <strong>Email Summarizer</strong>. You can now close this browser window and return to the application.</p>
+    <p style='color:#4f566b;font-size:14px;line-height:1.5;'>You have connected your Outlook account to <strong>Kerkenez Mail</strong>. You can now close this browser window and return to the application.</p>
   </div>
 </body>
 </html>";

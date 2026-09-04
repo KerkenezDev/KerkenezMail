@@ -1,7 +1,7 @@
 using System;
 using System.IO;
 
-namespace EmailSummarizer.Models
+namespace KerkenezMail.Models
 {
     public class EmailAttachmentInfo
     {

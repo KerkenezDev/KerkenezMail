@@ -7,7 +7,7 @@ using System.Windows.Forms;
 using Windows.Data.Xml.Dom;
 using Windows.UI.Notifications;
 
-namespace EmailSummarizer.Services
+namespace KerkenezMail.Services
 {
     /// <summary>
     /// Delivers persistent Windows toast notifications that remain in the Windows Action Center
@@ -15,7 +15,7 @@ namespace EmailSummarizer.Services
     /// </summary>
     public static class NotificationService
     {
-        private const string AppDisplayName = "Email Summarizer";
+        private const string AppDisplayName = "Kerkenez Mail";
         private static string? _cachedAppId;
         private static bool _isRegistered = false;
         private static readonly object _lock = new();
@@ -35,7 +35,7 @@ namespace EmailSummarizer.Services
             {
                 string startMenuLnk = Path.Combine(
                     Environment.GetFolderPath(Environment.SpecialFolder.Programs),
-                    "Email Summarizer.lnk");
+                    "Kerkenez Mail.lnk");
 
                 if (File.Exists(startMenuLnk))
                 {
@@ -136,7 +136,7 @@ namespace EmailSummarizer.Services
         }
 
         /// <summary>
-        /// Launches or focuses the primary Email Summarizer application window.
+        /// Launches or focuses the primary Kerkenez Mail application window.
         /// </summary>
         public static void LaunchOrFocusMainApp()
         {

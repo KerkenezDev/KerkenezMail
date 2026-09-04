@@ -1,10 +1,10 @@
 using System;
 using System.Drawing;
 using System.Windows.Forms;
-using EmailSummarizer.Models;
-using EmailSummarizer.Services;
+using KerkenezMail.Models;
+using KerkenezMail.Services;
 
-namespace EmailSummarizer.UI
+namespace KerkenezMail.UI
 {
     public class AddAccountDialog : Form
     {
@@ -71,7 +71,7 @@ namespace EmailSummarizer.UI
             this.Text = _isEditMode ? "Edit Email Account" : "Add Email Account";
             try
             {
-                using var stream = typeof(MainForm).Assembly.GetManifestResourceStream("EmailSummarizer.app.ico");
+                using var stream = typeof(MainForm).Assembly.GetManifestResourceStream("KerkenezMail.app.ico");
                 if (stream != null) this.Icon = new Icon(stream);
                 else if (File.Exists("app.ico")) this.Icon = new Icon("app.ico");
             }
