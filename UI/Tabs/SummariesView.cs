@@ -81,6 +81,9 @@ namespace KerkenezMail.UI.Tabs
         private FlowLayoutPanel _pnlAttachments = null!;
         private Label _lblAttachmentsTitle = null!;
         private Label _lblInboxHeader = null!;
+        private Label _lblAccount = null!;
+        private Label _lblSummaryTitle = null!;
+        private Label _lblSummaryHint = null!;
         private ProgressBar _progressBar = null!;
         private SplitContainer _mainSplit = null!;
         private SplitContainer _middleSplit = null!;
@@ -163,7 +166,7 @@ namespace KerkenezMail.UI.Tabs
 
             _btnRefresh = new Button
             {
-                Text = "🔄 Refresh Inbox",
+                Text = "🔄 " + Lang.T(StringKeys.InboxRefresh),
                 UseMnemonic = false,
                 AutoSize = true,
                 AutoSizeMode = AutoSizeMode.GrowAndShrink,
@@ -177,7 +180,7 @@ namespace KerkenezMail.UI.Tabs
 
             _btnCopySummary = new Button
             {
-                Text = "📋 Copy Summary",
+                Text = "📋 " + Lang.T(StringKeys.InboxCopySummary),
                 UseMnemonic = false,
                 AutoSize = true,
                 AutoSizeMode = AutoSizeMode.GrowAndShrink,
@@ -191,7 +194,7 @@ namespace KerkenezMail.UI.Tabs
 
             _btnExport = new Button
             {
-                Text = "💾 Export...",
+                Text = "💾 " + Lang.T(StringKeys.InboxExport),
                 UseMnemonic = false,
                 AutoSize = true,
                 AutoSizeMode = AutoSizeMode.GrowAndShrink,
@@ -261,19 +264,19 @@ namespace KerkenezMail.UI.Tabs
                 InitialDelay = 400,
                 ReshowDelay = 150
             };
-            _topBarToolTip.SetToolTip(_btnRefresh, "Refresh Inbox: Fetch new messages from configured accounts");
-            _topBarToolTip.SetToolTip(_btnCopySummary, "Copy Summary: Copy the AI executive summary to clipboard");
-            _topBarToolTip.SetToolTip(_btnExport, "Export: Save emails and summaries to JSON, CSV, Markdown, or HTML report");
-            _topBarToolTip.SetToolTip(_btnOpenInBrowser, "Open in Browser: View original email in default browser (Full HTML with remote images & styles)");
-            _topBarToolTip.SetToolTip(_btnArchive, "Archive: Move selected email(s) to Archive folder");
-            _topBarToolTip.SetToolTip(_btnDelete, "Delete: Move selected email(s) to Trash folder");
+            _topBarToolTip.SetToolTip(_btnRefresh, Lang.T(StringKeys.InboxTipRefresh));
+            _topBarToolTip.SetToolTip(_btnCopySummary, Lang.T(StringKeys.InboxTipCopySummary));
+            _topBarToolTip.SetToolTip(_btnExport, Lang.T(StringKeys.InboxTipExport));
+            _topBarToolTip.SetToolTip(_btnOpenInBrowser, Lang.T(StringKeys.InboxTipOpenInBrowser));
+            _topBarToolTip.SetToolTip(_btnArchive, Lang.T(StringKeys.InboxTipArchive));
+            _topBarToolTip.SetToolTip(_btnDelete, Lang.T(StringKeys.InboxTipDelete));
 
             pnlTriageButtons.Controls.Add(_btnDelete);
             pnlTriageButtons.Controls.Add(_btnArchive);
 
-            var lblAccount = new Label
+            _lblAccount = new Label
             {
-                Text = "Account:",
+                Text = Lang.T(StringKeys.InboxAccountLabel),
                 AutoSize = true,
                 Margin = new Padding(0, (int)(7 * scale), (int)(6 * scale), 0),
                 ForeColor = Color.FromArgb(80, 80, 80)
@@ -295,7 +298,7 @@ namespace KerkenezMail.UI.Tabs
                 Height = (int)(28 * scale),
                 Margin = new Padding(0, (int)(3 * scale), 0, 0),
                 Font = new Font("Segoe UI", 9F),
-                PlaceholderText = "Search emails..."
+                PlaceholderText = Lang.T(StringKeys.InboxSearchPlaceholder)
             };
             _txtSearch.TextChanged += (s, e) => ApplyFilter();
 
@@ -304,7 +307,7 @@ namespace KerkenezMail.UI.Tabs
             actionsFlow.Controls.Add(_btnExport);
             actionsFlow.Controls.Add(_btnOpenInBrowser);
             actionsFlow.Controls.Add(pnlTriageButtons);
-            actionsFlow.Controls.Add(lblAccount);
+            actionsFlow.Controls.Add(_lblAccount);
             actionsFlow.Controls.Add(_cboAccountFilter);
             actionsFlow.Controls.Add(_txtSearch);
 
@@ -399,7 +402,7 @@ namespace KerkenezMail.UI.Tabs
 
             _btnReply = new Button
             {
-                Text = "↩  Reply",
+                Text = "↩  " + Lang.T(StringKeys.InboxBtnReply),
                 Dock = DockStyle.Top,
                 Height = (int)(26 * scale),
                 FlatStyle = FlatStyle.System,
@@ -415,11 +418,11 @@ namespace KerkenezMail.UI.Tabs
                     ReplyRequested?.Invoke(this, currentEmail);
                 }
             };
-            _topBarToolTip.SetToolTip(_btnReply, "Reply: Compose a reply to this email thread");
+            _topBarToolTip.SetToolTip(_btnReply, Lang.T(StringKeys.InboxTipReply));
 
             _btnMoveToInbox = new Button
             {
-                Text = "📥 Move to Inbox",
+                Text = "📥 " + Lang.T(StringKeys.InboxBtnMoveInbox),
                 Dock = DockStyle.Top,
                 Height = (int)(26 * scale),
                 FlatStyle = FlatStyle.System,
@@ -428,7 +431,7 @@ namespace KerkenezMail.UI.Tabs
                 Visible = false
             };
             _btnMoveToInbox.Click += OnMoveToInboxClick;
-            _topBarToolTip.SetToolTip(_btnMoveToInbox, "Move to Inbox: Move selected email(s) from Spam back to Inbox");
+            _topBarToolTip.SetToolTip(_btnMoveToInbox, Lang.T(StringKeys.InboxTipMoveToInbox));
 
             _pnlReplyBox.Controls.Add(_btnMoveToInbox);
             _pnlReplyBox.Controls.Add(_btnReply);
@@ -449,7 +452,7 @@ namespace KerkenezMail.UI.Tabs
 
             _lblEmailSubject = new Label
             {
-                Text = "Subject: (No email selected)",
+                Text = $"{Lang.T(StringKeys.InboxSubjectPrefix)} {Lang.T(StringKeys.InboxNoEmailSelected)}",
                 AutoSize = true,
                 Location = new Point(0, (int)(2 * scale)),
                 Font = new Font("Segoe UI", 11F, FontStyle.Bold),
@@ -471,19 +474,20 @@ namespace KerkenezMail.UI.Tabs
                 _lblEmailSubject.Location = new Point(-_sliderSubject.Value, (int)(2 * scale));
             };
 
-            MouseEventHandler onSubjectWheel = (s, e) =>
+            void onSubjectWheel(object? s, MouseEventArgs e)
             {
                 if (_sliderSubject.Visible)
                 {
-                    int maxVal = _sliderSubject.Maximum - _sliderSubject.LargeChange + 1;
-                    if (maxVal > 0)
+                    int step = (int)(24 * scale);
+                    int delta = e.Delta > 0 ? -step : step;
+                    int newVal = Math.Max(0, Math.Min(_sliderSubject.Maximum - _sliderSubject.LargeChange + 1, _sliderSubject.Value + delta));
+                    if (newVal != _sliderSubject.Value)
                     {
-                        int newVal = Math.Clamp(_sliderSubject.Value - (e.Delta / 2), 0, maxVal);
                         _sliderSubject.Value = newVal;
                         _lblEmailSubject.Location = new Point(-newVal, (int)(2 * scale));
                     }
                 }
-            };
+            }
             _pnlSubjectViewport.MouseWheel += onSubjectWheel;
             _lblEmailSubject.MouseWheel += onSubjectWheel;
 
@@ -497,7 +501,7 @@ namespace KerkenezMail.UI.Tabs
 
             _lblEmailMeta = new Label
             {
-                Text = "From: -   •   Date: -   •   Account: -",
+                Text = $"{Lang.T(StringKeys.InboxDetailFrom)} -   •   {Lang.T(StringKeys.InboxDetailDate)} -   •   {Lang.T(StringKeys.InboxDetailAccount)} -",
                 Dock = DockStyle.Top,
                 AutoSize = true,
                 Font = new Font("Segoe UI", 9F),
@@ -544,7 +548,7 @@ namespace KerkenezMail.UI.Tabs
 
             _lblAttachmentsTitle = new Label
             {
-                Text = "📎 Attachments:",
+                Text = "📎 " + Lang.T(StringKeys.InboxAttachmentsTitle),
                 AutoSize = true,
                 Font = new Font("Segoe UI", 8.5F, FontStyle.Bold),
                 ForeColor = Color.FromArgb(40, 55, 80),
@@ -578,26 +582,26 @@ namespace KerkenezMail.UI.Tabs
                 Padding = new Padding(0, 0, 0, 4)
             };
 
-            var lblSummaryTitle = new Label
+            _lblSummaryTitle = new Label
             {
-                Text = "✨ AI Executive Summary",
+                Text = "✨ " + Lang.T(StringKeys.InboxAiExecutiveSummary),
                 Dock = DockStyle.Left,
                 AutoSize = true,
                 Font = new Font("Segoe UI", 10F, FontStyle.Bold),
                 ForeColor = Color.FromArgb(0, 102, 204)
             };
 
-            var lblSummaryHint = new Label
+            _lblSummaryHint = new Label
             {
-                Text = "(Generated by local LLM in VRAM)",
+                Text = Lang.T(StringKeys.InboxAiGeneratedVram),
                 Dock = DockStyle.Right,
                 AutoSize = true,
                 Font = new Font("Segoe UI", 8.5F),
                 ForeColor = Color.FromArgb(120, 120, 120)
             };
 
-            summaryHeader.Controls.Add(lblSummaryTitle);
-            summaryHeader.Controls.Add(lblSummaryHint);
+            summaryHeader.Controls.Add(_lblSummaryTitle);
+            summaryHeader.Controls.Add(_lblSummaryHint);
 
             _txtSummary = new TextBox
             {
@@ -608,7 +612,7 @@ namespace KerkenezMail.UI.Tabs
                 BackColor = Color.FromArgb(245, 250, 255),
                 BorderStyle = BorderStyle.None,
                 Font = new Font("Segoe UI", 10F, FontStyle.Regular),
-                PlaceholderText = "AI summary will appear here..."
+                PlaceholderText = Lang.T(StringKeys.InboxAiSummaryPlaceholder)
             };
 
             summaryCard.Controls.Add(_txtSummary);
@@ -706,11 +710,44 @@ namespace KerkenezMail.UI.Tabs
         {
             if (this.IsDisposed) return;
             if (_btnRefresh != null) _btnRefresh.Text = "🔄 " + Lang.T(StringKeys.InboxRefresh);
-            if (_btnReply != null) _btnReply.Text = "↩ " + Lang.T(StringKeys.InboxBtnReply);
+            if (_btnCopySummary != null) _btnCopySummary.Text = "📋 " + Lang.T(StringKeys.InboxCopySummary);
+            if (_btnExport != null) _btnExport.Text = "💾 " + Lang.T(StringKeys.InboxExport);
+            if (_btnReply != null) _btnReply.Text = "↩  " + Lang.T(StringKeys.InboxBtnReply);
             if (_btnMoveToInbox != null) _btnMoveToInbox.Text = "📥 " + Lang.T(StringKeys.InboxBtnMoveInbox);
-            if (_btnDelete != null) _btnDelete.Text = "🗑 " + Lang.T(StringKeys.InboxBtnDelete);
+            if (_btnDelete != null) _btnDelete.Text = "🗑";
+            if (_btnArchive != null) _btnArchive.Text = "📥";
             if (_txtSearch != null) _txtSearch.PlaceholderText = Lang.T(StringKeys.InboxSearchPlaceholder);
+            if (_lblAccount != null) _lblAccount.Text = Lang.T(StringKeys.InboxAccountLabel);
+            if (_lblSummaryTitle != null) _lblSummaryTitle.Text = "✨ " + Lang.T(StringKeys.InboxAiExecutiveSummary);
+            if (_lblSummaryHint != null) _lblSummaryHint.Text = Lang.T(StringKeys.InboxAiGeneratedVram);
+            if (_txtSummary != null) _txtSummary.PlaceholderText = Lang.T(StringKeys.InboxAiSummaryPlaceholder);
+            if (_lblAttachmentsTitle != null) _lblAttachmentsTitle.Text = "📎 " + Lang.T(StringKeys.InboxAttachmentsTitle);
+
+            if (_topBarToolTip != null)
+            {
+                if (_btnRefresh != null) _topBarToolTip.SetToolTip(_btnRefresh, Lang.T(StringKeys.InboxTipRefresh));
+                if (_btnCopySummary != null) _topBarToolTip.SetToolTip(_btnCopySummary, Lang.T(StringKeys.InboxTipCopySummary));
+                if (_btnExport != null) _topBarToolTip.SetToolTip(_btnExport, Lang.T(StringKeys.InboxTipExport));
+                if (_btnOpenInBrowser != null) _topBarToolTip.SetToolTip(_btnOpenInBrowser, Lang.T(StringKeys.InboxTipOpenInBrowser));
+                if (_btnArchive != null) _topBarToolTip.SetToolTip(_btnArchive, Lang.T(StringKeys.InboxTipArchive));
+                if (_btnDelete != null) _topBarToolTip.SetToolTip(_btnDelete, Lang.T(StringKeys.InboxTipDelete));
+                if (_btnReply != null) _topBarToolTip.SetToolTip(_btnReply, Lang.T(StringKeys.InboxTipReply));
+                if (_btnMoveToInbox != null) _topBarToolTip.SetToolTip(_btnMoveToInbox, Lang.T(StringKeys.InboxTipMoveToInbox));
+            }
+
             SetupListViewColumns();
+            RefreshAccountFilter();
+            UpdateHeaderTitle(_emails.Count, _emails.Count(e => !e.IsRead));
+
+            if (_selectedEmailsOrder.Count == 0 || _lvEmails.SelectedItems.Count == 0)
+            {
+                ResetEmailPreview();
+            }
+            else
+            {
+                var curr = GetCurrentPreviewEmail();
+                if (curr != null) DisplayEmail(curr);
+            }
         }
 
         public void ApplyAiModeLayout()
@@ -794,9 +831,10 @@ namespace KerkenezMail.UI.Tabs
         public void RefreshAccountFilter()
         {
             string? currentSelection = _cboAccountFilter.SelectedItem?.ToString();
+            int prevIndex = _cboAccountFilter.SelectedIndex;
 
             _cboAccountFilter.Items.Clear();
-            _cboAccountFilter.Items.Add("All Accounts");
+            _cboAccountFilter.Items.Add(Lang.T(StringKeys.InboxAllAccounts));
 
             foreach (var acc in _configService.GetAccounts())
             {
@@ -806,6 +844,10 @@ namespace KerkenezMail.UI.Tabs
             if (!string.IsNullOrEmpty(currentSelection) && _cboAccountFilter.Items.Contains(currentSelection))
             {
                 _cboAccountFilter.SelectedItem = currentSelection;
+            }
+            else if (prevIndex >= 0 && prevIndex < _cboAccountFilter.Items.Count)
+            {
+                _cboAccountFilter.SelectedIndex = prevIndex;
             }
             else
             {
@@ -1059,27 +1101,27 @@ namespace KerkenezMail.UI.Tabs
                         if (settings.InstantVramUnload)
                         {
                             _llamaManager.Stop(_logger);
-                            StatusUpdated?.Invoke("Sync complete", "VRAM Free");
+                            StatusUpdated?.Invoke(Lang.T(StringKeys.StatusSyncComplete), "VRAM Free");
                         }
                         else
                         {
-                            StatusUpdated?.Invoke("Sync complete", "Model Loaded in VRAM");
+                            StatusUpdated?.Invoke(Lang.T(StringKeys.StatusSyncComplete), "Model Loaded in VRAM");
                         }
                     }
                     else if (settings.IsBatterySaverActive)
                     {
-                        StatusUpdated?.Invoke("Sync complete", "Battery Saver (No AI)");
+                        StatusUpdated?.Invoke(Lang.T(StringKeys.StatusSyncComplete), "Battery Saver (No AI)");
                     }
                     else if (settings.IsAiDisabled)
                     {
-                        StatusUpdated?.Invoke("Sync complete", "AI Disabled");
+                        StatusUpdated?.Invoke(Lang.T(StringKeys.StatusSyncComplete), "AI Disabled");
                     }
                     else
                     {
                         string backendMetric = string.Equals(settings.AiBackend, "Ollama", StringComparison.OrdinalIgnoreCase) 
                             ? "Ollama Active" 
                             : "Cloud Active";
-                        StatusUpdated?.Invoke("Sync complete", backendMetric);
+                        StatusUpdated?.Invoke(Lang.T(StringKeys.StatusSyncComplete), backendMetric);
                     }
                 }
             }
@@ -1313,7 +1355,7 @@ namespace KerkenezMail.UI.Tabs
             string search = _txtSearch.Text.Trim();
 
             if (!string.IsNullOrEmpty(filterAccount) && 
-                !string.Equals(filterAccount, "All Accounts", StringComparison.OrdinalIgnoreCase) && 
+                _cboAccountFilter.SelectedIndex > 0 && 
                 !string.Equals(email.AccountName?.Trim(), filterAccount, StringComparison.OrdinalIgnoreCase))
             {
                 return;
@@ -1344,14 +1386,23 @@ namespace KerkenezMail.UI.Tabs
 
         private void UpdateHeaderTitle(int totalCount, int unreadCount)
         {
-            string folderName = _currentFolder.GetDisplayName();
+            string folderName = _currentFolder switch
+            {
+                MailFolderType.Inbox => Lang.T(StringKeys.NavInbox),
+                MailFolderType.Sent => Lang.T(StringKeys.NavSent),
+                MailFolderType.Archive => Lang.T(StringKeys.NavArchived),
+                MailFolderType.Spam => Lang.T(StringKeys.NavSpam),
+                MailFolderType.Trash => Lang.T(StringKeys.NavTrash),
+                _ => _currentFolder.ToString()
+            };
+
             if (_currentFolder == MailFolderType.Inbox)
             {
-                _lblInboxHeader.Text = $"{folderName} ({totalCount} emails, {unreadCount} unread)";
+                _lblInboxHeader.Text = Lang.Format(StringKeys.InboxListHeaderUnread, folderName, totalCount, unreadCount);
             }
             else
             {
-                _lblInboxHeader.Text = $"{folderName} ({totalCount} emails)";
+                _lblInboxHeader.Text = Lang.Format(StringKeys.InboxListHeader, folderName, totalCount);
             }
         }
 
@@ -1362,8 +1413,8 @@ namespace KerkenezMail.UI.Tabs
             _rtbEmailBody.Clear();
             ResetLinkToolTip();
             _currentEmailLinkSpans.Clear();
-            _lblEmailSubject.Text = "Subject: (No email selected)";
-            _lblEmailMeta.Text = "From: -   •   Date: -   •   Account: -";
+            _lblEmailSubject.Text = $"{Lang.T(StringKeys.InboxSubjectPrefix)} {Lang.T(StringKeys.InboxNoEmailSelected)}";
+            _lblEmailMeta.Text = $"{Lang.T(StringKeys.InboxDetailFrom)} -   •   {Lang.T(StringKeys.InboxDetailDate)} -   •   {Lang.T(StringKeys.InboxDetailAccount)} -";
             _btnReply.Visible = false;
             _btnMoveToInbox.Visible = false;
             if (_sliderSubject != null)
@@ -1404,7 +1455,7 @@ namespace KerkenezMail.UI.Tabs
                 if (e.Folder != _currentFolder) return false;
 
                 if (!string.IsNullOrEmpty(filterAccount) && 
-                    !string.Equals(filterAccount, "All Accounts", StringComparison.OrdinalIgnoreCase) && 
+                    _cboAccountFilter.SelectedIndex > 0 && 
                     !string.Equals(e.AccountName?.Trim(), filterAccount, StringComparison.OrdinalIgnoreCase))
                 {
                     return false;
@@ -1615,16 +1666,16 @@ namespace KerkenezMail.UI.Tabs
         {
             UpdateSummaryPaneVisibility(email);
 
-            string readTag = email.IsRead ? "[Read]" : "[Unread]";
-            if (email.IsArchived) readTag = "[Archived] • " + readTag;
+            string readTag = email.IsRead ? $"[{Lang.T(StringKeys.InboxTagRead)}]" : $"[{Lang.T(StringKeys.InboxTagUnread)}]";
+            if (email.IsArchived) readTag = $"[{Lang.T(StringKeys.InboxTagArchived)}] • " + readTag;
 
             string priTag = email.Priority.HasValue
-                ? $"   •   Priority: {email.Priority.Value} ({(email.Priority.Value == 1 ? "High" : email.Priority.Value == 2 ? "Normal" : "Low")})"
+                ? $"   •   {Lang.T(StringKeys.InboxColPriority)}: {email.Priority.Value} ({(email.Priority.Value == 1 ? Lang.T(StringKeys.InboxPriorityHigh) : email.Priority.Value == 2 ? Lang.T(StringKeys.InboxPriorityNormal) : Lang.T(StringKeys.InboxPriorityLow))})"
                 : "";
 
-            _lblEmailSubject.Text = $"Subject: {email.Subject}";
+            _lblEmailSubject.Text = $"{Lang.T(StringKeys.InboxSubjectPrefix)} {email.Subject}";
             UpdateSubjectSlider();
-            _lblEmailMeta.Text = $"From: {email.Sender}   •   Date: {email.DateString}   •   Account: {email.AccountName}{priTag}   •   {readTag}";
+            _lblEmailMeta.Text = $"{Lang.T(StringKeys.InboxDetailFrom)} {email.Sender}   •   {Lang.T(StringKeys.InboxDetailDate)} {email.DateString}   •   {Lang.T(StringKeys.InboxDetailAccount)} {email.AccountName}{priTag}   •   {readTag}";
             UpdateActionButtonsVisibility();
 
             try

@@ -66,7 +66,7 @@ namespace KerkenezMail.UI.Tabs
 
             _btnCopy = new Button
             {
-                Text = "📋 " + Lang.T(StringKeys.LogsBtnExport),
+                Text = "📋 " + Lang.T(StringKeys.LogsBtnCopy),
                 UseMnemonic = false,
                 AutoSize = true,
                 AutoSizeMode = AutoSizeMode.GrowAndShrink,
@@ -157,7 +157,7 @@ namespace KerkenezMail.UI.Tabs
             if (_rtbLog.TextLength > 0)
             {
                 Clipboard.SetText(_rtbLog.Text);
-                MessageBox.Show("Console log copied to clipboard!", "Copied", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show(Lang.T(StringKeys.LogsCopiedMsg), Lang.T(StringKeys.CommonSuccess), MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
         }
 
@@ -165,7 +165,7 @@ namespace KerkenezMail.UI.Tabs
         {
             if (this.IsDisposed) return;
             if (_lblTitle != null) _lblTitle.Text = Lang.T(StringKeys.LogsTitle);
-            if (_btnCopy != null) _btnCopy.Text = "📋 " + Lang.T(StringKeys.LogsBtnExport);
+            if (_btnCopy != null) _btnCopy.Text = "📋 " + Lang.T(StringKeys.LogsBtnCopy);
             if (_btnClear != null) _btnClear.Text = "🧹 " + Lang.T(StringKeys.LogsBtnClear);
         }
     }

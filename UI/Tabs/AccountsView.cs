@@ -264,7 +264,7 @@ namespace KerkenezMail.UI.Tabs
 
             var lblStatus = new Label
             {
-                Text = $"Status: {account.ConnectionStatus}",
+                Text = $"{Lang.T(StringKeys.AccountsColStatus)}: {account.ConnectionStatus}",
                 Font = new Font("Segoe UI", 8.25F, FontStyle.Italic),
                 ForeColor = account.ConnectionStatus.StartsWith("Connected") ? Color.DarkGreen :
                             account.ConnectionStatus.StartsWith("Failed") ? Color.Red : Color.FromArgb(120, 120, 120),
@@ -286,7 +286,7 @@ namespace KerkenezMail.UI.Tabs
 
             var btnTest = new Button
             {
-                Text = "⚡ Test",
+                Text = "⚡ " + Lang.T(StringKeys.AccountsBtnTest),
                 UseMnemonic = false,
                 AutoSize = true,
                 AutoSizeMode = AutoSizeMode.GrowAndShrink,
@@ -299,25 +299,25 @@ namespace KerkenezMail.UI.Tabs
             {
                 btnTest.Enabled = false;
                 lblStatus.ForeColor = Color.DarkOrange;
-                lblStatus.Text = "Status: Testing...";
+                lblStatus.Text = $"{Lang.T(StringKeys.AccountsColStatus)}: {Lang.T(StringKeys.AddAccTesting)}";
 
                 var (success, msg, unread) = await _imapService.TestConnectionAsync(account);
                 account.ConnectionStatus = success ? $"Connected ({unread} unread)" : "Failed";
                 account.ConnectionError = success ? null : msg;
 
                 lblStatus.ForeColor = success ? Color.DarkGreen : Color.Red;
-                lblStatus.Text = $"Status: {account.ConnectionStatus}";
+                lblStatus.Text = $"{Lang.T(StringKeys.AccountsColStatus)}: {account.ConnectionStatus}";
                 btnTest.Enabled = true;
 
                 if (!success)
                 {
-                    MessageBox.Show(msg, "Connection Failed", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    MessageBox.Show(msg, Lang.T(StringKeys.AccountsStatusError), MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
             };
 
             var btnEdit = new Button
             {
-                Text = "✏️ Edit",
+                Text = "✏️ " + Lang.T(StringKeys.AccountsBtnEdit),
                 UseMnemonic = false,
                 AutoSize = true,
                 AutoSizeMode = AutoSizeMode.GrowAndShrink,

@@ -9,7 +9,7 @@ namespace KerkenezMail.UI.Controls
 {
     public class SidebarNav : Panel
     {
-        public const int ExpandedWidth = 155;
+        public const int ExpandedWidth = 168;
         public const int CollapsedWidth = 60;
 
         public event EventHandler<int>? TabChanged;
@@ -283,9 +283,9 @@ namespace KerkenezMail.UI.Controls
         public Rectangle GetChevronBounds(float scale)
         {
             var item0Rect = GetItemBounds(0, scale);
-            int chevronSize = (int)(22 * scale);
+            int chevronSize = (int)(18 * scale);
             int top = item0Rect.Top + (item0Rect.Height - chevronSize) / 2;
-            int left = item0Rect.Right - chevronSize - (int)(5 * scale);
+            int left = item0Rect.Right - chevronSize - (int)(3 * scale);
             return new Rectangle(left, top, chevronSize, chevronSize);
         }
 
@@ -836,12 +836,12 @@ namespace KerkenezMail.UI.Controls
                 };
 
                 // Draw icon
-                int iconLeft = itemRect.Left + (int)(8 * scale);
-                int iconWidth = (int)(22 * scale);
+                int iconLeft = itemRect.Left + (int)(6 * scale);
+                int iconWidth = (int)(20 * scale);
                 g.DrawString(_tabIcons[i], iconFont, textBrush, new Rectangle(iconLeft, itemRect.Top, iconWidth, itemRect.Height), stringFormat);
 
                 // Draw label text (reserve space on right for chevron on Item 0)
-                int textLeft = iconLeft + iconWidth + (int)(6 * scale);
+                int textLeft = iconLeft + iconWidth + (int)(5 * scale);
                 int rightBound = (i == 0) ? chevronRect.Left - (int)(2 * scale) : itemRect.Right - 2;
                 int textWidth = rightBound - textLeft;
                 if (textWidth > 0)

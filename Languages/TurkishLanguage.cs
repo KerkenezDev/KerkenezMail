@@ -22,7 +22,7 @@ namespace KerkenezMail.Languages
             Set(StringKeys.NavSendMail,                  "E-posta Gönder");
             Set(StringKeys.NavAccounts,                  "Hesaplar");
             Set(StringKeys.NavSettings,                  "Ayarlar");
-            Set(StringKeys.NavLiveLogs,                  "Canlı Günlükler");
+            Set(StringKeys.NavLiveLogs,                  "Canlı Kayıtlar");
             Set(StringKeys.NavSent,                      "Gönderilenler");
             Set(StringKeys.NavArchived,                  "Arşiv");
             Set(StringKeys.NavSpam,                      "İstenmeyen (Spam)");
@@ -46,6 +46,30 @@ namespace KerkenezMail.Languages
 
             // --- 3. Inbox & Summaries View ---
             Set(StringKeys.InboxRefresh,                 "Yenile");
+            Set(StringKeys.InboxCopySummary,             "Özeti Kopyala");
+            Set(StringKeys.InboxExport,                  "Dışa Aktar...");
+            Set(StringKeys.InboxOpenInBrowser,           "Tarayıcıda Aç");
+            Set(StringKeys.InboxTipRefresh,              "Gelen Kutusunu Yenile: Yapılandırılan hesaplardan yeni e-postaları al");
+            Set(StringKeys.InboxTipCopySummary,          "Özeti Kopyala: Yapay zeka özetini panoya kopyala");
+            Set(StringKeys.InboxTipExport,               "Dışa Aktar: E-postaları ve özetleri JSON, CSV, Markdown veya HTML raporu olarak kaydet");
+            Set(StringKeys.InboxTipOpenInBrowser,        "Tarayıcıda Aç: Orijinal e-postayı varsayılan tarayıcıda görüntüle (Tam HTML)");
+            Set(StringKeys.InboxTipArchive,              "Arşivle: Seçilen e-postaları Arşiv klasörüne taşı");
+            Set(StringKeys.InboxTipDelete,               "Sil: Seçilen e-postaları Çöp Kutusu klasörüne taşı");
+            Set(StringKeys.InboxTipReply,                "Yanıtla: Bu e-posta dizisine yanıt yaz");
+            Set(StringKeys.InboxTipMoveToInbox,          "Gelen Kutusuna Taşı: Seçilen e-postaları Gelen Kutusuna geri taşı");
+            Set(StringKeys.InboxAccountLabel,            "Hesap:");
+            Set(StringKeys.InboxAllAccounts,             "Tüm Hesaplar");
+            Set(StringKeys.InboxListHeader,              "{0} ({1} e-posta)");
+            Set(StringKeys.InboxListHeaderUnread,        "{0} ({1} e-posta, {2} okunmamış)");
+            Set(StringKeys.InboxSubjectPrefix,           "Konu:");
+            Set(StringKeys.InboxNoEmailSelected,         "(E-posta seçilmedi)");
+            Set(StringKeys.InboxAiExecutiveSummary,      "Yapay Zeka Yönetici Özeti");
+            Set(StringKeys.InboxAiGeneratedVram,         "(VRAM'deki yerel LLM tarafından üretildi)");
+            Set(StringKeys.InboxAiSummaryPlaceholder,    "Yapay zeka özeti burada görünecek...");
+            Set(StringKeys.InboxAttachmentsTitle,        "Ekler:");
+            Set(StringKeys.InboxTagRead,                 "Okundu");
+            Set(StringKeys.InboxTagUnread,               "Okunmadı");
+            Set(StringKeys.InboxTagArchived,             "Arşivlendi");
             Set(StringKeys.InboxSummarize,               "Yapay Zeka ile Özetle");
             Set(StringKeys.InboxSearchPlaceholder,       "Gönderen, konu veya içeriğe göre ara...");
             Set(StringKeys.InboxColAccount,              "Hesap");
@@ -175,11 +199,13 @@ namespace KerkenezMail.Languages
             Set(StringKeys.SettingsSavedToast,           "Ayarlar başarıyla kaydedildi!");
 
             // --- 7. Live Logs View ---
-            Set(StringKeys.LogsTitle,                    "Canlı Sistem Günlükleri");
-            Set(StringKeys.LogsSubtitle,                 "Gerçek zamanlı tanı olayları, IMAP bağlantıları ve yapay zeka günlükleri.");
-            Set(StringKeys.LogsBtnClear,                 "Günlükleri Temizle");
-            Set(StringKeys.LogsBtnExport,                "Günlükleri Dışa Aktar...");
+            Set(StringKeys.LogsTitle,                    "Canlı Kayıtlar");
+            Set(StringKeys.LogsSubtitle,                 "Gerçek zamanlı arka plan IMAP ve yapay zeka işlem kayıtları.");
+            Set(StringKeys.LogsBtnCopy,                  "Kayıtları Kopyala");
+            Set(StringKeys.LogsBtnClear,                 "Kayıtları Temizle");
+            Set(StringKeys.LogsBtnExport,                "Kayıtları Dışa Aktar...");
             Set(StringKeys.LogsChkAutoScroll,            "En alta otomatik kaydır");
+            Set(StringKeys.LogsCopiedMsg,                "Konsol kayıtları panoya kopyalandı!");
 
             // --- 8. Common & Dialog Messages ---
             Set(StringKeys.CommonSave,                   "Kaydet");
@@ -194,6 +220,10 @@ namespace KerkenezMail.Languages
             Set(StringKeys.CommonSuccess,                "Başarılı");
             Set(StringKeys.CommonLoading,                "Yükleniyor...");
             Set(StringKeys.CommonConnecting,             "Bağlanıyor...");
+
+            // --- 9. Status Bar Feedback ---
+            Set(StringKeys.StatusSyncComplete,           "Senkronizasyon tamamlandı");
+            Set(StringKeys.StatusReady,                  "Hazır");
         }
     }
 }

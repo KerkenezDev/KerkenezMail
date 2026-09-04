@@ -41,6 +41,30 @@ namespace KerkenezMail.Languages
         // 3. Inbox & Summaries View
         // ==========================================
         public const string InboxRefresh = "Inbox.Refresh";
+        public const string InboxCopySummary = "Inbox.CopySummary";
+        public const string InboxExport = "Inbox.Export";
+        public const string InboxOpenInBrowser = "Inbox.OpenInBrowser";
+        public const string InboxTipRefresh = "Inbox.TipRefresh";
+        public const string InboxTipCopySummary = "Inbox.TipCopySummary";
+        public const string InboxTipExport = "Inbox.TipExport";
+        public const string InboxTipOpenInBrowser = "Inbox.TipOpenInBrowser";
+        public const string InboxTipArchive = "Inbox.TipArchive";
+        public const string InboxTipDelete = "Inbox.TipDelete";
+        public const string InboxTipReply = "Inbox.TipReply";
+        public const string InboxTipMoveToInbox = "Inbox.TipMoveToInbox";
+        public const string InboxAccountLabel = "Inbox.AccountLabel";
+        public const string InboxAllAccounts = "Inbox.AllAccounts";
+        public const string InboxListHeader = "Inbox.ListHeader";
+        public const string InboxListHeaderUnread = "Inbox.ListHeaderUnread";
+        public const string InboxSubjectPrefix = "Inbox.SubjectPrefix";
+        public const string InboxNoEmailSelected = "Inbox.NoEmailSelected";
+        public const string InboxAiExecutiveSummary = "Inbox.AiExecutiveSummary";
+        public const string InboxAiGeneratedVram = "Inbox.AiGeneratedVram";
+        public const string InboxAiSummaryPlaceholder = "Inbox.AiSummaryPlaceholder";
+        public const string InboxAttachmentsTitle = "Inbox.AttachmentsTitle";
+        public const string InboxTagRead = "Inbox.TagRead";
+        public const string InboxTagUnread = "Inbox.TagUnread";
+        public const string InboxTagArchived = "Inbox.TagArchived";
         public const string InboxSummarize = "Inbox.Summarize";
         public const string InboxSearchPlaceholder = "Inbox.SearchPlaceholder";
         public const string InboxColAccount = "Inbox.ColAccount";
@@ -180,9 +204,11 @@ namespace KerkenezMail.Languages
         // ==========================================
         public const string LogsTitle = "Logs.Title";
         public const string LogsSubtitle = "Logs.Subtitle";
+        public const string LogsBtnCopy = "Logs.BtnCopy";
         public const string LogsBtnClear = "Logs.BtnClear";
         public const string LogsBtnExport = "Logs.BtnExport";
         public const string LogsChkAutoScroll = "Logs.ChkAutoScroll";
+        public const string LogsCopiedMsg = "Logs.CopiedMsg";
 
         // ==========================================
         // 8. Common & Dialog Messages
@@ -199,5 +225,11 @@ namespace KerkenezMail.Languages
         public const string CommonSuccess = "Common.Success";
         public const string CommonLoading = "Common.Loading";
         public const string CommonConnecting = "Common.Connecting";
+
+        // ==========================================
+        // 9. Status Bar Feedback
+        // ==========================================
+        public const string StatusSyncComplete = "Status.SyncComplete";
+        public const string StatusReady = "Status.Ready";
     }
 }

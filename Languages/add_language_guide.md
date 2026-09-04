@@ -51,136 +51,123 @@ public sealed class SpanishLanguage : BaseLanguage
     protected override void InitTranslations()
     {
         // ==========================================
-        // Navigation & Sidebar
+        // 1. Navigation & Sidebar
         // ==========================================
-        Set(StringKeys.Nav.Inbox,                   "Bandeja de entrada");
-        Set(StringKeys.Nav.SendMail,                "Enviar correo");
-        Set(StringKeys.Nav.Accounts,                "Cuentas");
-        Set(StringKeys.Nav.Settings,                "Configuración");
-        Set(StringKeys.Nav.LiveLogs,                "Registros en vivo");
-        Set(StringKeys.Nav.LiveImap,                "IMAP en vivo");
-        Set(StringKeys.Nav.CollapseSidebar,         "Contraer barra lateral");
-        Set(StringKeys.Nav.ExpandSidebar,           "Expandir barra lateral");
-        Set(StringKeys.Nav.StatusLive,              "IMAP en vivo: Activo");
-        Set(StringKeys.Nav.StatusIdle,              "IMAP en vivo: Inactivo");
-
-        // Subfolders
-        Set(StringKeys.Nav.SubFolderAll,            "Todos los correos");
-        Set(StringKeys.Nav.SubFolderUnread,         "No leídos");
-        Set(StringKeys.Nav.SubFolderStarred,        "Destacados");
-        Set(StringKeys.Nav.SubFolderSent,           "Enviados");
-        Set(StringKeys.Nav.SubFolderTrash,          "Papelera");
+        Set(StringKeys.NavInbox,                     "Bandeja de entrada");
+        Set(StringKeys.NavSendMail,                  "Enviar correo");
+        Set(StringKeys.NavAccounts,                  "Cuentas");
+        Set(StringKeys.NavSettings,                  "Configuración");
+        Set(StringKeys.NavLiveLogs,                  "Registros en vivo");
+        Set(StringKeys.NavSent,                      "Enviados");
+        Set(StringKeys.NavArchived,                  "Archivados");
+        Set(StringKeys.NavSpam,                      "Spam");
+        Set(StringKeys.NavTrash,                     "Papelera");
+        Set(StringKeys.NavLiveImap,                  "IMAP en vivo");
+        Set(StringKeys.NavLiveImapActive,            "IMAP en vivo: Activo");
+        Set(StringKeys.NavLiveImapOff,               "IMAP en vivo: Inactivo");
+        Set(StringKeys.NavTipExpandSidebar,          "Expandir barra lateral");
+        Set(StringKeys.NavTipCollapseSidebar,        "Contraer barra lateral");
 
         // ==========================================
-        // Shell & Windows
+        // 2. Main Window & Shell
         // ==========================================
-        Set(StringKeys.Shell.AppTitle,              "Kerkenez Mail");
-        Set(StringKeys.Shell.Close,                 "Cerrar");
-        Set(StringKeys.Shell.Minimize,              "Minimizar");
-        Set(StringKeys.Shell.Maximize,              "Maximizar");
-        Set(StringKeys.Shell.Quit,                  "Salir");
+        Set(StringKeys.AppTitle,                     "Kerkenez Mail (Win32)");
+        Set(StringKeys.TrayOpen,                     "📬  Abrir Kerkenez Mail");
+        Set(StringKeys.TrayCheckNow,                 "🔄  Comprobar ahora");
+        Set(StringKeys.TraySettings,                 "⚙️  Configuración");
+        Set(StringKeys.TrayExit,                     "❌  Salir");
 
         // ==========================================
-        // Inbox & Message List
+        // 3. Inbox & Summaries View
         // ==========================================
-        Set(StringKeys.Inbox.SearchPlaceholder,     "Buscar correos...");
-        Set(StringKeys.Inbox.ColFrom,               "De");
-        Set(StringKeys.Inbox.ColSubject,            "Asunto");
-        Set(StringKeys.Inbox.ColDate,               "Fecha");
-        Set(StringKeys.Inbox.ColPriority,           "Prioridad");
-        Set(StringKeys.Inbox.ColCategory,           "Categoría");
-        Set(StringKeys.Inbox.BtnRefresh,            "Actualizar");
-        Set(StringKeys.Inbox.BtnReply,              "Responder");
-        Set(StringKeys.Inbox.BtnForward,            "Reenviar");
-        Set(StringKeys.Inbox.BtnArchive,            "Archivar");
-        Set(StringKeys.Inbox.BtnDelete,             "Eliminar");
-        Set(StringKeys.Inbox.BtnStar,               "Destacar");
-        Set(StringKeys.Inbox.BtnMoveToInbox,        "Mover a bandeja de entrada");
-        Set(StringKeys.Inbox.NoMessages,            "No hay mensajes para mostrar.");
-        Set(StringKeys.Inbox.LoadingMessages,       "Cargando correos...");
+        Set(StringKeys.InboxRefresh,                 "Actualizar");
+        Set(StringKeys.InboxCopySummary,             "Copiar resumen");
+        Set(StringKeys.InboxExport,                  "Exportar...");
+        Set(StringKeys.InboxOpenInBrowser,           "Abrir en navegador");
+        Set(StringKeys.InboxTipRefresh,              "Actualizar bandeja de entrada");
+        Set(StringKeys.InboxTipCopySummary,          "Copiar resumen de IA al portapapeles");
+        Set(StringKeys.InboxTipExport,               "Exportar correos y resúmenes");
+        Set(StringKeys.InboxTipOpenInBrowser,        "Ver correo original en el navegador");
+        Set(StringKeys.InboxTipArchive,              "Mover correos a la carpeta de archivo");
+        Set(StringKeys.InboxTipDelete,               "Mover correos a la papelera");
+        Set(StringKeys.InboxTipReply,                "Responder a este hilo");
+        Set(StringKeys.InboxTipMoveToInbox,          "Mover a la bandeja de entrada");
+        Set(StringKeys.InboxAccountLabel,            "Cuenta:");
+        Set(StringKeys.InboxAllAccounts,             "Todas las cuentas");
+        Set(StringKeys.InboxListHeader,              "{0} ({1} correos)");
+        Set(StringKeys.InboxListHeaderUnread,        "{0} ({1} correos, {2} no leídos)");
+        Set(StringKeys.InboxSubjectPrefix,           "Asunto:");
+        Set(StringKeys.InboxNoEmailSelected,         "(Ningún correo seleccionado)");
+        Set(StringKeys.InboxAiExecutiveSummary,      "Resumen ejecutivo de IA");
+        Set(StringKeys.InboxAiGeneratedVram,         "(Generado por LLM local en VRAM)");
+        Set(StringKeys.InboxAiSummaryPlaceholder,    "El resumen de IA aparecerá aquí...");
+        Set(StringKeys.InboxAttachmentsTitle,        "Archivos adjuntos:");
+        Set(StringKeys.InboxTagRead,                 "Leído");
+        Set(StringKeys.InboxTagUnread,               "No leído");
+        Set(StringKeys.InboxTagArchived,             "Archivado");
+        Set(StringKeys.InboxSummarize,               "Resumir con IA");
+        Set(StringKeys.InboxSearchPlaceholder,       "Buscar correos por remitente, asunto o contenido...");
+        Set(StringKeys.InboxColAccount,              "Cuenta");
+        Set(StringKeys.InboxColFrom,                 "De");
+        Set(StringKeys.InboxColSubject,              "Asunto");
+        Set(StringKeys.InboxColDate,                 "Fecha");
+        Set(StringKeys.InboxColPriority,             "Prioridad");
+        Set(StringKeys.InboxBtnReply,                "Responder");
+        Set(StringKeys.InboxBtnMoveInbox,            "Mover a bandeja de entrada");
+        Set(StringKeys.InboxBtnDelete,               "Eliminar");
 
         // ==========================================
-        // Send Mail / Compose
+        // 4. Send Mail / Compose
         // ==========================================
-        Set(StringKeys.Send.Title,                  "Redactar nuevo correo");
-        Set(StringKeys.Send.From,                   "De");
-        Set(StringKeys.Send.To,                     "Para");
-        Set(StringKeys.Send.Cc,                     "CC");
-        Set(StringKeys.Send.Bcc,                    "CCO");
-        Set(StringKeys.Send.Subject,                "Asunto");
-        Set(StringKeys.Send.BtnSend,                "Enviar");
-        Set(StringKeys.Send.BtnDiscard,             "Descartar");
-        Set(StringKeys.Send.BtnAttach,              "Adjuntar");
-        Set(StringKeys.Send.Sending,                "Enviando...");
-        Set(StringKeys.Send.SentSuccess,            "¡Correo enviado con éxito!");
-        Set(StringKeys.Send.SentFailed,             "Error al enviar el correo.");
+        Set(StringKeys.SendTitle,                    "Redactar correo");
+        Set(StringKeys.SendFrom,                     "De:");
+        Set(StringKeys.SendTo,                       "Para:");
+        Set(StringKeys.SendCc,                       "CC:");
+        Set(StringKeys.SendBcc,                      "CCO:");
+        Set(StringKeys.SendSubject,                  "Asunto:");
+        Set(StringKeys.SendBodyPlaceholder,          "Escriba su mensaje aquí...");
+        Set(StringKeys.SendBtnSend,                  "Enviar");
+        Set(StringKeys.SendBtnDiscard,               "Descartar");
+        Set(StringKeys.SendAddAttachment,            "Adjuntar archivo");
 
         // ==========================================
-        // Accounts
+        // 5. Accounts View & Dialog
         // ==========================================
-        Set(StringKeys.Accounts.Title,              "Cuentas de correo");
-        Set(StringKeys.Accounts.BtnAddAccount,      "Agregar cuenta");
-        Set(StringKeys.Accounts.BtnEditAccount,     "Editar cuenta");
-        Set(StringKeys.Accounts.BtnDeleteAccount,   "Eliminar cuenta");
-        Set(StringKeys.Accounts.BtnTestConnection,  "Probar conexión");
-        Set(StringKeys.Accounts.SharedWithSuite,    "Compartido con la suite Kerkenez");
+        Set(StringKeys.AccountsTitle,                "Cuentas de correo");
+        Set(StringKeys.AccountsBtnAdd,               "Agregar cuenta");
+        Set(StringKeys.AccountsBtnEdit,              "Editar");
+        Set(StringKeys.AccountsBtnDelete,            "Eliminar");
+        Set(StringKeys.AccountsBtnTest,              "Probar");
+        Set(StringKeys.AccountsColStatus,            "Estado");
 
         // ==========================================
-        // Add / Edit Account Dialog
+        // 6. Settings View
         // ==========================================
-        Set(StringKeys.AddAcc.DialogTitleAdd,       "Agregar cuenta de correo");
-        Set(StringKeys.AddAcc.DialogTitleEdit,      "Editar cuenta de correo");
-        Set(StringKeys.AddAcc.AccountName,          "Nombre de cuenta");
-        Set(StringKeys.AddAcc.EmailAddress,         "Dirección de correo");
-        Set(StringKeys.AddAcc.Password,             "Contraseña / Clave de app");
-        Set(StringKeys.AddAcc.ImapServer,           "Servidor IMAP");
-        Set(StringKeys.AddAcc.ImapPort,             "Puerto IMAP");
-        Set(StringKeys.AddAcc.ImapSsl,              "Usar SSL/TLS para IMAP");
-        Set(StringKeys.AddAcc.SmtpServer,           "Servidor SMTP");
-        Set(StringKeys.AddAcc.SmtpPort,             "Puerto SMTP");
-        Set(StringKeys.AddAcc.SmtpSsl,              "Usar SSL/TLS para SMTP");
-        Set(StringKeys.AddAcc.BtnSave,              "Guardar");
-        Set(StringKeys.AddAcc.BtnCancel,            "Cancelar");
-        Set(StringKeys.AddAcc.BtnTest,              "Probar");
+        Set(StringKeys.SettingsTitle,                "Configuración");
+        Set(StringKeys.SettingsSecLanguage,          "Idioma y región");
+        Set(StringKeys.SettingsLanguageLabel,        "Idioma de la interfaz");
+        Set(StringKeys.SettingsBtnSave,              "Guardar configuración");
 
         // ==========================================
-        // Settings View
+        // 7. Live Logs View
         // ==========================================
-        Set(StringKeys.Settings.Title,              "Configuración");
-        Set(StringKeys.Settings.SectionLanguage,    "Idioma y región");
-        Set(StringKeys.Settings.Language,           "Idioma de la interfaz");
-        Set(StringKeys.Settings.SectionGeneral,     "General");
-        Set(StringKeys.Settings.SectionAppearance,  "Apariencia");
-        Set(StringKeys.Settings.SectionAi,          "Resumen por IA");
-        Set(StringKeys.Settings.SectionNetwork,     "Red e IMAP");
-        Set(StringKeys.Settings.CheckInterval,      "Intervalo de verificación");
-        Set(StringKeys.Settings.AutoStart,          "Iniciar con Windows");
-        Set(StringKeys.Settings.MinimizeToTray,     "Minimizar a la bandeja del sistema");
-        Set(StringKeys.Settings.BtnSaveSettings,    "Guardar configuración");
+        Set(StringKeys.LogsTitle,                    "Registros en vivo");
+        Set(StringKeys.LogsSubtitle,                 "Registros de diagnóstico de IMAP y IA en tiempo real.");
+        Set(StringKeys.LogsBtnCopy,                  "Copiar registros");
+        Set(StringKeys.LogsBtnClear,                 "Limpiar registros");
+        Set(StringKeys.LogsBtnExport,                "Exportar registros...");
 
         // ==========================================
-        // Logs View
+        // 8. Common & Feedback
         // ==========================================
-        Set(StringKeys.Logs.Title,                  "Registros en vivo");
-        Set(StringKeys.Logs.BtnCopy,                "Copiar");
-        Set(StringKeys.Logs.BtnClear,               "Limpiar registros");
-        Set(StringKeys.Logs.BtnExport,              "Exportar");
-
-        // ==========================================
-        // Common Actions & Feedback
-        // ==========================================
-        Set(StringKeys.Common.Ok,                   "Aceptar");
-        Set(StringKeys.Common.Cancel,               "Cancelar");
-        Set(StringKeys.Common.Save,                 "Guardar");
-        Set(StringKeys.Common.Delete,               "Eliminar");
-        Set(StringKeys.Common.Edit,                 "Editar");
-        Set(StringKeys.Common.Success,              "Éxito");
-        Set(StringKeys.Common.Error,                "Error");
-        Set(StringKeys.Common.Warning,              "Advertencia");
-        Set(StringKeys.Common.Info,                 "Información");
-        Set(StringKeys.Common.Yes,                  "Sí");
-        Set(StringKeys.Common.No,                   "No");
-        Set(StringKeys.Common.Loading,              "Cargando...");
+        Set(StringKeys.CommonSave,                   "Guardar");
+        Set(StringKeys.CommonCancel,                 "Cancelar");
+        Set(StringKeys.CommonDelete,                 "Eliminar");
+        Set(StringKeys.CommonOk,                     "Aceptar");
+        Set(StringKeys.CommonSuccess,                "Éxito");
+        Set(StringKeys.CommonError,                  "Error");
+        Set(StringKeys.StatusSyncComplete,           "Sincronización completa");
+        Set(StringKeys.StatusReady,                  "Listo");
     }
 }
 ```
