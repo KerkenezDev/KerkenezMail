@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -45,6 +45,9 @@ namespace KerkenezMail
             }
 
             // Always ensure application registration in HKCU Uninstall key is created/updated (e.g. if app moved)
+                        // Execute Universal Migration Engine (v0.5.0-bridge transition)
+            MigrationService.ExecuteMigrationIfNeeded();
+
             UninstallRegistrationService.RegisterOrUpdate();
 
             // Ensure AUMID is registered for persistent Windows Action Center notifications

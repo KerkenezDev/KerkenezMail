@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Drawing;
 using System.IO;
 using System.Linq;
@@ -75,6 +75,14 @@ namespace KerkenezMail.UI
                     }
                     catch { }
                 }
+
+                                // Present v0.5.0-bridge Rebranding & Migration Modal
+                try
+                {
+                    using var noticeDlg = new RebrandingNoticeDialog();
+                    noticeDlg.ShowDialog(this);
+                }
+                catch { }
 
                 await _summariesView.FetchAndAutoSummarizeAsync();
             };
@@ -441,6 +449,14 @@ namespace KerkenezMail.UI
 
             if (e.Control && e.KeyCode == Keys.R)
             {
+                                // Present v0.5.0-bridge Rebranding & Migration Modal
+                try
+                {
+                    using var noticeDlg = new RebrandingNoticeDialog();
+                    noticeDlg.ShowDialog(this);
+                }
+                catch { }
+
                 await _summariesView.FetchAndAutoSummarizeAsync();
                 e.Handled = true;
             }

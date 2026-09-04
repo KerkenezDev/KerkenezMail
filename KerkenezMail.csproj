@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
@@ -12,9 +12,9 @@
     <Title>Kerkenez Mail (Win32)</Title>
     <Product>Kerkenez Mail</Product>
     <Description>Local AI-Powered IMAP Email Summarizer with llama.cpp</Description>
-    <Version>1.0.0</Version>
-    <FileVersion>1.0.0.0</FileVersion>
-    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <Version>0.5.0</Version>
+    <FileVersion>0.5.0.0</FileVersion>
+    <AssemblyVersion>0.5.0.0</AssemblyVersion>
 
     <!-- Strip local machine path metadata from published binaries -->
     <Deterministic>true</Deterministic>
