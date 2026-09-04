@@ -2,17 +2,17 @@ using System;
 using System.IO;
 using System.Windows.Forms;
 
-namespace EmailSummarizer.Services
+namespace KerkenezMail.Services
 {
     public static class ShortcutService
     {
         public static string StartMenuShortcutPath => Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.Programs),
-            "Email Summarizer.lnk");
+            "Kerkenez Mail.lnk");
 
         public static string DesktopShortcutPath => Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
-            "Email Summarizer.lnk");
+            "Kerkenez Mail.lnk");
 
         public static bool ShortcutsExist => File.Exists(StartMenuShortcutPath) || File.Exists(DesktopShortcutPath);
 
@@ -36,7 +36,7 @@ namespace EmailSummarizer.Services
                     dynamic startMenuShortcut = shell.CreateShortcut(StartMenuShortcutPath);
                     startMenuShortcut.TargetPath = exePath;
                     startMenuShortcut.WorkingDirectory = Path.GetDirectoryName(exePath);
-                    startMenuShortcut.Description = "Email Summarizer - AI Email Assistant";
+                    startMenuShortcut.Description = "Kerkenez Mail - AI Email Assistant";
                     startMenuShortcut.IconLocation = exePath + ",0";
                     startMenuShortcut.Save();
                 }
@@ -49,7 +49,7 @@ namespace EmailSummarizer.Services
                     dynamic desktopShortcut = shell.CreateShortcut(DesktopShortcutPath);
                     desktopShortcut.TargetPath = exePath;
                     desktopShortcut.WorkingDirectory = Path.GetDirectoryName(exePath);
-                    desktopShortcut.Description = "Email Summarizer - AI Email Assistant";
+                    desktopShortcut.Description = "Kerkenez Mail - AI Email Assistant";
                     desktopShortcut.IconLocation = exePath + ",0";
                     desktopShortcut.Save();
                 }
@@ -84,6 +84,12 @@ namespace EmailSummarizer.Services
             {
                 StartMenuShortcutPath,
                 DesktopShortcutPath,
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), "Kerkenez Mail.lnk"),
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonPrograms), "Kerkenez Mail.lnk"),
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonDesktopDirectory), "Kerkenez Mail.lnk"),
+                // Legacy shortcuts cleanup
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Programs), "Email Summarizer.lnk"),
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), "Email Summarizer.lnk"),
                 Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), "Email Summarizer.lnk"),
                 Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonPrograms), "Email Summarizer.lnk"),
                 Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonDesktopDirectory), "Email Summarizer.lnk")

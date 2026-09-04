@@ -3,10 +3,11 @@ using System.Drawing;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-using EmailSummarizer.Models;
-using EmailSummarizer.Services;
+using KerkenezMail.Languages;
+using KerkenezMail.Models;
+using KerkenezMail.Services;
 
-namespace EmailSummarizer.UI.Tabs
+namespace KerkenezMail.UI.Tabs
 {
     public class AccountsView : UserControl
     {
@@ -15,6 +16,7 @@ namespace EmailSummarizer.UI.Tabs
         private readonly IProgress<string> _logger;
 
         private FlowLayoutPanel _pnlCards = null!;
+        private Label _lblTitle = null!;
         private Button _btnAddAccount = null!;
         private Button _btnTestAll = null!;
         private Button _btnBottomAdd = null!;
@@ -30,6 +32,7 @@ namespace EmailSummarizer.UI.Tabs
 
             InitializeComponent();
             LoadAccounts();
+            LanguageManager.Instance.LanguageChanged += (s, e) => ApplyLocalization();
         }
 
         private void InitializeComponent()
@@ -54,9 +57,9 @@ namespace EmailSummarizer.UI.Tabs
                 e.Graphics.DrawLine(p, 0, topPanel.Height - 1, topPanel.Width, topPanel.Height - 1);
             };
 
-            var lblTitle = new Label
+            _lblTitle = new Label
             {
-                Text = "Configured IMAP Accounts",
+                Text = Lang.T(StringKeys.AccountsTitle),
                 Dock = DockStyle.Left,
                 AutoSize = true,
                 Font = new Font("Segoe UI", 11F, FontStyle.Bold),
@@ -77,7 +80,7 @@ namespace EmailSummarizer.UI.Tabs
 
             _btnAddAccount = new Button
             {
-                Text = "➕ Add Account",
+                Text = "➕ " + Lang.T(StringKeys.AccountsBtnAdd),
                 UseMnemonic = false,
                 AutoSize = true,
                 AutoSizeMode = AutoSizeMode.GrowAndShrink,
@@ -91,7 +94,7 @@ namespace EmailSummarizer.UI.Tabs
 
             _btnTestAll = new Button
             {
-                Text = "⚡ Test All Connections",
+                Text = "⚡ " + Lang.T(StringKeys.AccountsBtnTest),
                 UseMnemonic = false,
                 AutoSize = true,
                 AutoSizeMode = AutoSizeMode.GrowAndShrink,
@@ -105,7 +108,7 @@ namespace EmailSummarizer.UI.Tabs
             rightActions.Controls.Add(_btnAddAccount);
             rightActions.Controls.Add(_btnTestAll);
 
-            topPanel.Controls.Add(lblTitle);
+            topPanel.Controls.Add(_lblTitle);
             topPanel.Controls.Add(rightActions);
 
             // Card container
@@ -120,7 +123,7 @@ namespace EmailSummarizer.UI.Tabs
 
             _lblEmpty = new Label
             {
-                Text = "No accounts configured yet.\r\nClick '+ Add Account' above to connect your Gmail or IMAP account.",
+                Text = Lang.T(StringKeys.AccountsEmptyDesc),
                 AutoSize = false,
                 Size = new Size(500, 80),
                 TextAlign = ContentAlignment.MiddleCenter,
@@ -132,7 +135,7 @@ namespace EmailSummarizer.UI.Tabs
 
             _btnBottomAdd = new Button
             {
-                Text = "➕  Add Another IMAP / Gmail Account...",
+                Text = "➕ " + Lang.T(StringKeys.AccountsBtnAdd),
                 UseMnemonic = false,
                 Width = 500,
                 Height = 38,
@@ -198,6 +201,28 @@ namespace EmailSummarizer.UI.Tabs
             _pnlCards.ResumeLayout();
         }
 
+        private static string FormatConnectionStatus(string? status)
+        {
+            if (string.IsNullOrWhiteSpace(status) || status.Equals("Untested", StringComparison.OrdinalIgnoreCase))
+            {
+                return Lang.T(StringKeys.AccountsStatusUntested);
+            }
+            if (status.StartsWith("Connected", StringComparison.OrdinalIgnoreCase))
+            {
+                var match = System.Text.RegularExpressions.Regex.Match(status, @"\(([0-9]+)\s+unread\)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                if (match.Success && int.TryParse(match.Groups[1].Value, out int unread))
+                {
+                    return Lang.Format(StringKeys.AccountsStatusConnectedUnread, unread);
+                }
+                return Lang.T(StringKeys.AccountsStatusConnected);
+            }
+            if (status.StartsWith("Failed", StringComparison.OrdinalIgnoreCase))
+            {
+                return Lang.T(StringKeys.AccountsStatusFailed);
+            }
+            return status;
+        }
+
         private Panel CreateAccountCard(EmailAccount account, int width)
         {
             var card = new Panel
@@ -248,9 +273,10 @@ namespace EmailSummarizer.UI.Tabs
                 Top = 8
             };
 
+            string providerBadge = account.IsOutlookOAuth ? "  •  🔐 OAuth 2.0" : "";
             var lblEmail = new Label
             {
-                Text = $"📧 {account.Email}  •  🌐 {account.Host}:{account.Port} ({(account.UseSsl ? "SSL" : "Plain")})",
+                Text = $"📧 {account.Email}  •  🌐 {account.Host}:{account.Port} ({(account.UseSsl ? "SSL" : "Plain")}){providerBadge}",
                 Font = new Font("Segoe UI", 8.5F),
                 ForeColor = Color.FromArgb(90, 90, 90),
                 AutoSize = true,
@@ -260,7 +286,7 @@ namespace EmailSummarizer.UI.Tabs
 
             var lblStatus = new Label
             {
-                Text = $"Status: {account.ConnectionStatus}",
+                Text = $"{Lang.T(StringKeys.AccountsColStatus)}: {FormatConnectionStatus(account.ConnectionStatus)}",
                 Font = new Font("Segoe UI", 8.25F, FontStyle.Italic),
                 ForeColor = account.ConnectionStatus.StartsWith("Connected") ? Color.DarkGreen :
                             account.ConnectionStatus.StartsWith("Failed") ? Color.Red : Color.FromArgb(120, 120, 120),
@@ -282,7 +308,7 @@ namespace EmailSummarizer.UI.Tabs
 
             var btnTest = new Button
             {
-                Text = "⚡ Test",
+                Text = "⚡ " + Lang.T(StringKeys.AccountsBtnTest),
                 UseMnemonic = false,
                 AutoSize = true,
                 AutoSizeMode = AutoSizeMode.GrowAndShrink,
@@ -295,25 +321,25 @@ namespace EmailSummarizer.UI.Tabs
             {
                 btnTest.Enabled = false;
                 lblStatus.ForeColor = Color.DarkOrange;
-                lblStatus.Text = "Status: Testing...";
+                lblStatus.Text = $"{Lang.T(StringKeys.AccountsColStatus)}: {Lang.T(StringKeys.AddAccTesting)}";
 
                 var (success, msg, unread) = await _imapService.TestConnectionAsync(account);
                 account.ConnectionStatus = success ? $"Connected ({unread} unread)" : "Failed";
                 account.ConnectionError = success ? null : msg;
 
                 lblStatus.ForeColor = success ? Color.DarkGreen : Color.Red;
-                lblStatus.Text = $"Status: {account.ConnectionStatus}";
+                lblStatus.Text = $"{Lang.T(StringKeys.AccountsColStatus)}: {FormatConnectionStatus(account.ConnectionStatus)}";
                 btnTest.Enabled = true;
 
                 if (!success)
                 {
-                    MessageBox.Show(msg, "Connection Failed", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    MessageBox.Show(msg, Lang.T(StringKeys.AccountsStatusError), MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
             };
 
             var btnEdit = new Button
             {
-                Text = "✏️ Edit",
+                Text = "✏️ " + Lang.T(StringKeys.AccountsBtnEdit),
                 UseMnemonic = false,
                 AutoSize = true,
                 AutoSizeMode = AutoSizeMode.GrowAndShrink,
@@ -334,6 +360,14 @@ namespace EmailSummarizer.UI.Tabs
                     account.Host = updated.Host;
                     account.Port = updated.Port;
                     account.UseSsl = updated.UseSsl;
+                    account.SmtpHost = updated.SmtpHost;
+                    account.SmtpPort = updated.SmtpPort;
+                    account.SmtpUseSsl = updated.SmtpUseSsl;
+                    account.Provider = updated.Provider;
+                    account.EncryptedAccessToken = updated.EncryptedAccessToken;
+                    account.EncryptedRefreshToken = updated.EncryptedRefreshToken;
+                    account.AccessTokenExpiresUtc = updated.AccessTokenExpiresUtc;
+                    account.LastRefreshedUtc = updated.LastRefreshedUtc;
 
                     var accounts = _configService.GetAccounts();
                     var idx = accounts.FindIndex(a => a.Id == account.Id);
@@ -359,7 +393,8 @@ namespace EmailSummarizer.UI.Tabs
             };
             btnDelete.Click += (s, e) =>
             {
-                if (MessageBox.Show($"Are you sure you want to remove account '{account.Name}' ({account.Email})?", "Confirm Delete", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
+                string msg = Lang.Format(StringKeys.AccountsDeleteConfirm, account.Name, account.Email);
+                if (MessageBox.Show(msg, Lang.T(StringKeys.CommonDelete), MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
                 {
                     var accounts = _configService.GetAccounts();
                     accounts.RemoveAll(a => a.Id == account.Id);
@@ -368,6 +403,11 @@ namespace EmailSummarizer.UI.Tabs
                     AccountsChanged?.Invoke();
                 }
             };
+
+            var actionTips = new ToolTip();
+            actionTips.SetToolTip(btnTest, Lang.T(StringKeys.AccountsBtnTest));
+            actionTips.SetToolTip(btnEdit, Lang.T(StringKeys.AccountsBtnEdit));
+            actionTips.SetToolTip(btnDelete, Lang.T(StringKeys.AccountsBtnDelete));
 
             pnlActions.Controls.Add(btnTest);
             pnlActions.Controls.Add(btnEdit);
@@ -420,6 +460,17 @@ namespace EmailSummarizer.UI.Tabs
 
             LoadAccounts();
             _btnTestAll.Enabled = true;
+        }
+
+        public void ApplyLocalization()
+        {
+            if (this.IsDisposed) return;
+            if (_lblTitle != null) _lblTitle.Text = Lang.T(StringKeys.AccountsTitle);
+            if (_btnAddAccount != null) _btnAddAccount.Text = "➕ " + Lang.T(StringKeys.AccountsBtnAdd);
+            if (_btnTestAll != null) _btnTestAll.Text = "⚡ " + Lang.T(StringKeys.AccountsBtnTest);
+            if (_btnBottomAdd != null) _btnBottomAdd.Text = "➕ " + Lang.T(StringKeys.AccountsBtnAdd);
+            if (_lblEmpty != null) _lblEmpty.Text = Lang.T(StringKeys.AccountsEmptyDesc);
+            LoadAccounts();
         }
     }
 }

@@ -4,19 +4,23 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Windows.Forms;
-using EmailSummarizer.Services;
-using EmailSummarizer.UI;
+using KerkenezMail.Languages;
+using KerkenezMail.Services;
+using KerkenezMail.UI;
 
-namespace EmailSummarizer
+namespace KerkenezMail
 {
     static class Program
     {
-        private const string TrayDaemonMutexName = @"Global\EmailSummarizer_TrayDaemon_Mutex";
-        private const string MainUiMutexName = @"Global\EmailSummarizer_MainUI_Mutex";
+        private const string TrayDaemonMutexName = @"Global\KerkenezMail_TrayDaemon_Mutex";
+        private const string MainUiMutexName = @"Global\KerkenezMail_MainUI_Mutex";
 
         [STAThread]
         static void Main(string[] args)
         {
+            // Ensure temp folder cleanup on process exit
+            AppDomain.CurrentDomain.ProcessExit += (s, e) => ConfigService.CleanTempFolder();
+
             // 1. Handle --uninstall switch
             if (args != null && args.Any(a => a.Equals("--uninstall", StringComparison.OrdinalIgnoreCase) ||
                                               a.Equals("/uninstall", StringComparison.OrdinalIgnoreCase) ||
@@ -43,6 +47,9 @@ namespace EmailSummarizer
 
             // Always ensure application registration in HKCU Uninstall key is created/updated (e.g. if app moved)
             UninstallRegistrationService.RegisterOrUpdate();
+
+            // Ensure AUMID is registered for persistent Windows Action Center notifications
+            NotificationService.EnsureRegistered();
 
             // 2. Handle --daemon or --tray switch (Background System Tray Daemon)
             bool isDaemonMode = args != null && args.Any(a => a.Equals("--daemon", StringComparison.OrdinalIgnoreCase) ||
@@ -97,6 +104,19 @@ namespace EmailSummarizer
             {
                 // Check if background tray daemon should be active
                 var configService = new ConfigService();
+
+                // Initialize Language / Localization
+                string langCode = configService.Settings.Language;
+                if (string.IsNullOrWhiteSpace(langCode))
+                {
+                    var sysLang = System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
+                    langCode = LanguageManager.Instance.AvailableLanguages.Any(l => l.Code.Equals(sysLang, StringComparison.OrdinalIgnoreCase))
+                        ? sysLang
+                        : "en";
+                    configService.Settings.Language = langCode;
+                }
+                LanguageManager.Instance.SetLanguage(langCode);
+
                 if (configService.Settings.AlwaysKeepOn)
                 {
                     StartDaemonIfNotRunning();
@@ -110,6 +130,7 @@ namespace EmailSummarizer
             }
             finally
             {
+                ConfigService.CleanTempFolder();
                 try { mainMutex.ReleaseMutex(); } catch { }
             }
         }
@@ -174,8 +195,8 @@ namespace EmailSummarizer
             }
 
             var res = MessageBox.Show(
-                "Are you sure you want to uninstall Email Summarizer?\n\nThis will remove Desktop and Start Menu shortcuts, Windows startup entries, Add/Remove Programs registration, and delete all configuration and cached data from %APPDATA%\\EmailSummarizer.",
-                "Uninstall Email Summarizer",
+                "Are you sure you want to uninstall Kerkenez Mail?\n\nThis will remove Desktop and Start Menu shortcuts, Windows startup entries, Add/Remove Programs registration, and delete all configuration and cached data from %APPDATA%\\Kerkenez\\mail.",
+                "Uninstall Kerkenez Mail",
                 MessageBoxButtons.YesNo,
                 MessageBoxIcon.Warning);
 
@@ -185,7 +206,7 @@ namespace EmailSummarizer
                 if (success)
                 {
                     MessageBox.Show(
-                        "Email Summarizer shortcuts, startup entries, Windows Add/Remove registration, configuration, and data have been successfully removed.",
+                        "Kerkenez Mail shortcuts, startup entries, Windows Add/Remove registration, configuration, and data have been successfully removed.",
                         "Uninstall Complete",
                         MessageBoxButtons.OK,
                         MessageBoxIcon.Information);

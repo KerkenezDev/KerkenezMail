@@ -4,7 +4,7 @@ using System.Drawing.Drawing2D;
 using System.IO;
 using System.Runtime.InteropServices;
 
-namespace EmailSummarizer.Services
+namespace KerkenezMail.Services
 {
     public static class TrayIconHelper
     {
@@ -44,7 +44,7 @@ namespace EmailSummarizer.Services
             try
             {
                 // Try from embedded resource
-                using var stream = typeof(TrayIconHelper).Assembly.GetManifestResourceStream("EmailSummarizer.app.ico");
+                using var stream = typeof(TrayIconHelper).Assembly.GetManifestResourceStream("KerkenezMail.app.ico");
                 if (stream != null)
                 {
                     return new Icon(stream, 32, 32);

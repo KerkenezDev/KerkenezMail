@@ -3,18 +3,24 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
-using EmailSummarizer.Models;
+using KerkenezMail.Models;
 
-namespace EmailSummarizer.Services
+namespace KerkenezMail.Services
 {
     public class ConfigService
     {
-        public static readonly string AppDataFolder = Path.Combine(
+        public static readonly string SuiteFolder = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "EmailSummarizer");
+            "Kerkenez");
+
+        public static readonly string AppDataFolder = Path.Combine(SuiteFolder, "mail");
+
+        public static readonly string TempFolder = Path.Combine(
+            Path.GetTempPath(),
+            "Kerkenez", "mail");
 
         public static readonly string ConfigFilePath = Path.Combine(AppDataFolder, "config.json");
-        public static readonly string AccountsFilePath = Path.Combine(AppDataFolder, "accounts.dat");
+        public static readonly string AccountsFilePath = Path.Combine(SuiteFolder, "accounts.dat");
 
         private static readonly JsonSerializerOptions JsonOptions = new JsonSerializerOptions
         {
@@ -41,6 +47,11 @@ namespace EmailSummarizer.Services
         {
             try
             {
+                if (!Directory.Exists(SuiteFolder))
+                {
+                    Directory.CreateDirectory(SuiteFolder);
+                }
+
                 if (!Directory.Exists(AppDataFolder))
                 {
                     Directory.CreateDirectory(AppDataFolder);
@@ -77,7 +88,16 @@ namespace EmailSummarizer.Services
                     var loaded = JsonSerializer.Deserialize<AppSettings>(json, JsonOptions);
                     if (loaded != null)
                     {
+                        string originalVersion = loaded.AppVersion;
+                        bool hadVersionInJson = !string.IsNullOrWhiteSpace(originalVersion) && json.Contains("\"AppVersion\"", StringComparison.OrdinalIgnoreCase);
                         Settings = HealAndNormalizeSettings(loaded);
+
+                        // If version was missing, updated, or healed, re-save config to disk
+                        if (!hadVersionInJson || !string.Equals(originalVersion?.TrimStart('v', 'V'), Settings.AppVersion.TrimStart('v', 'V'), StringComparison.OrdinalIgnoreCase))
+                        {
+                            SaveConfig(Settings);
+                        }
+
                         return Settings;
                     }
                 }
@@ -89,6 +109,7 @@ namespace EmailSummarizer.Services
 
             // If config doesn't exist, create default and save
             var defaults = AppSettings.CreateDefault();
+            defaults.AppVersion = UninstallRegistrationService.CurrentVersion;
             SaveConfig(defaults);
             return defaults;
         }
@@ -144,8 +165,21 @@ namespace EmailSummarizer.Services
             // 6. Heal Email / System settings
             if (s.MaxEmailsPerAccount <= 0) s.MaxEmailsPerAccount = 15;
             if (s.TrayRefreshIntervalMinutes <= 0) s.TrayRefreshIntervalMinutes = 5;
-            if (string.IsNullOrWhiteSpace(s.SystemPrompt)) s.SystemPrompt = AppSettings.CreateDefault().SystemPrompt;
+            if (string.IsNullOrWhiteSpace(s.SystemPrompt) || 
+                !s.SystemPrompt.Contains("Priority", StringComparison.OrdinalIgnoreCase) ||
+                (s.SystemPrompt.Contains("Action required", StringComparison.OrdinalIgnoreCase) && !s.SystemPrompt.Contains("Priority 2 (Normal - DEFAULT", StringComparison.OrdinalIgnoreCase)))
+            {
+                s.SystemPrompt = AppSettings.CreateDefault().SystemPrompt;
+            }
             if (s.AccountIds == null) s.AccountIds = new List<string>();
+
+            // 7. Heal AppVersion
+            string currentVer = UninstallRegistrationService.CurrentVersion;
+            if (string.IsNullOrWhiteSpace(s.AppVersion) ||
+                !string.Equals(s.AppVersion.TrimStart('v', 'V'), currentVer.TrimStart('v', 'V'), StringComparison.OrdinalIgnoreCase))
+            {
+                s.AppVersion = currentVer;
+            }
 
             return s;
         }
@@ -325,6 +359,7 @@ namespace EmailSummarizer.Services
                 try
                 {
                     using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run", true);
+                    key?.DeleteValue("KerkenezMailTray", false);
                     key?.DeleteValue("EmailSummarizerTray", false);
                 }
                 catch { }
@@ -334,6 +369,9 @@ namespace EmailSummarizer.Services
 
                 // Remove Desktop and Start Menu shortcuts
                 ShortcutService.DeleteShortcuts();
+
+                // Clean temporary folder
+                CleanTempFolder();
 
                 if (Directory.Exists(AppDataFolder))
                 {
@@ -346,6 +384,61 @@ namespace EmailSummarizer.Services
             {
                 System.Diagnostics.Debug.WriteLine($"[ConfigService] Error during uninstall: {ex.Message}");
                 return false;
+            }
+        }
+
+        /// <summary>
+        /// Cleans up temporary preview and cache files stored in %TEMP%\Kerkenez\mail.
+        /// Handles locked files gracefully without throwing exceptions.
+        /// </summary>
+        public static void CleanTempFolder()
+        {
+            try
+            {
+                if (!Directory.Exists(TempFolder)) return;
+
+                var dirInfo = new DirectoryInfo(TempFolder);
+
+                // Delete all files inside temp folder
+                foreach (var file in dirInfo.EnumerateFiles("*", SearchOption.AllDirectories))
+                {
+                    try
+                    {
+                        file.Attributes = FileAttributes.Normal;
+                        file.Delete();
+                    }
+                    catch
+                    {
+                        // File may be locked by another process (e.g. browser); best effort
+                    }
+                }
+
+                // Delete all subdirectories if any
+                foreach (var subDir in dirInfo.EnumerateDirectories("*", SearchOption.AllDirectories).OrderByDescending(d => d.FullName.Length))
+                {
+                    try
+                    {
+                        subDir.Delete(false);
+                    }
+                    catch
+                    {
+                        // Best effort
+                    }
+                }
+
+                // If directory is now empty, remove it
+                try
+                {
+                    if (!dirInfo.EnumerateFileSystemInfos().Any())
+                    {
+                        Directory.Delete(TempFolder, false);
+                    }
+                }
+                catch { }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[ConfigService] CleanTempFolder error: {ex.Message}");
             }
         }
     }

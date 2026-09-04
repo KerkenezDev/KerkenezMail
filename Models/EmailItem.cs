@@ -1,6 +1,6 @@
 using System;
 
-namespace EmailSummarizer.Models
+namespace KerkenezMail.Models
 {
     public enum SummaryState
     {
@@ -19,7 +19,14 @@ namespace EmailSummarizer.Models
         public string Subject { get; set; } = string.Empty;
         public string Sender { get; set; } = string.Empty;
         public DateTimeOffset Date { get; set; }
+
+        // RFC 5322 Threading Headers
+        public string? MessageId { get; set; }
+        public string? InReplyTo { get; set; }
+        public List<string> References { get; set; } = new List<string>();
+
         public string RawBody { get; set; } = string.Empty;
+        public string? HtmlBody { get; set; }
         public string CleanBody { get; set; } = string.Empty;
         public string DisplayBody { get; set; } = string.Empty;
         public string? DisplayRtf { get; set; }
@@ -33,6 +40,9 @@ namespace EmailSummarizer.Models
         // Track whether email is archived
         public bool IsArchived { get; set; }
 
+        // Folder type (Inbox, Sent, Archive, Spam, Trash)
+        public MailFolderType Folder { get; set; } = MailFolderType.Inbox;
+
         // Priority ranking (1 = High / Urgent, 2 = Normal / Medium, 3 = Low / Newsletter, null = unranked)
         public int? Priority { get; set; } = null;
 
@@ -43,8 +53,14 @@ namespace EmailSummarizer.Models
         // Extracted hyperlinks for hover tooltips and actions
         public List<EmailLink> ExtractedLinks { get; set; } = new List<EmailLink>();
 
+        // Detected incoming email attachments metadata
+        public List<EmailAttachmentInfo> Attachments { get; set; } = new List<EmailAttachmentInfo>();
+        public bool HasAttachments => Attachments != null && Attachments.Count > 0;
+
         public string DateString => Date.LocalDateTime.ToString("dd/MM/yyyy HH:mm");
         public string ShortDateString => Date.LocalDateTime.ToString("dd/MM HH:mm");
+
+        public EmailItem Clone() => (EmailItem)this.MemberwiseClone();
     }
 
     public class EmailLink

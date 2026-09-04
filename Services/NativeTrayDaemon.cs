@@ -6,13 +6,13 @@ using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
-using EmailSummarizer.Models;
+using KerkenezMail.Models;
 
-namespace EmailSummarizer.Services
+namespace KerkenezMail.Services
 {
     public class NativeTrayDaemon : IDisposable
     {
-        public const string ExitEventName = @"Global\EmailSummarizer_TrayDaemon_ExitEvent";
+        public const string ExitEventName = @"Global\KerkenezMail_TrayDaemon_ExitEvent";
 
         private const uint TRAY_ICON_ID = 1001;
         private const uint CMD_OPEN = 2001;
@@ -90,7 +90,7 @@ namespace EmailSummarizer.Services
 
         private void InitializeMessageWindow()
         {
-            string className = "EmailSummarizer_TrayMsgHost_" + Guid.NewGuid().ToString("N");
+            string className = "KerkenezMail_TrayMsgHost_" + Guid.NewGuid().ToString("N");
             _wndProcDelegate = WndProc;
 
             var wcx = new NativeMethods.WNDCLASSEX
@@ -106,7 +106,7 @@ namespace EmailSummarizer.Services
             _hWnd = NativeMethods.CreateWindowEx(
                 0,
                 className,
-                "EmailSummarizerTrayHost",
+                "KerkenezMailTrayHost",
                 0,
                 0, 0, 0, 0,
                 IntPtr.Zero,
@@ -125,7 +125,7 @@ namespace EmailSummarizer.Services
                 uFlags = NativeMethods.NIF_MESSAGE | NativeMethods.NIF_ICON | NativeMethods.NIF_TIP,
                 uCallbackMessage = NativeMethods.WM_TRAYICON,
                 hIcon = TrayIconHelper.GetNormalIcon().Handle,
-                szTip = "Email Summarizer"
+                szTip = "Kerkenez Mail"
             };
 
             NativeMethods.Shell_NotifyIcon(NativeMethods.NIM_ADD, ref _nid);
@@ -170,7 +170,7 @@ namespace EmailSummarizer.Services
             IntPtr hMenu = NativeMethods.CreatePopupMenu();
             try
             {
-                NativeMethods.AppendMenu(hMenu, NativeMethods.MF_STRING, CMD_OPEN, "📬  Open Email Summarizer");
+                NativeMethods.AppendMenu(hMenu, NativeMethods.MF_STRING, CMD_OPEN, "📬  Open Kerkenez Mail");
                 NativeMethods.SetMenuDefaultItem(hMenu, CMD_OPEN, 0); // Bold default item
 
                 NativeMethods.AppendMenu(hMenu, NativeMethods.MF_STRING, CMD_CHECK_NOW, "🔄  Check Emails Now");
@@ -207,7 +207,7 @@ namespace EmailSummarizer.Services
             }
             else if (cmd == CMD_CHECK_NOW)
             {
-                _nid.szTip = "Email Summarizer - Checking...";
+                _nid.szTip = "Kerkenez Mail - Checking...";
                 _nid.uFlags = NativeMethods.NIF_TIP;
                 NativeMethods.Shell_NotifyIcon(NativeMethods.NIM_MODIFY, ref _nid);
 
@@ -235,8 +235,8 @@ namespace EmailSummarizer.Services
                     : TrayIconHelper.GetNormalIcon().Handle;
 
                 string tip = unreadCount > 0 
-                    ? $"Email Summarizer: {unreadCount} unread" 
-                    : "Email Summarizer: 0 unread";
+                    ? $"Kerkenez Mail: {unreadCount} unread" 
+                    : "Kerkenez Mail: 0 unread";
 
                 if (tip.Length > 120) tip = tip.Substring(0, 117) + "...";
                 _nid.szTip = tip;
@@ -277,12 +277,14 @@ namespace EmailSummarizer.Services
                 if (title.Length > 60) title = title.Substring(0, 57) + "...";
                 if (message.Length > 240) message = message.Substring(0, 237) + "...";
 
-                _nid.uFlags = NativeMethods.NIF_INFO;
-                _nid.szInfoTitle = title;
-                _nid.szInfo = message;
-                _nid.dwInfoFlags = NativeMethods.NIIF_INFO;
-
-                NativeMethods.Shell_NotifyIcon(NativeMethods.NIM_MODIFY, ref _nid);
+                NotificationService.ShowNotification(title, message, fallbackAction: () =>
+                {
+                    _nid.uFlags = NativeMethods.NIF_INFO;
+                    _nid.szInfoTitle = title;
+                    _nid.szInfo = message;
+                    _nid.dwInfoFlags = NativeMethods.NIIF_INFO;
+                    NativeMethods.Shell_NotifyIcon(NativeMethods.NIM_MODIFY, ref _nid);
+                });
             }
             catch
             {
@@ -342,6 +344,8 @@ namespace EmailSummarizer.Services
                 _idleTrimTimer?.Dispose();
                 _idleTrimTimer = null;
                 _daemonService.Dispose();
+
+                ConfigService.CleanTempFolder();
             }
             catch
             {

@@ -2,15 +2,15 @@
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net8.0-windows</TargetFramework>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
     <Nullable>enable</Nullable>
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
     <ApplicationIcon>app.ico</ApplicationIcon>
     
     <!-- Assembly Metadata -->
-    <Title>Email Summarizer (Win32)</Title>
-    <Product>Email Summarizer</Product>
+    <Title>Kerkenez Mail (Win32)</Title>
+    <Product>Kerkenez Mail</Product>
     <Description>Local AI-Powered IMAP Email Summarizer with llama.cpp</Description>
     <Version>1.0.0</Version>
     <FileVersion>1.0.0.0</FileVersion>
@@ -26,6 +26,7 @@
     <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
     <RetainVMGarbageCollection>false</RetainVMGarbageCollection>
     <TieredCompilation>true</TieredCompilation>
+    <NoWarn>$(NoWarn);WFO1000</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

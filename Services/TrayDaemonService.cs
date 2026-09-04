@@ -8,9 +8,9 @@ using MailKit;
 using MailKit.Net.Imap;
 using MailKit.Search;
 using MailKit.Security;
-using EmailSummarizer.Models;
+using KerkenezMail.Models;
 
-namespace EmailSummarizer.Services
+namespace KerkenezMail.Services
 {
     public class UnreadNotificationInfo
     {
@@ -167,7 +167,7 @@ namespace EmailSummarizer.Services
                 var sslOption = account.UseSsl ? SecureSocketOptions.SslOnConnect : SecureSocketOptions.Auto;
 
                 await client.ConnectAsync(account.Host, account.Port, sslOption, ct);
-                await client.AuthenticateAsync(account.Email, account.AppPassword, ct);
+                await OutlookOAuthService.AuthenticateMailServiceAsync(client, account, _configService, ct: ct);
 
                 var inbox = client.Inbox;
                 await inbox.OpenAsync(FolderAccess.ReadOnly, ct);

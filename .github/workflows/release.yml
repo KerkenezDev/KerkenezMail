@@ -5,6 +5,11 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release Tag (e.g. v1.0.0 or v0.5.0)'
+        required: true
+        default: 'v1.0.0'
 
 jobs:
   build-and-release:
@@ -17,10 +22,10 @@ jobs:
       - name: Checkout Source
         uses: actions/checkout@v4
 
-      - name: Setup .NET 8 SDK
+      - name: Setup .NET 10 SDK
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '8.0.x'
+          dotnet-version: '10.0.x'
 
       - name: Compile Single-File Executable
         run: |
@@ -29,15 +34,27 @@ jobs:
       - name: Package Release ZIP
         shell: pwsh
         run: |
-          Compress-Archive -Path ./publish/EmailSummarizer.exe -DestinationPath ./publish/EmailSummarizer.zip -Force
+          Compress-Archive -Path ./publish/KerkenezMail.exe -DestinationPath ./publish/KerkenezMail.zip -Force
+
+      - name: Determine Prerelease Status
+        id: check_pre
+        shell: pwsh
+        run: |
+          $tag = if ('${{ github.event_name }}' -eq 'workflow_dispatch') { '${{ inputs.tag }}' } else { '${{ github.ref_name }}' }
+          $isPre = $tag.Contains("0.5") -or $tag.Contains("beta") -or $tag.Contains("rc") -or $tag.Contains("bridge")
+          "is_prerelease=$($isPre.ToString().ToLower())" >> $env:GITHUB_OUTPUT
+          "release_tag=$tag" >> $env:GITHUB_OUTPUT
 
       - name: Create GitHub Release & Upload Binaries
         uses: softprops/action-gh-release@v2
         with:
-          files: ./publish/EmailSummarizer.zip
-          name: Release ${{ github.ref_name }}
+          tag_name: ${{ steps.check_pre.outputs.release_tag }}
+          files: |
+            ./publish/KerkenezMail.zip
+            ./publish/KerkenezMail.exe
+          name: Release ${{ steps.check_pre.outputs.release_tag }}
           draft: false
-          prerelease: false
+          prerelease: ${{ steps.check_pre.outputs.is_prerelease == 'true' }}
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

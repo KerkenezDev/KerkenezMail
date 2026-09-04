@@ -6,9 +6,9 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
-using EmailSummarizer.Models;
+using KerkenezMail.Models;
 
-namespace EmailSummarizer.Services
+namespace KerkenezMail.Services
 {
     public class LlmSummarizerService
     {
@@ -26,26 +26,54 @@ namespace EmailSummarizer.Services
             return fullBody.Substring(0, maxChars) + "\r\n\r\n... [Remaining email content truncated for AI context length limit]";
         }
 
+        private static string GetEmailContextNotice(EmailItem email)
+        {
+            bool isThreadOrReply = email.Subject.StartsWith("Re:", StringComparison.OrdinalIgnoreCase) ||
+                                   email.Subject.StartsWith("Fwd:", StringComparison.OrdinalIgnoreCase) ||
+                                   (email.Subject.Contains("[") && email.Subject.Contains("]"));
+
+            bool hasNewsletterSignature = email.HasNewsletterFooter || 
+                                          ImapService.DetectNewsletterFooter(email.RawBody) || 
+                                          ImapService.DetectNewsletterFooter(email.CleanBody);
+
+            if (email.IsMailingList && hasNewsletterSignature && !isThreadOrReply)
+            {
+                return "Context Note: Bulk mailing list / newsletter detected (suggested Priority: 3).\r\n";
+            }
+            else if (isThreadOrReply)
+            {
+                return "Context Note: Direct reply or discussion thread.\r\n";
+            }
+            else if (email.IsMailingList)
+            {
+                return "Context Note: Automated notification or mailing list.\r\n";
+            }
+
+            return string.Empty;
+        }
+
         public async Task<string> SummarizeEmailAsync(
             EmailItem email,
             AppSettings settings,
             CancellationToken ct = default)
         {
+            if (settings.IsAiDisabled)
+            {
+                return string.Empty;
+            }
+
             string emailContentForLlm = PrepareEmailBodyForSummary(email.CleanBody, settings.MaxSummaryEmailChars);
+            string metadataNotice = GetEmailContextNotice(email);
 
-            bool isLikelyNewsletter = email.IsMailingList || email.HasNewsletterFooter || ImapService.DetectNewsletterFooter(email.CleanBody) || ImapService.DetectNewsletterFooter(email.RawBody);
-            string metadataNotice = isLikelyNewsletter
-                ? "Classification Note: This email is an Automated Newsletter / Mailing List / Promotional update. Set Priority to 3.\r\n"
-                : "";
-
-            var userContent = $"Analyze the following email, assign a Priority rank (1 = High/Urgent, 2 = Normal/Medium, 3 = Low/Newsletter), and provide a concise 1-3 sentence executive summary.\r\n\r\n" +
-                              $"Subject: {email.Subject}\r\n" +
+            var userContent = $"Subject: {email.Subject}\r\n" +
                               $"From: {email.Sender}\r\n" +
                               metadataNotice +
                               $"Email Content:\r\n{emailContentForLlm}\r\n\r\n" +
+                              $"Read the email above. First write a concise summary (1-3 sentences), then assign the Priority rank (1 = Critical/Urgent emergency ONLY, 2 = Normal/Default for routine emails, 3 = Low/Newsletters/Marketing).\r\n" +
+                              $"Do NOT output scratchpad notes, drafts, or numbered analysis steps.\r\n" +
                               $"Output strictly in this format:\r\n" +
-                              $"Priority: [1/2/3]\r\n" +
-                              $"Summary: [summary text]";
+                              $"Summary: <1-3 sentence brief>\r\n" +
+                              $"Priority: <1, 2, or 3>";
 
             string endpointUrl = settings.GetEffectiveEndpointUrl();
             string modelName = settings.GetEffectiveModelName();
@@ -54,11 +82,14 @@ namespace EmailSummarizer.Services
             string systemPrompt = settings.SystemPrompt;
             if (!systemPrompt.Contains("Priority", StringComparison.OrdinalIgnoreCase))
             {
-                systemPrompt += "\r\n\r\nRequired Output format:\r\nPriority: [1/2/3]\r\nSummary: [summary text]";
-            }
-            if (!systemPrompt.Contains("signals", StringComparison.OrdinalIgnoreCase))
-            {
-                systemPrompt += "\r\n* Note: Market digests, signals, promos, and newsletters must always be Priority 3 (Low).";
+                systemPrompt += "\r\n\r\nPriority Guidelines (Rank from 1 to 3):\r\n" +
+                                "* Priority 2 (Normal - DEFAULT for most emails): Standard work correspondence, routine questions, meeting invites, invoices, and updates.\r\n" +
+                                "* Priority 1 (High / Urgent ONLY): Severe emergencies, production outages, broken CI/CD builds, critical security failures, or urgent same-day deadlines.\r\n" +
+                                "* Priority 3 (Low / Newsletters / Bulk): Marketing promos, sales discounts, newsletters, and automated bulk notifications.\r\n" +
+                                "* Rule: When in doubt between 1 and 2, ALWAYS default to 2.\r\n\r\n" +
+                                "Required Output Format:\r\n" +
+                                "Summary: <1-3 sentence brief>\r\n" +
+                                "Priority: <1, 2, or 3>";
             }
 
             // Strict user preference: respect configured token limit without forced overrides
@@ -232,44 +263,54 @@ namespace EmailSummarizer.Services
 
             int priority = 2; // Default to Normal (2)
 
-            // Extract Priority: 1 / Priority: 2 / Priority: 3 (supports markdown bolding like **Priority:** 1, brackets [1], etc.)
-            var priMatch = Regex.Match(
-                text,
-                @"(?:^|[\r\n\s])(?:\*\*)?(?:Priority|Rank|Urgency|Level)(?:\*\*)?\s*[:=\-]?\s*\[?\s*([1-3])\s*\]?",
-                RegexOptions.IgnoreCase
-            );
+            // Extract Priority: 1 / Priority: 2 / Priority: 3 / High / Normal / Low
+            // Matches formats like:
+            // "Priority: 1", "**Priority:** 2", "Priority: 2 (Normal)", "Priority: Low", "1. Priority: 3"
+            var priPattern = @"(?i)(?:^|[\r\n\s])(?:\d+\.\s*)?(?:\*\*)?(?:Priority|Rank|Urgency|Level)(?:\*\*)?\s*[:=\-]?\s*(?:\*\*)?\s*\[?\s*(?:Priority\s*)?([1-3]|High|Urgent|Medium|Normal|Low)\b";
+            var priMatches = Regex.Matches(text, priPattern);
 
-            if (priMatch.Success && int.TryParse(priMatch.Groups[1].Value, out int parsedPri))
+            if (priMatches.Count > 0)
             {
-                priority = Math.Clamp(parsedPri, 1, 3);
+                var lastPri = priMatches[priMatches.Count - 1];
+                string val = lastPri.Groups[1].Value.ToLowerInvariant();
+                priority = val switch
+                {
+                    "1" or "high" or "urgent" => 1,
+                    "3" or "low" => 3,
+                    _ => 2
+                };
             }
-
-            string cleanSummary = text;
 
             // Extract Summary: ...
-            var sumMatch = Regex.Match(
-                text,
-                @"(?:^|[\r\n\s])(?:\*\*)?(?:Summary|Executive Summary)(?:\*\*)?\s*[:=\-]\s*(.*)",
-                RegexOptions.IgnoreCase | RegexOptions.Singleline
-            );
+            // Handles both "Summary: ... Priority: 2" and "Priority: 2 Summary: ..."
+            string cleanSummary = "";
+            var sumMarkerPattern = @"(?i)(?:^|[\r\n])(?:\s*(?:\d+\.|\*)\s*)?(?:\*\*)?(?:Summary|Executive Summary)(?:\*\*)?\s*[:=\-]\s*(?:\*\*)?\s*";
+            var sumMatches = Regex.Matches(text, sumMarkerPattern);
 
-            if (sumMatch.Success && !string.IsNullOrWhiteSpace(sumMatch.Groups[1].Value))
+            for (int i = sumMatches.Count - 1; i >= 0; i--)
             {
-                cleanSummary = sumMatch.Groups[1].Value.Trim();
-            }
-            else if (priMatch.Success)
-            {
-                // Remove the priority line from summary
-                cleanSummary = Regex.Replace(
-                    text,
-                    @"^(?:\*\*)?(?:Priority|Rank|Urgency|Level)(?:\*\*)?\s*[:=\-]?\s*\[?\s*[1-3]\s*\]?\s*[\r\n]+",
-                    "",
-                    RegexOptions.IgnoreCase
-                ).Trim();
+                var sm = sumMatches[i];
+                string afterMarker = text.Substring(sm.Index + sm.Length).Trim();
+                var priInSummary = Regex.Match(afterMarker, @"(?i)[\r\n]+\s*(?:\d+\.\s*)?(?:\*\*)?(?:Priority|Rank|Urgency|Level)(?:\*\*)?\s*[:=\-]");
+                string candidate = priInSummary.Success ? afterMarker.Substring(0, priInSummary.Index).Trim() : afterMarker;
+                if (Regex.IsMatch(candidate, @"^\[?(?:summary(?:\s+text)?|text|insert summary)\]?$", RegexOptions.IgnoreCase))
+                {
+                    continue;
+                }
+                cleanSummary = candidate;
+                break;
             }
 
-            // Remove any trailing markdown artifacts or quotes
-            cleanSummary = cleanSummary.Trim('`', '\r', '\n', ' ');
+            // Fallback if no distinct Summary: header found
+            if (string.IsNullOrWhiteSpace(cleanSummary))
+            {
+                cleanSummary = Regex.Replace(text, priPattern + @"[^\r\n]*", "").Trim();
+            }
+
+            // Remove any leftover Priority line or placeholder artifact from the summary text
+            cleanSummary = Regex.Replace(cleanSummary, @"^(?:\*\*)?(?:Priority|Rank|Urgency|Level)(?:\*\*)?\s*[:=\-]?\s*(?:\*\*)?\s*\[?\s*(?:[1-3]|High|Urgent|Medium|Normal|Low)\b[^\r\n]*", "", RegexOptions.IgnoreCase).Trim();
+            cleanSummary = Regex.Replace(cleanSummary, @"^\[?(?:summary(?:\s+text)?|text|insert summary)\]?\s*", "", RegexOptions.IgnoreCase).Trim();
+            cleanSummary = cleanSummary.Trim('`', '\r', '\n', ' ', '"', '\'', ':').Trim();
 
             if (string.IsNullOrWhiteSpace(cleanSummary))
             {

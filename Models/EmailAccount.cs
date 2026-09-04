@@ -1,7 +1,7 @@
 using System;
 using System.Text.Json.Serialization;
 
-namespace EmailSummarizer.Models
+namespace KerkenezMail.Models
 {
     public class EmailAccount
     {
@@ -13,6 +13,38 @@ namespace EmailSummarizer.Models
         public int Port { get; set; } = 993;
         public bool UseSsl { get; set; } = true;
         public bool IsEnabled { get; set; } = true;
+
+        // Provider & OAuth 2.0 (e.g. Outlook / Office 365)
+        public string Provider { get; set; } = "Custom";
+        public string EncryptedRefreshToken { get; set; } = "";
+        public string EncryptedAccessToken { get; set; } = "";
+        public DateTime? AccessTokenExpiresUtc { get; set; }
+        public DateTime? LastRefreshedUtc { get; set; }
+
+        [JsonIgnore]
+        public bool IsOutlookOAuth => string.Equals(Provider, "OutlookOAuth", StringComparison.OrdinalIgnoreCase);
+
+        // SMTP Settings
+        public string SmtpHost { get; set; } = "";
+        public int SmtpPort { get; set; } = 587;
+        public bool SmtpUseSsl { get; set; } = false;
+
+        public string GetEffectiveSmtpHost()
+        {
+            if (!string.IsNullOrWhiteSpace(SmtpHost)) return SmtpHost.Trim();
+            if (Host.Contains("gmail", StringComparison.OrdinalIgnoreCase)) return "smtp.gmail.com";
+            if (Host.Contains("yahoo", StringComparison.OrdinalIgnoreCase)) return "smtp.mail.yahoo.com";
+            if (Host.Contains("mail.me.com", StringComparison.OrdinalIgnoreCase) || Host.Contains("icloud", StringComparison.OrdinalIgnoreCase)) return "smtp.mail.me.com";
+            if (Host.Contains("office365", StringComparison.OrdinalIgnoreCase) || Host.Contains("outlook", StringComparison.OrdinalIgnoreCase) || IsOutlookOAuth) return "smtp.office365.com";
+            if (Host.StartsWith("imap.", StringComparison.OrdinalIgnoreCase)) return "smtp." + Host.Substring(5);
+            return Host;
+        }
+
+        public int GetEffectiveSmtpPort()
+        {
+            if (SmtpPort > 0) return SmtpPort;
+            return 587;
+        }
 
         [JsonIgnore]
         public string ConnectionStatus { get; set; } = "Untested";
