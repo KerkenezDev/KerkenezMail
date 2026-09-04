@@ -88,7 +88,15 @@ namespace KerkenezMail.Services
                     var loaded = JsonSerializer.Deserialize<AppSettings>(json, JsonOptions);
                     if (loaded != null)
                     {
+                        string originalVersion = loaded.AppVersion;
                         Settings = HealAndNormalizeSettings(loaded);
+
+                        // If version was updated or healed, re-save config to disk
+                        if (!string.Equals(originalVersion?.TrimStart('v', 'V'), Settings.AppVersion.TrimStart('v', 'V'), StringComparison.OrdinalIgnoreCase))
+                        {
+                            SaveConfig(Settings);
+                        }
+
                         return Settings;
                     }
                 }
@@ -100,6 +108,7 @@ namespace KerkenezMail.Services
 
             // If config doesn't exist, create default and save
             var defaults = AppSettings.CreateDefault();
+            defaults.AppVersion = UninstallRegistrationService.CurrentVersion;
             SaveConfig(defaults);
             return defaults;
         }
@@ -162,6 +171,14 @@ namespace KerkenezMail.Services
                 s.SystemPrompt = AppSettings.CreateDefault().SystemPrompt;
             }
             if (s.AccountIds == null) s.AccountIds = new List<string>();
+
+            // 7. Heal AppVersion
+            string currentVer = UninstallRegistrationService.CurrentVersion;
+            if (string.IsNullOrWhiteSpace(s.AppVersion) ||
+                !string.Equals(s.AppVersion.TrimStart('v', 'V'), currentVer.TrimStart('v', 'V'), StringComparison.OrdinalIgnoreCase))
+            {
+                s.AppVersion = currentVer;
+            }
 
             return s;
         }
