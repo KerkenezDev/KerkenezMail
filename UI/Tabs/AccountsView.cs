@@ -3,6 +3,7 @@ using System.Drawing;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using KerkenezMail.Languages;
 using KerkenezMail.Models;
 using KerkenezMail.Services;
 
@@ -15,6 +16,7 @@ namespace KerkenezMail.UI.Tabs
         private readonly IProgress<string> _logger;
 
         private FlowLayoutPanel _pnlCards = null!;
+        private Label _lblTitle = null!;
         private Button _btnAddAccount = null!;
         private Button _btnTestAll = null!;
         private Button _btnBottomAdd = null!;
@@ -30,6 +32,7 @@ namespace KerkenezMail.UI.Tabs
 
             InitializeComponent();
             LoadAccounts();
+            LanguageManager.Instance.LanguageChanged += (s, e) => ApplyLocalization();
         }
 
         private void InitializeComponent()
@@ -54,9 +57,9 @@ namespace KerkenezMail.UI.Tabs
                 e.Graphics.DrawLine(p, 0, topPanel.Height - 1, topPanel.Width, topPanel.Height - 1);
             };
 
-            var lblTitle = new Label
+            _lblTitle = new Label
             {
-                Text = "Configured IMAP Accounts",
+                Text = Lang.T(StringKeys.AccountsTitle),
                 Dock = DockStyle.Left,
                 AutoSize = true,
                 Font = new Font("Segoe UI", 11F, FontStyle.Bold),
@@ -77,7 +80,7 @@ namespace KerkenezMail.UI.Tabs
 
             _btnAddAccount = new Button
             {
-                Text = "➕ Add Account",
+                Text = "➕ " + Lang.T(StringKeys.AccountsBtnAdd),
                 UseMnemonic = false,
                 AutoSize = true,
                 AutoSizeMode = AutoSizeMode.GrowAndShrink,
@@ -91,7 +94,7 @@ namespace KerkenezMail.UI.Tabs
 
             _btnTestAll = new Button
             {
-                Text = "⚡ Test All Connections",
+                Text = "⚡ " + Lang.T(StringKeys.AccountsBtnTest),
                 UseMnemonic = false,
                 AutoSize = true,
                 AutoSizeMode = AutoSizeMode.GrowAndShrink,
@@ -105,7 +108,7 @@ namespace KerkenezMail.UI.Tabs
             rightActions.Controls.Add(_btnAddAccount);
             rightActions.Controls.Add(_btnTestAll);
 
-            topPanel.Controls.Add(lblTitle);
+            topPanel.Controls.Add(_lblTitle);
             topPanel.Controls.Add(rightActions);
 
             // Card container
@@ -132,7 +135,7 @@ namespace KerkenezMail.UI.Tabs
 
             _btnBottomAdd = new Button
             {
-                Text = "➕  Add Another IMAP / Gmail Account...",
+                Text = "➕ " + Lang.T(StringKeys.AccountsBtnAdd),
                 UseMnemonic = false,
                 Width = 500,
                 Height = 38,
@@ -429,6 +432,16 @@ namespace KerkenezMail.UI.Tabs
 
             LoadAccounts();
             _btnTestAll.Enabled = true;
+        }
+
+        public void ApplyLocalization()
+        {
+            if (this.IsDisposed) return;
+            if (_lblTitle != null) _lblTitle.Text = Lang.T(StringKeys.AccountsTitle);
+            if (_btnAddAccount != null) _btnAddAccount.Text = "➕ " + Lang.T(StringKeys.AccountsBtnAdd);
+            if (_btnTestAll != null) _btnTestAll.Text = "⚡ " + Lang.T(StringKeys.AccountsBtnTest);
+            if (_btnBottomAdd != null) _btnBottomAdd.Text = "➕ " + Lang.T(StringKeys.AccountsBtnAdd);
+            LoadAccounts();
         }
     }
 }

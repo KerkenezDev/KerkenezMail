@@ -5,6 +5,7 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using KerkenezMail.Languages;
 using KerkenezMail.Models;
 using KerkenezMail.Services;
 
@@ -78,6 +79,11 @@ namespace KerkenezMail.UI.Tabs
         private ComboBox _cboMultiSelectPreview = null!;
         private TextBox _txtAttachmentDownloadPath = null!;
 
+        // Language & Region controls
+        private Label _lblSecLanguage = null!;
+        private Label _lblLanguageDesc = null!;
+        private ComboBox _cboLanguage = null!;
+
         // UI & Layout controls
         private CheckBox _chkCollapseSidebarByDefault = null!;
         private NumericUpDown _numWindowWidthScale = null!;
@@ -110,6 +116,7 @@ namespace KerkenezMail.UI.Tabs
 
             InitializeComponent();
             LoadSettings();
+            LanguageManager.Instance.LanguageChanged += (s, e) => ApplyLocalization();
         }
 
         private void InitializeComponent()
@@ -989,6 +996,41 @@ namespace KerkenezMail.UI.Tabs
             pnlAttachmentCard.Controls.Add(lblDownloadPathDesc);
             pnlAttachmentCard.Controls.Add(rowPathControls);
 
+            // ==================== 2.5. Language & Region Section ====================
+            var pnlLangCard = CreateCardPanel(ContentW);
+            _lblSecLanguage = CreateSectionHeader(Lang.T(StringKeys.SettingsSecLanguage));
+
+            _lblLanguageDesc = new Label
+            {
+                Text = Lang.T(StringKeys.SettingsLanguageDesc),
+                AutoSize = true,
+                Font = new Font("Segoe UI", 8.5F),
+                ForeColor = Color.FromArgb(100, 100, 100),
+                Margin = new Padding(0, 0, 0, 8)
+            };
+
+            _cboLanguage = new ComboBox
+            {
+                DropDownStyle = ComboBoxStyle.DropDownList,
+                Width = 280,
+                Font = new Font("Segoe UI", 9.5F),
+                Margin = new Padding(0, 0, 0, 4)
+            };
+
+            PopulateLanguageDropdown();
+
+            _cboLanguage.SelectedIndexChanged += (s, e) =>
+            {
+                if (_cboLanguage.SelectedItem is LanguageComboItem item)
+                {
+                    LanguageManager.Instance.SetLanguage(item.Language.Code);
+                }
+            };
+
+            pnlLangCard.Controls.Add(_lblSecLanguage);
+            pnlLangCard.Controls.Add(_lblLanguageDesc);
+            pnlLangCard.Controls.Add(_cboLanguage);
+
             // ==================== 3. Interface & Layout Section ====================
             var pnlUiCard = CreateCardPanel(ContentW);
             var lblSecUi = CreateSectionHeader("🖥️  Interface & Layout");
@@ -1282,6 +1324,7 @@ namespace KerkenezMail.UI.Tabs
 
             _mainFlow.Controls.Add(pnlLlmCard);
             _mainFlow.Controls.Add(pnlBatteryCard);
+            _mainFlow.Controls.Add(pnlLangCard);
             _mainFlow.Controls.Add(pnlEmailCard);
             _mainFlow.Controls.Add(pnlAttachmentCard);
             _mainFlow.Controls.Add(pnlUiCard);
@@ -1528,7 +1571,47 @@ namespace KerkenezMail.UI.Tabs
             _numTrayInterval.Value = Math.Max(_numTrayInterval.Minimum, Math.Min(_numTrayInterval.Maximum, s.TrayRefreshIntervalMinutes));
             _chkStartWithWindows.Checked = s.StartWithWindows || IsStartupWithWindowsEnabled();
 
+            // Language setting
+            string curLang = s.Language ?? "en";
+            for (int i = 0; i < _cboLanguage.Items.Count; i++)
+            {
+                if (_cboLanguage.Items[i] is LanguageComboItem item && item.Language.Code.Equals(curLang, StringComparison.OrdinalIgnoreCase))
+                {
+                    _cboLanguage.SelectedIndex = i;
+                    break;
+                }
+            }
+            if (_cboLanguage.SelectedIndex < 0 && _cboLanguage.Items.Count > 0)
+            {
+                _cboLanguage.SelectedIndex = 0;
+            }
+
             _txtPrompt.Text = s.SystemPrompt;
+        }
+
+        private void PopulateLanguageDropdown()
+        {
+            _cboLanguage.Items.Clear();
+            foreach (var lang in LanguageManager.Instance.AvailableLanguages)
+            {
+                _cboLanguage.Items.Add(new LanguageComboItem(lang));
+            }
+        }
+
+        public void ApplyLocalization()
+        {
+            if (this.IsDisposed) return;
+            if (_lblSecLanguage != null) _lblSecLanguage.Text = Lang.T(StringKeys.SettingsSecLanguage);
+            if (_lblLanguageDesc != null) _lblLanguageDesc.Text = Lang.T(StringKeys.SettingsLanguageDesc);
+            if (_btnSave != null) _btnSave.Text = "💾 " + Lang.T(StringKeys.SettingsBtnSave);
+            if (_btnTestLlm != null) _btnTestLlm.Text = "⚡ " + Lang.T(StringKeys.SettingsBtnTestLlm);
+        }
+
+        private class LanguageComboItem
+        {
+            public ILanguage Language { get; }
+            public LanguageComboItem(ILanguage lang) => Language = lang;
+            public override string ToString() => $"{Language.FlagEmoji}  {Language.Name} ({Language.Code})";
         }
 
         private Button CreateCharLimitPresetChip(string text, int charLimit)
@@ -1909,6 +1992,13 @@ namespace KerkenezMail.UI.Tabs
             s.StartWithWindows = _chkStartWithWindows.Checked;
 
             s.SystemPrompt = _txtPrompt.Text;
+
+            // Language setting
+            if (_cboLanguage.SelectedItem is LanguageComboItem selLang)
+            {
+                s.Language = selLang.Language.Code;
+                LanguageManager.Instance.SetLanguage(selLang.Language.Code);
+            }
 
             SetStartupWithWindows(s.StartWithWindows);
             _configService.SaveConfig();

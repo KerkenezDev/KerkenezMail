@@ -11,6 +11,9 @@ namespace KerkenezMail.Models
     {
         public List<string> AccountIds { get; set; } = new List<string>();
 
+        // Language / Localization Setting ("en", "tr", etc.)
+        public string Language { get; set; } = "en";
+
         // AI Backend Selection ("LlamaCpp", "Ollama", "Cloud", "None")
         public string AiBackend { get; set; } = "LlamaCpp";
 

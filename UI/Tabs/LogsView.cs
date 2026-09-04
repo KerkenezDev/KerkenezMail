@@ -2,12 +2,14 @@ using System;
 using System.Drawing;
 using System.Text;
 using System.Windows.Forms;
+using KerkenezMail.Languages;
 
 namespace KerkenezMail.UI.Tabs
 {
     public class LogsView : UserControl
     {
         private RichTextBox _rtbLog = null!;
+        private Label _lblTitle = null!;
         private Button _btnCopy = null!;
         private Button _btnClear = null!;
         private readonly StringBuilder _logBuffer = new StringBuilder();
@@ -15,6 +17,7 @@ namespace KerkenezMail.UI.Tabs
         public LogsView()
         {
             InitializeComponent();
+            LanguageManager.Instance.LanguageChanged += (s, e) => ApplyLocalization();
         }
 
         private void InitializeComponent()
@@ -40,9 +43,9 @@ namespace KerkenezMail.UI.Tabs
                 e.Graphics.DrawLine(p, 0, topPanel.Height - 1, topPanel.Width, topPanel.Height - 1);
             };
 
-            var lblTitle = new Label
+            _lblTitle = new Label
             {
-                Text = "Live System & IMAP Activity Console",
+                Text = Lang.T(StringKeys.LogsTitle),
                 Dock = DockStyle.Left,
                 AutoSize = true,
                 Font = new Font("Segoe UI", 10.5F, FontStyle.Bold),
@@ -63,7 +66,7 @@ namespace KerkenezMail.UI.Tabs
 
             _btnCopy = new Button
             {
-                Text = "📋 Copy Log",
+                Text = "📋 " + Lang.T(StringKeys.LogsBtnExport),
                 UseMnemonic = false,
                 AutoSize = true,
                 AutoSizeMode = AutoSizeMode.GrowAndShrink,
@@ -76,7 +79,7 @@ namespace KerkenezMail.UI.Tabs
 
             _btnClear = new Button
             {
-                Text = "🧹 Clear",
+                Text = "🧹 " + Lang.T(StringKeys.LogsBtnClear),
                 UseMnemonic = false,
                 AutoSize = true,
                 AutoSizeMode = AutoSizeMode.GrowAndShrink,
@@ -94,7 +97,7 @@ namespace KerkenezMail.UI.Tabs
             rightActions.Controls.Add(_btnCopy);
             rightActions.Controls.Add(_btnClear);
 
-            topPanel.Controls.Add(lblTitle);
+            topPanel.Controls.Add(_lblTitle);
             topPanel.Controls.Add(rightActions);
 
             // RichTextBox Log Console
@@ -156,6 +159,14 @@ namespace KerkenezMail.UI.Tabs
                 Clipboard.SetText(_rtbLog.Text);
                 MessageBox.Show("Console log copied to clipboard!", "Copied", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
+        }
+
+        public void ApplyLocalization()
+        {
+            if (this.IsDisposed) return;
+            if (_lblTitle != null) _lblTitle.Text = Lang.T(StringKeys.LogsTitle);
+            if (_btnCopy != null) _btnCopy.Text = "📋 " + Lang.T(StringKeys.LogsBtnExport);
+            if (_btnClear != null) _btnClear.Text = "🧹 " + Lang.T(StringKeys.LogsBtnClear);
         }
     }
 }

@@ -2,6 +2,7 @@ using System;
 using System.Drawing;
 using System.IO;
 using System.Windows.Forms;
+using KerkenezMail.Languages;
 using KerkenezMail.Models;
 using KerkenezMail.Services;
 using KerkenezMail.UI.Tabs;
@@ -14,7 +15,7 @@ namespace KerkenezMail.UI
 
         public SendMailForm(ConfigService configService, SmtpService? smtpService = null, EmailItem? replyEmail = null, EmailAccount? senderAccount = null)
         {
-            this.Text = replyEmail != null ? $"Reply: {replyEmail.Subject}" : "Compose Email";
+            this.Text = replyEmail != null ? $"{Lang.T(StringKeys.InboxBtnReply)}: {replyEmail.Subject}" : Lang.T(StringKeys.SendTitle);
             this.Size = new Size(820, 640);
             this.MinimumSize = new Size(580, 440);
             this.StartPosition = FormStartPosition.CenterParent;

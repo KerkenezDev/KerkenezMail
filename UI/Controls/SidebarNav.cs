@@ -2,7 +2,7 @@ using System;
 using System.ComponentModel;
 using System.Drawing;
 using System.Drawing.Drawing2D;
-using System.Windows.Forms;
+using KerkenezMail.Languages;
 using KerkenezMail.Models;
 
 namespace KerkenezMail.UI.Controls
@@ -16,6 +16,25 @@ namespace KerkenezMail.UI.Controls
         public event EventHandler<MailFolderType>? MailFolderSelected;
         public event EventHandler<bool>? CollapsedChanged;
         public event EventHandler<bool>? LiveImapToggled;
+
+        public static string GetTabTitle(int index) => index switch
+        {
+            0 => Lang.T(StringKeys.NavInbox),
+            1 => Lang.T(StringKeys.NavSendMail),
+            2 => Lang.T(StringKeys.NavAccounts),
+            3 => Lang.T(StringKeys.NavSettings),
+            4 => Lang.T(StringKeys.NavLiveLogs),
+            _ => ""
+        };
+
+        public static string GetSubFolderTitle(MailFolderType folder) => folder switch
+        {
+            MailFolderType.Sent => Lang.T(StringKeys.NavSent),
+            MailFolderType.Archive => Lang.T(StringKeys.NavArchived),
+            MailFolderType.Spam => Lang.T(StringKeys.NavSpam),
+            MailFolderType.Trash => Lang.T(StringKeys.NavTrash),
+            _ => folder.ToString()
+        };
 
         private readonly string[] _tabTitles = new[]
         {
@@ -190,6 +209,8 @@ namespace KerkenezMail.UI.Controls
 
             float scale = CurrentScale;
             this.Width = _isCollapsed ? (int)(CollapsedWidth * scale) : (int)(ExpandedWidth * scale);
+
+            LanguageManager.Instance.LanguageChanged += (s, e) => this.Invalidate();
         }
 
         public void ToggleCollapsed()
@@ -339,7 +360,7 @@ namespace KerkenezMail.UI.Controls
                 // No tooltip for Send Mail (tab 1); only show tooltip for other tabs when collapsed
                 if (_isCollapsed && matchedIdx != 1)
                 {
-                    UpdateToolTip(_tabTitles[matchedIdx], loc);
+                    UpdateToolTip(GetTabTitle(matchedIdx), loc);
                 }
                 else
                 {
@@ -378,9 +399,7 @@ namespace KerkenezMail.UI.Controls
                 _hoveredFolder = null;
                 _isLiveImapHovered = true;
                 this.Cursor = Cursors.Hand;
-                string liveTip = _isLiveImapActive
-                    ? (_isCollapsed ? "Live IMAP: Active (Click to turn off)" : "Live IMAP is active (Click to turn off)")
-                    : (_isCollapsed ? "Live IMAP: Off (Click to turn on)" : "Live IMAP is off (Click to turn on)");
+                string liveTip = Lang.T(_isLiveImapActive ? StringKeys.NavLiveImapActive : StringKeys.NavLiveImapOff);
                 UpdateToolTip(liveTip, e.Location);
             }
             else
@@ -394,7 +413,7 @@ namespace KerkenezMail.UI.Controls
                     _isChevronHovered = false;
                     _hoveredFolder = null;
                     this.Cursor = Cursors.Hand;
-                    string toggleTip = _isCollapsed ? "Expand sidebar (Ctrl+B)" : "Collapse sidebar (Ctrl+B)";
+                    string toggleTip = Lang.T(_isCollapsed ? StringKeys.NavTipExpandSidebar : StringKeys.NavTipCollapseSidebar);
                     UpdateToolTip(toggleTip, e.Location);
                 }
                 else if (isWide && chevronRect.Contains(e.Location))
@@ -404,7 +423,7 @@ namespace KerkenezMail.UI.Controls
                     _isChevronHovered = true;
                     _hoveredFolder = null;
                     this.Cursor = Cursors.Hand;
-                    UpdateToolTip(_isInboxExpanded ? "Collapse mail folders" : "Expand mail folders (Sent, Archive, Trash...)", e.Location);
+                    UpdateToolTip(Lang.T(_isInboxExpanded ? StringKeys.NavTipCollapseFolders : StringKeys.NavTipExpandFolders), e.Location);
                 }
                 else if (item0Rect.Contains(e.Location))
                 {
@@ -415,7 +434,7 @@ namespace KerkenezMail.UI.Controls
                     this.Cursor = Cursors.Hand;
                     if (_isCollapsed)
                     {
-                        string tip = _selectedFolder == MailFolderType.Inbox ? "Inbox" : $"Inbox ({_selectedFolder.GetDisplayName()})";
+                        string tip = _selectedFolder == MailFolderType.Inbox ? GetTabTitle(0) : $"{GetTabTitle(0)} ({GetSubFolderTitle(_selectedFolder)})";
                         UpdateToolTip(tip, e.Location);
                     }
                     else
@@ -658,7 +677,7 @@ namespace KerkenezMail.UI.Controls
                     int sTextWidth = subRect.Width - (sTextLeft - subRect.Left) - 2;
                     if (sTextWidth > 0)
                     {
-                        g.DrawString(sub.Title, subFont, subTextBrush, new Rectangle(sTextLeft, subRect.Top, sTextWidth, subRect.Height), sfSub);
+                        g.DrawString(GetSubFolderTitle(sub.Folder), subFont, subTextBrush, new Rectangle(sTextLeft, subRect.Top, sTextWidth, subRect.Height), sfSub);
                     }
                 }
             }
@@ -748,7 +767,7 @@ namespace KerkenezMail.UI.Controls
                 if (textWidth > 0)
                 {
                     var textRect = new Rectangle(textLeft, liveRect.Top, textWidth, liveRect.Height);
-                    g.DrawString("Live IMAP", itemFont, textBrush, textRect, stringFormat);
+                    g.DrawString(Lang.T(StringKeys.NavLiveImap), itemFont, textBrush, textRect, stringFormat);
                 }
 
                 // Live status indicator dot on far right
@@ -828,7 +847,7 @@ namespace KerkenezMail.UI.Controls
                 if (textWidth > 0)
                 {
                     var textRect = new Rectangle(textLeft, itemRect.Top, textWidth, itemRect.Height);
-                    g.DrawString(_tabTitles[i], itemFont, textBrush, textRect, stringFormat);
+                    g.DrawString(GetTabTitle(i), itemFont, textBrush, textRect, stringFormat);
                 }
 
                 // Draw chevron on Item 0

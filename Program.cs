@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Windows.Forms;
+using KerkenezMail.Languages;
 using KerkenezMail.Services;
 using KerkenezMail.UI;
 
@@ -103,6 +104,19 @@ namespace KerkenezMail
             {
                 // Check if background tray daemon should be active
                 var configService = new ConfigService();
+
+                // Initialize Language / Localization
+                string langCode = configService.Settings.Language;
+                if (string.IsNullOrWhiteSpace(langCode))
+                {
+                    var sysLang = System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
+                    langCode = LanguageManager.Instance.AvailableLanguages.Any(l => l.Code.Equals(sysLang, StringComparison.OrdinalIgnoreCase))
+                        ? sysLang
+                        : "en";
+                    configService.Settings.Language = langCode;
+                }
+                LanguageManager.Instance.SetLanguage(langCode);
+
                 if (configService.Settings.AlwaysKeepOn)
                 {
                     StartDaemonIfNotRunning();

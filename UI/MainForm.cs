@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using KerkenezMail.Languages;
 using KerkenezMail.Models;
 using KerkenezMail.Services;
 using KerkenezMail.UI.Controls;
@@ -78,11 +79,13 @@ namespace KerkenezMail.UI
 
                 await _summariesView.FetchAndAutoSummarizeAsync();
             };
+
+            LanguageManager.Instance.LanguageChanged += (s, e) => ApplyLocalization();
         }
 
         private void InitializeComponent()
         {
-            this.Text = "Kerkenez Mail (Win32)";
+            ApplyLocalization();
             
             // Set window icon for Title Bar and Windows Taskbar
             try
@@ -513,6 +516,11 @@ namespace KerkenezMail.UI
             base.OnFormClosing(e);
             _llamaManager.Stop();
             ConfigService.CleanTempFolder();
+        }
+
+        public void ApplyLocalization()
+        {
+            this.Text = Lang.T(StringKeys.AppTitle);
         }
 
         protected override void Dispose(bool disposing)

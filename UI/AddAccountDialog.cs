@@ -1,6 +1,7 @@
 using System;
 using System.Drawing;
 using System.Windows.Forms;
+using KerkenezMail.Languages;
 using KerkenezMail.Models;
 using KerkenezMail.Services;
 
@@ -68,7 +69,7 @@ namespace KerkenezMail.UI
 
         private void InitializeComponent()
         {
-            this.Text = _isEditMode ? "Edit Email Account" : "Add Email Account";
+            this.Text = _isEditMode ? Lang.T(StringKeys.AddAccEditTitle) : Lang.T(StringKeys.AddAccTitle);
             try
             {
                 using var stream = typeof(MainForm).Assembly.GetManifestResourceStream("KerkenezMail.app.ico");
@@ -227,7 +228,7 @@ namespace KerkenezMail.UI
             // 7. SSL Checkbox
             _chkUseSsl = new CheckBox
             {
-                Text = "Use SSL / TLS for IMAP",
+                Text = Lang.T(StringKeys.AddAccImapSsl),
                 Checked = true,
                 AutoSize = true,
                 Margin = new Padding(0, 4, 0, 8)
@@ -254,7 +255,7 @@ namespace KerkenezMail.UI
             // 7c. SMTP SSL Checkbox
             _chkSmtpUseSsl = new CheckBox
             {
-                Text = "Use SSL on Connect for SMTP (Uncheck for STARTTLS on port 587)",
+                Text = Lang.T(StringKeys.AddAccSmtpSsl),
                 Checked = false,
                 AutoSize = true,
                 Margin = new Padding(0, 4, 0, 12)
@@ -264,7 +265,7 @@ namespace KerkenezMail.UI
             var testPanel = new Panel { Dock = DockStyle.Fill, Height = 36, Margin = new Padding(0, 4, 0, 8) };
             _btnTestConnection = new Button
             {
-                Text = "⚡ Test Connection",
+                Text = "⚡ " + Lang.T(StringKeys.AddAccTestConnection),
                 Width = 140,
                 Height = 32,
                 Dock = DockStyle.Left,
@@ -301,7 +302,7 @@ namespace KerkenezMail.UI
 
             _btnCancel = new Button
             {
-                Text = "Cancel",
+                Text = Lang.T(StringKeys.AddAccCancel),
                 Width = 90,
                 Height = 32,
                 Dock = DockStyle.Right,
@@ -310,7 +311,7 @@ namespace KerkenezMail.UI
             };
             _btnSave = new Button
             {
-                Text = _isEditMode ? "Save Changes" : "Add Account",
+                Text = _isEditMode ? Lang.T(StringKeys.CommonSave) : Lang.T(StringKeys.AddAccSave),
                 Width = 120,
                 Height = 32,
                 Dock = DockStyle.Right,

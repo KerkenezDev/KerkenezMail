@@ -8,6 +8,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using KerkenezMail.Languages;
 using KerkenezMail.Models;
 using KerkenezMail.Services;
 
@@ -91,6 +92,7 @@ namespace KerkenezMail.UI.Tabs
 
             InitializeComponent();
             RefreshAccountsList();
+            LanguageManager.Instance.LanguageChanged += (s, e) => ApplyLocalization();
         }
 
         private void InitializeComponent()
@@ -168,7 +170,7 @@ namespace KerkenezMail.UI.Tabs
 
             _btnSend = new Button
             {
-                Text = "🚀  Send Email",
+                Text = "🚀  " + Lang.T(StringKeys.SendBtnSend),
                 Width = (int)(110 * scale),
                 Height = (int)(34 * scale),
                 Margin = new Padding((int)(6 * scale), 0, 0, 0),
@@ -180,7 +182,7 @@ namespace KerkenezMail.UI.Tabs
 
             _btnDiscard = new Button
             {
-                Text = "🗑 Discard",
+                Text = "🗑 " + Lang.T(StringKeys.SendBtnDiscard),
                 Width = (int)(80 * scale),
                 Height = (int)(34 * scale),
                 Margin = new Padding((int)(6 * scale), 0, 0, 0),
@@ -1154,6 +1156,15 @@ namespace KerkenezMail.UI.Tabs
 
             SetNewEmail();
             BackToInboxRequested?.Invoke(this, EventArgs.Empty);
+        }
+
+        public void ApplyLocalization()
+        {
+            if (this.IsDisposed) return;
+            if (_lblTitle != null) _lblTitle.Text = _isReply ? Lang.T(StringKeys.InboxBtnReply) : Lang.T(StringKeys.SendTitle);
+            if (_btnSend != null) _btnSend.Text = "🚀  " + Lang.T(StringKeys.SendBtnSend);
+            if (_btnDiscard != null) _btnDiscard.Text = "🗑 " + Lang.T(StringKeys.SendBtnDiscard);
+            if (_btnBrowseFiles != null) _btnBrowseFiles.Text = "📎 " + Lang.T(StringKeys.SendAddAttachment);
         }
 
         #endregion

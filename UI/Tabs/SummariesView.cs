@@ -8,6 +8,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using KerkenezMail.Languages;
 using KerkenezMail.Models;
 using KerkenezMail.Services;
 
@@ -120,6 +121,8 @@ namespace KerkenezMail.UI.Tabs
             InitializeComponent();
             RefreshAccountFilter();
             _configService.SettingsChanged += RefreshAccountFilter;
+            LanguageManager.Instance.LanguageChanged += (s, e) => ApplyLocalization();
+            ApplyLocalization();
         }
 
         private void InitializeComponent()
@@ -687,16 +690,27 @@ namespace KerkenezMail.UI.Tabs
             if (!_configService.Settings.IsAiDisabled)
             {
                 _lvEmails.Columns.Add("⚡", 44);
-                _lvEmails.Columns.Add("Subject", 190);
+                _lvEmails.Columns.Add(Lang.T(StringKeys.InboxColSubject), 190);
             }
             else
             {
-                _lvEmails.Columns.Add("Subject", 234);
+                _lvEmails.Columns.Add(Lang.T(StringKeys.InboxColSubject), 234);
             }
-            _lvEmails.Columns.Add("Account", 95);
-            _lvEmails.Columns.Add("From", 120);
-            _lvEmails.Columns.Add("Date", 85);
+            _lvEmails.Columns.Add(Lang.T(StringKeys.InboxColAccount), 95);
+            _lvEmails.Columns.Add(Lang.T(StringKeys.InboxColFrom), 120);
+            _lvEmails.Columns.Add(Lang.T(StringKeys.InboxColDate), 85);
             _lvEmails.EndUpdate();
+        }
+
+        public void ApplyLocalization()
+        {
+            if (this.IsDisposed) return;
+            if (_btnRefresh != null) _btnRefresh.Text = "🔄 " + Lang.T(StringKeys.InboxRefresh);
+            if (_btnReply != null) _btnReply.Text = "↩ " + Lang.T(StringKeys.InboxBtnReply);
+            if (_btnMoveToInbox != null) _btnMoveToInbox.Text = "📥 " + Lang.T(StringKeys.InboxBtnMoveInbox);
+            if (_btnDelete != null) _btnDelete.Text = "🗑 " + Lang.T(StringKeys.InboxBtnDelete);
+            if (_txtSearch != null) _txtSearch.PlaceholderText = Lang.T(StringKeys.InboxSearchPlaceholder);
+            SetupListViewColumns();
         }
 
         public void ApplyAiModeLayout()
