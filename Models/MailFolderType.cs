@@ -1,4 +1,5 @@
 using System;
+using KerkenezMail.Languages;
 
 namespace KerkenezMail.Models
 {
@@ -15,11 +16,11 @@ namespace KerkenezMail.Models
     {
         public static string GetDisplayName(this MailFolderType folder) => folder switch
         {
-            MailFolderType.Inbox => "Inbox",
-            MailFolderType.Sent => "Sent",
-            MailFolderType.Archive => "Archived",
-            MailFolderType.Spam => "Spam",
-            MailFolderType.Trash => "Trash",
+            MailFolderType.Inbox => Lang.T(StringKeys.NavInbox),
+            MailFolderType.Sent => Lang.T(StringKeys.NavSent),
+            MailFolderType.Archive => Lang.T(StringKeys.NavArchived),
+            MailFolderType.Spam => Lang.T(StringKeys.NavSpam),
+            MailFolderType.Trash => Lang.T(StringKeys.NavTrash),
             _ => folder.ToString()
         };
 

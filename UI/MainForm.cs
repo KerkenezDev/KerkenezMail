@@ -51,7 +51,7 @@ namespace KerkenezMail.UI
             InitializeComponent();
             Microsoft.Win32.SystemEvents.PowerModeChanged += OnSystemPowerModeChanged;
             string modelName = _configService.Settings.GetBackendDisplayName();
-            UpdateStatusStrip($"Ready • Backend: {modelName}", "Ready");
+            UpdateStatusStrip(Lang.Format(StringKeys.StatusReadyBackend, modelName), Lang.T(StringKeys.StatusReady));
 
             // Auto-fetch and auto-summarize unread emails as soon as app opens
             this.Shown += async (s, e) =>
@@ -64,8 +64,8 @@ namespace KerkenezMail.UI
                     {
                         var res = MessageBox.Show(
                             this,
-                            "Welcome to Kerkenez Mail!\r\n\r\nWould you like to create shortcuts on your Desktop and Start Menu for easy access?",
-                            "Kerkenez Mail Shortcuts",
+                            Lang.T(StringKeys.MainShortcutsPromptDesc),
+                            Lang.T(StringKeys.MainShortcutsPromptTitle),
                             MessageBoxButtons.YesNo,
                             MessageBoxIcon.Question);
 
@@ -155,7 +155,7 @@ namespace KerkenezMail.UI
 
             _lblStatus = new ToolStripStatusLabel
             {
-                Text = "Starting up...",
+                Text = Lang.T(StringKeys.StatusStartingUp),
                 Spring = true,
                 TextAlign = ContentAlignment.MiddleLeft,
                 ForeColor = Color.FromArgb(50, 50, 50)
@@ -251,15 +251,15 @@ namespace KerkenezMail.UI
             string metrics = _lblMetrics?.Text ?? "";
             if (isActive)
             {
-                UpdateStatusStrip("Live IMAP: Connecting...", metrics);
+                UpdateStatusStrip(Lang.T(StringKeys.StatusLiveConnecting), metrics);
                 await _liveImapService.StartAsync();
-                UpdateStatusStrip(_liveImapService.IsRunning ? "Live IMAP: Connected & Listening" : "Live IMAP: Stopped", metrics);
+                UpdateStatusStrip(_liveImapService.IsRunning ? Lang.T(StringKeys.StatusLiveListening) : Lang.T(StringKeys.StatusLiveStopped), metrics);
             }
             else
             {
-                UpdateStatusStrip("Live IMAP: Transmitting DONE signals...", metrics);
+                UpdateStatusStrip(Lang.T(StringKeys.StatusLiveDone), metrics);
                 await _liveImapService.StopAsync();
-                UpdateStatusStrip("Live IMAP: Stopped", metrics);
+                UpdateStatusStrip(Lang.T(StringKeys.StatusLiveStopped), metrics);
             }
         }
 
@@ -277,7 +277,7 @@ namespace KerkenezMail.UI
                 $"{account.Name}: {count} new email(s) received in Inbox.");
 
             // 2. Status Strip feedback
-            UpdateStatusStrip($"Live IMAP: New email arrived for {account.Name}", _lblMetrics?.Text ?? "");
+            UpdateStatusStrip(Lang.Format(StringKeys.StatusLiveNewEmail, account.Name), _lblMetrics?.Text ?? "");
 
             // 3. Auto-refresh if currently looking at the Inbox folder in Summaries view
             if (_sidebar.SelectedIndex == 0 && _sidebar.SelectedFolder == MailFolderType.Inbox)
@@ -380,7 +380,7 @@ namespace KerkenezMail.UI
 
             _lblStatus.Text = status;
             int enabledCount = _configService.GetAccounts().Count(a => a.IsEnabled);
-            _lblMetrics.Text = $"Accounts: {enabledCount} | VRAM: {vramStatus}";
+            _lblMetrics.Text = Lang.Format(StringKeys.StatusAccountsCount, enabledCount, vramStatus);
         }
 
         private void UpdateMetrics()
@@ -389,20 +389,20 @@ namespace KerkenezMail.UI
             string status;
             if (_configService.Settings.IsBatterySaverActive)
             {
-                status = "Battery Saver (No AI)";
+                status = Lang.T(StringKeys.StatusBatterySaverNoAi);
             }
             else if (_configService.Settings.IsAiDisabled)
             {
-                status = "Disabled (Classic Mail)";
+                status = Lang.T(StringKeys.StatusDisabledClassic);
             }
             else
             {
                 string backendType = _configService.Settings.AiBackend;
                 status = string.Equals(backendType, "LlamaCpp", StringComparison.OrdinalIgnoreCase) 
-                    ? (_configService.Settings.InstantVramUnload ? "On-Demand (VRAM Unload)" : "Model Loaded in VRAM") 
-                    : (string.Equals(backendType, "Ollama", StringComparison.OrdinalIgnoreCase) ? "Ollama Active" : "Cloud Active");
+                    ? (_configService.Settings.InstantVramUnload ? Lang.T(StringKeys.StatusOnDemandVram) : Lang.T(StringKeys.StatusModelLoaded)) 
+                    : (string.Equals(backendType, "Ollama", StringComparison.OrdinalIgnoreCase) ? Lang.T(StringKeys.StatusOllamaActive) : Lang.T(StringKeys.StatusCloudActive));
             }
-            _lblMetrics.Text = $"Accounts: {enabledCount} | Backend: {status}";
+            _lblMetrics.Text = Lang.Format(StringKeys.StatusAccountsBackend, enabledCount, status);
         }
 
         private void OnSystemPowerModeChanged(object? sender, Microsoft.Win32.PowerModeChangedEventArgs e)
@@ -521,6 +521,7 @@ namespace KerkenezMail.UI
         public void ApplyLocalization()
         {
             this.Text = Lang.T(StringKeys.AppTitle);
+            UpdateMetrics();
         }
 
         protected override void Dispose(bool disposing)

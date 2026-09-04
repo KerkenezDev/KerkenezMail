@@ -123,7 +123,7 @@ namespace KerkenezMail.UI.Tabs
 
             _lblEmpty = new Label
             {
-                Text = "No accounts configured yet.\r\nClick '+ Add Account' above to connect your Gmail or IMAP account.",
+                Text = Lang.T(StringKeys.AccountsEmptyDesc),
                 AutoSize = false,
                 Size = new Size(500, 80),
                 TextAlign = ContentAlignment.MiddleCenter,
@@ -201,6 +201,28 @@ namespace KerkenezMail.UI.Tabs
             _pnlCards.ResumeLayout();
         }
 
+        private static string FormatConnectionStatus(string? status)
+        {
+            if (string.IsNullOrWhiteSpace(status) || status.Equals("Untested", StringComparison.OrdinalIgnoreCase))
+            {
+                return Lang.T(StringKeys.AccountsStatusUntested);
+            }
+            if (status.StartsWith("Connected", StringComparison.OrdinalIgnoreCase))
+            {
+                var match = System.Text.RegularExpressions.Regex.Match(status, @"\(([0-9]+)\s+unread\)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                if (match.Success && int.TryParse(match.Groups[1].Value, out int unread))
+                {
+                    return Lang.Format(StringKeys.AccountsStatusConnectedUnread, unread);
+                }
+                return Lang.T(StringKeys.AccountsStatusConnected);
+            }
+            if (status.StartsWith("Failed", StringComparison.OrdinalIgnoreCase))
+            {
+                return Lang.T(StringKeys.AccountsStatusFailed);
+            }
+            return status;
+        }
+
         private Panel CreateAccountCard(EmailAccount account, int width)
         {
             var card = new Panel
@@ -264,7 +286,7 @@ namespace KerkenezMail.UI.Tabs
 
             var lblStatus = new Label
             {
-                Text = $"{Lang.T(StringKeys.AccountsColStatus)}: {account.ConnectionStatus}",
+                Text = $"{Lang.T(StringKeys.AccountsColStatus)}: {FormatConnectionStatus(account.ConnectionStatus)}",
                 Font = new Font("Segoe UI", 8.25F, FontStyle.Italic),
                 ForeColor = account.ConnectionStatus.StartsWith("Connected") ? Color.DarkGreen :
                             account.ConnectionStatus.StartsWith("Failed") ? Color.Red : Color.FromArgb(120, 120, 120),
@@ -306,7 +328,7 @@ namespace KerkenezMail.UI.Tabs
                 account.ConnectionError = success ? null : msg;
 
                 lblStatus.ForeColor = success ? Color.DarkGreen : Color.Red;
-                lblStatus.Text = $"{Lang.T(StringKeys.AccountsColStatus)}: {account.ConnectionStatus}";
+                lblStatus.Text = $"{Lang.T(StringKeys.AccountsColStatus)}: {FormatConnectionStatus(account.ConnectionStatus)}";
                 btnTest.Enabled = true;
 
                 if (!success)
@@ -371,7 +393,8 @@ namespace KerkenezMail.UI.Tabs
             };
             btnDelete.Click += (s, e) =>
             {
-                if (MessageBox.Show($"Are you sure you want to remove account '{account.Name}' ({account.Email})?", "Confirm Delete", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
+                string msg = Lang.Format(StringKeys.AccountsDeleteConfirm, account.Name, account.Email);
+                if (MessageBox.Show(msg, Lang.T(StringKeys.CommonDelete), MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
                 {
                     var accounts = _configService.GetAccounts();
                     accounts.RemoveAll(a => a.Id == account.Id);
@@ -380,6 +403,11 @@ namespace KerkenezMail.UI.Tabs
                     AccountsChanged?.Invoke();
                 }
             };
+
+            var actionTips = new ToolTip();
+            actionTips.SetToolTip(btnTest, Lang.T(StringKeys.AccountsBtnTest));
+            actionTips.SetToolTip(btnEdit, Lang.T(StringKeys.AccountsBtnEdit));
+            actionTips.SetToolTip(btnDelete, Lang.T(StringKeys.AccountsBtnDelete));
 
             pnlActions.Controls.Add(btnTest);
             pnlActions.Controls.Add(btnEdit);
@@ -441,6 +469,7 @@ namespace KerkenezMail.UI.Tabs
             if (_btnAddAccount != null) _btnAddAccount.Text = "➕ " + Lang.T(StringKeys.AccountsBtnAdd);
             if (_btnTestAll != null) _btnTestAll.Text = "⚡ " + Lang.T(StringKeys.AccountsBtnTest);
             if (_btnBottomAdd != null) _btnBottomAdd.Text = "➕ " + Lang.T(StringKeys.AccountsBtnAdd);
+            if (_lblEmpty != null) _lblEmpty.Text = Lang.T(StringKeys.AccountsEmptyDesc);
             LoadAccounts();
         }
     }

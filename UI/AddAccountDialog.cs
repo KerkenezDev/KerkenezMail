@@ -107,11 +107,11 @@ namespace KerkenezMail.UI
             mainPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
 
             // 1. Account Name
-            var lblName = new Label { Text = "Account Label:", AutoSize = true, Anchor = AnchorStyles.Left | AnchorStyles.Top, Margin = new Padding(0, 8, 0, 8) };
+            var lblName = new Label { Text = Lang.T(StringKeys.AddAccDisplayName), AutoSize = true, Anchor = AnchorStyles.Left | AnchorStyles.Top, Margin = new Padding(0, 8, 0, 8) };
             _txtName = new TextBox { Dock = DockStyle.Fill, Margin = new Padding(0, 4, 0, 10), Font = new Font("Segoe UI", 9.5F) };
 
             // 2. Provider Preset
-            var lblProvider = new Label { Text = "Provider:", AutoSize = true, Anchor = AnchorStyles.Left | AnchorStyles.Top, Margin = new Padding(0, 8, 0, 8) };
+            var lblProvider = new Label { Text = Lang.T(StringKeys.AddAccProviderPreset), AutoSize = true, Anchor = AnchorStyles.Left | AnchorStyles.Top, Margin = new Padding(0, 8, 0, 8) };
             _cboProvider = new ComboBox
             {
                 Dock = DockStyle.Fill,
@@ -131,12 +131,12 @@ namespace KerkenezMail.UI
             _cboProvider.SelectedIndexChanged += OnProviderChanged;
 
             // 3. Email Address
-            var lblEmail = new Label { Text = "Email Address:", AutoSize = true, Anchor = AnchorStyles.Left | AnchorStyles.Top, Margin = new Padding(0, 8, 0, 8) };
+            var lblEmail = new Label { Text = Lang.T(StringKeys.AddAccEmail), AutoSize = true, Anchor = AnchorStyles.Left | AnchorStyles.Top, Margin = new Padding(0, 8, 0, 8) };
             _txtEmail = new TextBox { Dock = DockStyle.Fill, Margin = new Padding(0, 4, 0, 10), Font = new Font("Segoe UI", 9.5F) };
             _txtEmail.TextChanged += OnEmailTextChanged;
 
             // 4. Authentication / Password
-            _lblPasswordHeader = new Label { Text = "App Password:", AutoSize = true, Anchor = AnchorStyles.Left | AnchorStyles.Top, Margin = new Padding(0, 8, 0, 8) };
+            _lblPasswordHeader = new Label { Text = Lang.T(StringKeys.AddAccPassword), AutoSize = true, Anchor = AnchorStyles.Left | AnchorStyles.Top, Margin = new Padding(0, 8, 0, 8) };
             
             var panelAuthHolder = new Panel { Dock = DockStyle.Fill, AutoSize = true, Margin = new Padding(0, 4, 0, 4) };
 
@@ -168,7 +168,7 @@ namespace KerkenezMail.UI
             _pnlOAuthSection = new Panel { Dock = DockStyle.Top, AutoSize = true, Visible = false };
             _btnMicrosoftSignIn = new Button
             {
-                Text = "🌐  Sign in with Microsoft",
+                Text = "🌐  " + Lang.T(StringKeys.AddAccOAuthSignIn),
                 Height = 36,
                 Dock = DockStyle.Top,
                 FlatStyle = FlatStyle.Flat,
@@ -182,7 +182,7 @@ namespace KerkenezMail.UI
 
             _lblOAuthStatus = new Label
             {
-                Text = "Click above to sign in via your web browser.",
+                Text = Lang.T(StringKeys.AddAccOAuthClickHelp),
                 Font = new Font("Segoe UI", 8.5F, FontStyle.Italic),
                 ForeColor = Color.FromArgb(80, 80, 80),
                 Dock = DockStyle.Top,
@@ -199,7 +199,7 @@ namespace KerkenezMail.UI
             // 5. Help text / note
             _lblHelpNote = new Label
             {
-                Text = "💡 For Gmail: Use a 16-character Google App Password (myaccount.google.com/apppasswords). Standard Google passwords will not work with 2FA enabled.",
+                Text = Lang.T(StringKeys.AddAccHelpGmail),
                 ForeColor = Color.FromArgb(80, 80, 80),
                 Font = new Font("Segoe UI", 8.25F, FontStyle.Italic),
                 AutoSize = true,
@@ -208,7 +208,7 @@ namespace KerkenezMail.UI
             };
 
             // 6. Host & Port
-            var lblHost = new Label { Text = "IMAP Host & Port:", AutoSize = true, Anchor = AnchorStyles.Left | AnchorStyles.Top, Margin = new Padding(0, 8, 0, 8) };
+            var lblHost = new Label { Text = Lang.T(StringKeys.AddAccImapServer), AutoSize = true, Anchor = AnchorStyles.Left | AnchorStyles.Top, Margin = new Padding(0, 8, 0, 8) };
             var hostPortPanel = new Panel { Dock = DockStyle.Fill, Height = 32, Margin = new Padding(0, 4, 0, 10) };
             _txtHost = new TextBox { Text = "imap.gmail.com", Dock = DockStyle.Fill, Font = new Font("Segoe UI", 9.5F) };
             _numPort = new NumericUpDown
@@ -235,7 +235,7 @@ namespace KerkenezMail.UI
             };
 
             // 7b. SMTP Host & Port
-            var lblSmtpHost = new Label { Text = "SMTP Host & Port:", AutoSize = true, Anchor = AnchorStyles.Left | AnchorStyles.Top, Margin = new Padding(0, 8, 0, 8) };
+            var lblSmtpHost = new Label { Text = Lang.T(StringKeys.AddAccSmtpServer), AutoSize = true, Anchor = AnchorStyles.Left | AnchorStyles.Top, Margin = new Padding(0, 8, 0, 8) };
             var smtpHostPortPanel = new Panel { Dock = DockStyle.Fill, Height = 32, Margin = new Padding(0, 4, 0, 8) };
             _txtSmtpHost = new TextBox { Text = "smtp.gmail.com", Dock = DockStyle.Fill, Font = new Font("Segoe UI", 9.5F) };
             _numSmtpPort = new NumericUpDown

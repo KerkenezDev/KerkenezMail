@@ -36,9 +36,14 @@ namespace KerkenezMail.UI.Tabs
 
         // UI Controls - Recipient Card
         private ComboBox _cboFrom = null!;
+        private Label _lblFrom = null!;
+        private Label _lblTo = null!;
         private TextBox _txtTo = null!;
+        private Label _lblCc = null!;
         private TextBox _txtCc = null!;
+        private Label _lblBcc = null!;
         private TextBox _txtBcc = null!;
+        private Label _lblSubject = null!;
         private TextBox _txtSubject = null!;
         private Label _lblCcToggle = null!;
         private Panel _pnlCcRow = null!;
@@ -117,8 +122,8 @@ namespace KerkenezMail.UI.Tabs
 
             _btnBack = new Button
             {
-                Text = "← Inbox",
-                Width = (int)(75 * scale),
+                Text = "← " + Lang.T(StringKeys.SendBackToInbox),
+                Width = (int)(95 * scale),
                 Dock = DockStyle.Left,
                 FlatStyle = FlatStyle.System,
                 Cursor = Cursors.Hand,
@@ -135,7 +140,7 @@ namespace KerkenezMail.UI.Tabs
 
             _lblTitle = new Label
             {
-                Text = "✉ Compose New Email",
+                Text = "✉ " + Lang.T(StringKeys.SendTitle),
                 AutoSize = true,
                 Dock = DockStyle.Left,
                 Font = new Font("Segoe UI", 10.5F, FontStyle.Bold),
@@ -144,7 +149,7 @@ namespace KerkenezMail.UI.Tabs
 
             _lblThreadBadge = new Label
             {
-                Text = "🔗 Threaded Reply",
+                Text = "🔗 " + Lang.T(StringKeys.SendThreadedReply),
                 AutoSize = true,
                 Dock = DockStyle.Left,
                 Font = new Font("Segoe UI", 8F, FontStyle.Bold),
@@ -171,8 +176,11 @@ namespace KerkenezMail.UI.Tabs
             _btnSend = new Button
             {
                 Text = "🚀  " + Lang.T(StringKeys.SendBtnSend),
-                Width = (int)(110 * scale),
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                MinimumSize = new Size((int)(140 * scale), (int)(34 * scale)),
                 Height = (int)(34 * scale),
+                Padding = new Padding((int)(12 * scale), (int)(4 * scale), (int)(12 * scale), (int)(4 * scale)),
                 Margin = new Padding((int)(6 * scale), 0, 0, 0),
                 FlatStyle = FlatStyle.System,
                 Font = new Font("Segoe UI", 9F, FontStyle.Bold),
@@ -183,8 +191,11 @@ namespace KerkenezMail.UI.Tabs
             _btnDiscard = new Button
             {
                 Text = "🗑 " + Lang.T(StringKeys.SendBtnDiscard),
-                Width = (int)(80 * scale),
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                MinimumSize = new Size((int)(80 * scale), (int)(34 * scale)),
                 Height = (int)(34 * scale),
+                Padding = new Padding((int)(8 * scale), (int)(4 * scale), (int)(8 * scale), (int)(4 * scale)),
                 Margin = new Padding((int)(6 * scale), 0, 0, 0),
                 FlatStyle = FlatStyle.System,
                 Cursor = Cursors.Hand
@@ -193,9 +204,12 @@ namespace KerkenezMail.UI.Tabs
 
             _btnPopOut = new Button
             {
-                Text = "↗ Pop Out",
-                Width = (int)(85 * scale),
+                Text = "↗ " + Lang.T(StringKeys.SendPopOut),
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                MinimumSize = new Size((int)(85 * scale), (int)(34 * scale)),
                 Height = (int)(34 * scale),
+                Padding = new Padding((int)(8 * scale), (int)(4 * scale), (int)(8 * scale), (int)(4 * scale)),
                 Margin = new Padding((int)(6 * scale), 0, 0, 0),
                 FlatStyle = FlatStyle.System,
                 Cursor = Cursors.Hand
@@ -238,7 +252,7 @@ namespace KerkenezMail.UI.Tabs
             fieldsLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
 
             // Row 0: From
-            var lblFrom = new Label { Text = "From:", AutoSize = true, Anchor = AnchorStyles.Left, Margin = new Padding(0, 6, 0, 6), ForeColor = Color.FromArgb(90, 95, 105) };
+            _lblFrom = new Label { Text = Lang.T(StringKeys.SendFrom), AutoSize = true, Anchor = AnchorStyles.Left, Margin = new Padding(0, 6, 0, 6), ForeColor = Color.FromArgb(90, 95, 105) };
             var fromContainer = new Panel { Dock = DockStyle.Fill, Height = (int)(28 * scale), Margin = new Padding(0, 2, 0, 6) };
             
             _cboFrom = new ComboBox
@@ -251,7 +265,7 @@ namespace KerkenezMail.UI.Tabs
 
             _lblCcToggle = new Label
             {
-                Text = "+ Cc / Bcc",
+                Text = Lang.T(StringKeys.SendCcBccToggle),
                 Dock = DockStyle.Left,
                 AutoSize = true,
                 Cursor = Cursors.Hand,
@@ -265,35 +279,35 @@ namespace KerkenezMail.UI.Tabs
             fromContainer.Controls.Add(_cboFrom);
 
             // Row 1: To
-            var lblTo = new Label { Text = "To:", AutoSize = true, Anchor = AnchorStyles.Left, Margin = new Padding(0, 6, 0, 6), ForeColor = Color.FromArgb(90, 95, 105) };
+            _lblTo = new Label { Text = Lang.T(StringKeys.SendTo), AutoSize = true, Anchor = AnchorStyles.Left, Margin = new Padding(0, 6, 0, 6), ForeColor = Color.FromArgb(90, 95, 105) };
             _txtTo = new TextBox
             {
                 Dock = DockStyle.Fill,
-                PlaceholderText = "recipient@example.com (separate multiple with comma)",
+                PlaceholderText = Lang.T(StringKeys.SendToPlaceholder),
                 Margin = new Padding(0, 2, 0, 6),
                 Font = new Font("Segoe UI", 9.25F)
             };
 
             // Row 2: Cc
             _pnlCcRow = new Panel { Dock = DockStyle.Top, Height = (int)(32 * scale), Visible = false };
-            var lblCc = new Label { Text = "Cc:", Width = (int)(70 * scale), Dock = DockStyle.Left, ForeColor = Color.FromArgb(90, 95, 105), Padding = new Padding(0, 5, 0, 0) };
-            _txtCc = new TextBox { Dock = DockStyle.Fill, PlaceholderText = "Cc recipients...", Font = new Font("Segoe UI", 9F) };
+            _lblCc = new Label { Text = Lang.T(StringKeys.SendCc), Width = (int)(70 * scale), Dock = DockStyle.Left, ForeColor = Color.FromArgb(90, 95, 105), Padding = new Padding(0, 5, 0, 0) };
+            _txtCc = new TextBox { Dock = DockStyle.Fill, PlaceholderText = Lang.T(StringKeys.SendCcPlaceholder), Font = new Font("Segoe UI", 9F) };
             _pnlCcRow.Controls.Add(_txtCc);
-            _pnlCcRow.Controls.Add(lblCc);
+            _pnlCcRow.Controls.Add(_lblCc);
 
             // Row 3: Bcc
             _pnlBccRow = new Panel { Dock = DockStyle.Top, Height = (int)(32 * scale), Visible = false };
-            var lblBcc = new Label { Text = "Bcc:", Width = (int)(70 * scale), Dock = DockStyle.Left, ForeColor = Color.FromArgb(90, 95, 105), Padding = new Padding(0, 5, 0, 0) };
-            _txtBcc = new TextBox { Dock = DockStyle.Fill, PlaceholderText = "Bcc recipients...", Font = new Font("Segoe UI", 9F) };
+            _lblBcc = new Label { Text = Lang.T(StringKeys.SendBcc), Width = (int)(70 * scale), Dock = DockStyle.Left, ForeColor = Color.FromArgb(90, 95, 105), Padding = new Padding(0, 5, 0, 0) };
+            _txtBcc = new TextBox { Dock = DockStyle.Fill, PlaceholderText = Lang.T(StringKeys.SendBccPlaceholder), Font = new Font("Segoe UI", 9F) };
             _pnlBccRow.Controls.Add(_txtBcc);
-            _pnlBccRow.Controls.Add(lblBcc);
+            _pnlBccRow.Controls.Add(_lblBcc);
 
             // Row 4: Subject
-            var lblSubject = new Label { Text = "Subject:", AutoSize = true, Anchor = AnchorStyles.Left, Margin = new Padding(0, 6, 0, 6), ForeColor = Color.FromArgb(90, 95, 105) };
+            _lblSubject = new Label { Text = Lang.T(StringKeys.SendSubject), AutoSize = true, Anchor = AnchorStyles.Left, Margin = new Padding(0, 6, 0, 6), ForeColor = Color.FromArgb(90, 95, 105) };
             _txtSubject = new TextBox
             {
                 Dock = DockStyle.Fill,
-                PlaceholderText = "Subject",
+                PlaceholderText = Lang.T(StringKeys.SendSubjectPlaceholder),
                 Margin = new Padding(0, 2, 0, 6),
                 Font = new Font("Segoe UI", 9.5F, FontStyle.Bold)
             };
@@ -318,11 +332,11 @@ namespace KerkenezMail.UI.Tabs
             };
             _pnlThreadInfo.Controls.Add(_lblThreadDetails);
 
-            fieldsLayout.Controls.Add(lblFrom, 0, 0);
+            fieldsLayout.Controls.Add(_lblFrom, 0, 0);
             fieldsLayout.Controls.Add(fromContainer, 1, 0);
-            fieldsLayout.Controls.Add(lblTo, 0, 1);
+            fieldsLayout.Controls.Add(_lblTo, 0, 1);
             fieldsLayout.Controls.Add(_txtTo, 1, 1);
-            fieldsLayout.Controls.Add(lblSubject, 0, 2);
+            fieldsLayout.Controls.Add(_lblSubject, 0, 2);
             fieldsLayout.Controls.Add(_txtSubject, 1, 2);
 
             recipientCard.Controls.Add(fieldsLayout);
@@ -354,15 +368,15 @@ namespace KerkenezMail.UI.Tabs
                 Margin = new Padding(0)
             };
 
-            mdButtonsFlow.Controls.Add(CreateToolbarButton("B", "Bold (**text**)", (s, e) => WrapSelection("**", "**")));
-            mdButtonsFlow.Controls.Add(CreateToolbarButton("I", "Italic (*text*)", (s, e) => WrapSelection("*", "*")));
-            mdButtonsFlow.Controls.Add(CreateToolbarButton("H", "Header (### text)", (s, e) => InsertLinePrefix("### ")));
-            mdButtonsFlow.Controls.Add(CreateToolbarButton("🔗", "Insert Link ([text](url))", (s, e) => InsertLinkTemplate()));
-            mdButtonsFlow.Controls.Add(CreateToolbarButton("• List", "Bullet List (- item)", (s, e) => InsertLinePrefix("- ")));
-            mdButtonsFlow.Controls.Add(CreateToolbarButton("1. List", "Numbered List (1. item)", (s, e) => InsertLinePrefix("1. ")));
-            mdButtonsFlow.Controls.Add(CreateToolbarButton("❝", "Quote Block (> text)", (s, e) => InsertLinePrefix("> ")));
-            mdButtonsFlow.Controls.Add(CreateToolbarButton("</>", "Code Block (```)", (s, e) => WrapSelection("```\n", "\n```")));
-            mdButtonsFlow.Controls.Add(CreateToolbarButton("──", "Horizontal Rule (---)", (s, e) => InsertAtCursor("\n---\n")));
+            mdButtonsFlow.Controls.Add(CreateToolbarButton("B", Lang.T(StringKeys.SendToolbarBold), (s, e) => WrapSelection("**", "**")));
+            mdButtonsFlow.Controls.Add(CreateToolbarButton("I", Lang.T(StringKeys.SendToolbarItalic), (s, e) => WrapSelection("*", "*")));
+            mdButtonsFlow.Controls.Add(CreateToolbarButton("H", Lang.T(StringKeys.SendToolbarHeader), (s, e) => InsertLinePrefix("### ")));
+            mdButtonsFlow.Controls.Add(CreateToolbarButton("🔗", Lang.T(StringKeys.SendToolbarLink), (s, e) => InsertLinkTemplate()));
+            mdButtonsFlow.Controls.Add(CreateToolbarButton("• List", Lang.T(StringKeys.SendToolbarBulletList), (s, e) => InsertLinePrefix("- ")));
+            mdButtonsFlow.Controls.Add(CreateToolbarButton("1. List", Lang.T(StringKeys.SendToolbarNumberedList), (s, e) => InsertLinePrefix("1. ")));
+            mdButtonsFlow.Controls.Add(CreateToolbarButton("❝", Lang.T(StringKeys.SendToolbarQuote), (s, e) => InsertLinePrefix("> ")));
+            mdButtonsFlow.Controls.Add(CreateToolbarButton("</>", Lang.T(StringKeys.SendToolbarCode), (s, e) => WrapSelection("```\n", "\n```")));
+            mdButtonsFlow.Controls.Add(CreateToolbarButton("──", Lang.T(StringKeys.SendToolbarRule), (s, e) => InsertAtCursor("\n---\n")));
 
             // Right side: View toggles and format mode
             var rightToolbar = new FlowLayoutPanel
@@ -377,21 +391,16 @@ namespace KerkenezMail.UI.Tabs
             _cboFormatMode = new ComboBox
             {
                 DropDownStyle = ComboBoxStyle.DropDownList,
-                Width = (int)(210 * scale),
+                Width = (int)(250 * scale),
                 Height = (int)(24 * scale),
                 Font = new Font("Segoe UI", 8.5F),
                 Margin = new Padding((int)(8 * scale), 2, 0, 0)
             };
-            _cboFormatMode.Items.AddRange(new object[]
-            {
-                "Markdown (Text + HTML Multipart)",
-                "Plaintext Only (Raw RFC Text)"
-            });
-            _cboFormatMode.SelectedIndex = 0;
+            PopulateFormatModes();
 
-            _btnViewHtml = CreateModeToggleButton("🌐 HTML Preview", 2);
-            _btnViewPlaintext = CreateModeToggleButton("👁️ Plaintext Preview", 1);
-            _btnViewMarkdown = CreateModeToggleButton("✏️ Markdown Edit", 0);
+            _btnViewHtml = CreateModeToggleButton("🌐 " + Lang.T(StringKeys.SendTabHtml), 2);
+            _btnViewPlaintext = CreateModeToggleButton("👁️ " + Lang.T(StringKeys.SendTabPlaintext), 1);
+            _btnViewMarkdown = CreateModeToggleButton("✏️ " + Lang.T(StringKeys.SendTabMarkdown), 0);
 
             rightToolbar.Controls.Add(_cboFormatMode);
             rightToolbar.Controls.Add(_btnViewHtml);
@@ -437,7 +446,7 @@ namespace KerkenezMail.UI.Tabs
 
             _lblDropHint = new Label
             {
-                Text = "📎 Drag & drop attachments here (or click Browse to attach files)",
+                Text = Lang.T(StringKeys.SendDropHint),
                 AutoSize = true,
                 Dock = DockStyle.Left,
                 ForeColor = Color.FromArgb(0, 95, 195),
@@ -447,9 +456,12 @@ namespace KerkenezMail.UI.Tabs
 
             _btnBrowseFiles = new Button
             {
-                Text = "Browse Files...",
+                Text = Lang.T(StringKeys.SendBrowseFiles),
                 Dock = DockStyle.Right,
-                Width = (int)(100 * scale),
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                MinimumSize = new Size((int)(100 * scale), 0),
+                Padding = new Padding((int)(10 * scale), (int)(4 * scale), (int)(10 * scale), (int)(4 * scale)),
                 FlatStyle = FlatStyle.System,
                 Cursor = Cursors.Hand
             };
@@ -502,7 +514,7 @@ namespace KerkenezMail.UI.Tabs
 
             _lblStatusText = new Label
             {
-                Text = "Ready to compose. Markdown formatting supported.",
+                Text = Lang.T(StringKeys.SendStatusHint),
                 Dock = DockStyle.Fill,
                 TextAlign = ContentAlignment.MiddleLeft,
                 ForeColor = Color.FromArgb(70, 75, 85),
@@ -539,7 +551,7 @@ namespace KerkenezMail.UI.Tabs
                 BorderStyle = BorderStyle.None,
                 Padding = new Padding(12),
                 AcceptsTab = true,
-                PlaceholderText = "Write your email message here using Markdown...\r\n\r\n# Heading\r\n**Bold**, *Italic*, `code`\r\n- Bullet points\r\n> Quoted text\r\n[Link Title](https://example.com)"
+                PlaceholderText = Lang.T(StringKeys.SendBodyPlaceholder)
             };
             _txtBodyMarkdown.AllowDrop = true;
             _txtBodyMarkdown.DragEnter += OnDropZoneDragEnter;
@@ -963,11 +975,11 @@ namespace KerkenezMail.UI.Tabs
                     ? $"{totalBytes / 1024.0:F1} KB" 
                     : $"{totalBytes / (1024.0 * 1024.0):F1} MB";
 
-                _lblAttachmentSummary.Text = $"📎 {_attachments.Count} file(s) attached ({formattedTotal} total • 25 MB provider limit)";
+                _lblAttachmentSummary.Text = Lang.Format(StringKeys.SendAttachmentSummary, _attachments.Count, formattedTotal);
                 if (totalBytes > 25 * 1024 * 1024)
                 {
                     _lblAttachmentSummary.ForeColor = Color.Red;
-                    _lblAttachmentSummary.Text += " ⚠️ Exceeds standard email 25 MB limit";
+                    _lblAttachmentSummary.Text += " ⚠️ (> 25 MB)";
                 }
                 else
                 {
@@ -1056,21 +1068,21 @@ namespace KerkenezMail.UI.Tabs
             string to = _txtTo.Text.Trim();
             if (string.IsNullOrWhiteSpace(to))
             {
-                MessageBox.Show(this, "Please enter at least one recipient in the 'To' field.", "Missing Recipient", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(this, Lang.T(StringKeys.SendMissingRecipient), Lang.T(StringKeys.SendMissingRecipientTitle), MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 _txtTo.Focus();
                 return;
             }
 
             if (_cboFrom.SelectedItem is not EmailAccount account)
             {
-                MessageBox.Show(this, "Please select an account to send from.", "Missing Account", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(this, Lang.T(StringKeys.SendMissingAccount), Lang.T(StringKeys.SendMissingAccountTitle), MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
             string subject = _txtSubject.Text.Trim();
             if (string.IsNullOrWhiteSpace(subject))
             {
-                var res = MessageBox.Show(this, "Send this message without a subject?", "No Subject", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+                var res = MessageBox.Show(this, Lang.T(StringKeys.SendNoSubjectPrompt), Lang.T(StringKeys.SendNoSubjectTitle), MessageBoxButtons.YesNo, MessageBoxIcon.Question);
                 if (res != DialogResult.Yes)
                 {
                     _txtSubject.Focus();
@@ -1115,21 +1127,21 @@ namespace KerkenezMail.UI.Tabs
                 if (success)
                 {
                     _lblStatusText.Text = "✓ " + msg;
-                    MessageBox.Show(this, msg, "Email Sent", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    MessageBox.Show(this, msg, Lang.T(StringKeys.SendSentTitle), MessageBoxButtons.OK, MessageBoxIcon.Information);
                     EmailSentSuccessfully?.Invoke(this, EventArgs.Empty);
                     BackToInboxRequested?.Invoke(this, EventArgs.Empty);
                 }
                 else
                 {
                     _lblStatusText.Text = "✗ " + msg;
-                    MessageBox.Show(this, msg, "Failed to Send Email", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    MessageBox.Show(this, msg, Lang.T(StringKeys.SendFailedTitle), MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
             }
             catch (Exception ex)
             {
                 SetSendingState(false);
                 _lblStatusText.Text = "✗ Error: " + ex.Message;
-                MessageBox.Show(this, "Error sending email: " + ex.Message, "Send Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(this, Lang.T(StringKeys.SendError) + ": " + ex.Message, Lang.T(StringKeys.CommonError), MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -1146,11 +1158,20 @@ namespace KerkenezMail.UI.Tabs
             }
         }
 
+        private void PopulateFormatModes()
+        {
+            int prevIdx = _cboFormatMode.SelectedIndex;
+            _cboFormatMode.Items.Clear();
+            _cboFormatMode.Items.Add(Lang.T(StringKeys.SendFormatMultipart));
+            _cboFormatMode.Items.Add(Lang.T(StringKeys.SendFormatPlaintext));
+            _cboFormatMode.SelectedIndex = prevIdx >= 0 && prevIdx < _cboFormatMode.Items.Count ? prevIdx : 0;
+        }
+
         private void OnDiscardClick(object? sender, EventArgs e)
         {
             if (!string.IsNullOrWhiteSpace(_txtTo.Text) || !string.IsNullOrWhiteSpace(_txtBodyMarkdown.Text) || _attachments.Count > 0)
             {
-                var res = MessageBox.Show(this, "Are you sure you want to discard this draft?", "Discard Draft", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+                var res = MessageBox.Show(this, Lang.T(StringKeys.SendConfirmDiscard), Lang.T(StringKeys.SendDiscardTitle), MessageBoxButtons.YesNo, MessageBoxIcon.Question);
                 if (res != DialogResult.Yes) return;
             }
 
@@ -1161,10 +1182,33 @@ namespace KerkenezMail.UI.Tabs
         public void ApplyLocalization()
         {
             if (this.IsDisposed) return;
-            if (_lblTitle != null) _lblTitle.Text = _isReply ? Lang.T(StringKeys.InboxBtnReply) : Lang.T(StringKeys.SendTitle);
+            if (_btnBack != null) _btnBack.Text = "← " + Lang.T(StringKeys.SendBackToInbox);
+            if (_lblTitle != null) _lblTitle.Text = _isReply ? ("↩ " + Lang.T(StringKeys.InboxBtnReply)) : ("✉ " + Lang.T(StringKeys.SendTitle));
+            if (_lblThreadBadge != null) _lblThreadBadge.Text = "🔗 " + Lang.T(StringKeys.SendThreadedReply);
             if (_btnSend != null) _btnSend.Text = "🚀  " + Lang.T(StringKeys.SendBtnSend);
             if (_btnDiscard != null) _btnDiscard.Text = "🗑 " + Lang.T(StringKeys.SendBtnDiscard);
-            if (_btnBrowseFiles != null) _btnBrowseFiles.Text = "📎 " + Lang.T(StringKeys.SendAddAttachment);
+            if (_btnPopOut != null) _btnPopOut.Text = "↗ " + Lang.T(StringKeys.SendPopOut);
+
+            if (_lblFrom != null) _lblFrom.Text = Lang.T(StringKeys.SendFrom);
+            if (_lblCcToggle != null) _lblCcToggle.Text = Lang.T(StringKeys.SendCcBccToggle);
+            if (_lblTo != null) _lblTo.Text = Lang.T(StringKeys.SendTo);
+            if (_txtTo != null) _txtTo.PlaceholderText = Lang.T(StringKeys.SendToPlaceholder);
+            if (_lblCc != null) _lblCc.Text = Lang.T(StringKeys.SendCc);
+            if (_txtCc != null) _txtCc.PlaceholderText = Lang.T(StringKeys.SendCcPlaceholder);
+            if (_lblBcc != null) _lblBcc.Text = Lang.T(StringKeys.SendBcc);
+            if (_txtBcc != null) _txtBcc.PlaceholderText = Lang.T(StringKeys.SendBccPlaceholder);
+            if (_lblSubject != null) _lblSubject.Text = Lang.T(StringKeys.SendSubject);
+            if (_txtSubject != null) _txtSubject.PlaceholderText = Lang.T(StringKeys.SendSubjectPlaceholder);
+
+            if (_cboFormatMode != null) PopulateFormatModes();
+            if (_btnViewMarkdown != null) _btnViewMarkdown.Text = "✏️ " + Lang.T(StringKeys.SendTabMarkdown);
+            if (_btnViewPlaintext != null) _btnViewPlaintext.Text = "👁️ " + Lang.T(StringKeys.SendTabPlaintext);
+            if (_btnViewHtml != null) _btnViewHtml.Text = "🌐 " + Lang.T(StringKeys.SendTabHtml);
+
+            if (_lblDropHint != null) _lblDropHint.Text = Lang.T(StringKeys.SendDropHint);
+            if (_btnBrowseFiles != null) _btnBrowseFiles.Text = Lang.T(StringKeys.SendBrowseFiles);
+            if (_txtBodyMarkdown != null) _txtBodyMarkdown.PlaceholderText = Lang.T(StringKeys.SendBodyPlaceholder);
+            if (_lblStatusText != null && !_isSending) _lblStatusText.Text = Lang.T(StringKeys.SendStatusHint);
         }
 
         #endregion

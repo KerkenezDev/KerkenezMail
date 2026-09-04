@@ -709,7 +709,12 @@ namespace KerkenezMail.UI.Tabs
         public void ApplyLocalization()
         {
             if (this.IsDisposed) return;
-            if (_btnRefresh != null) _btnRefresh.Text = "🔄 " + Lang.T(StringKeys.InboxRefresh);
+            if (_btnRefresh != null)
+            {
+                _btnRefresh.Text = (_currentFolder == MailFolderType.Inbox)
+                    ? "🔄 " + Lang.T(StringKeys.InboxRefresh)
+                    : $"🔄 {Lang.T(StringKeys.InboxRefresh)} {_currentFolder.GetDisplayName()}";
+            }
             if (_btnCopySummary != null) _btnCopySummary.Text = "📋 " + Lang.T(StringKeys.InboxCopySummary);
             if (_btnExport != null) _btnExport.Text = "💾 " + Lang.T(StringKeys.InboxExport);
             if (_btnReply != null) _btnReply.Text = "↩  " + Lang.T(StringKeys.InboxBtnReply);
@@ -725,12 +730,22 @@ namespace KerkenezMail.UI.Tabs
 
             if (_topBarToolTip != null)
             {
-                if (_btnRefresh != null) _topBarToolTip.SetToolTip(_btnRefresh, Lang.T(StringKeys.InboxTipRefresh));
+                if (_btnRefresh != null)
+                {
+                    _topBarToolTip.SetToolTip(_btnRefresh, (_currentFolder == MailFolderType.Inbox)
+                        ? Lang.T(StringKeys.InboxTipRefresh)
+                        : $"{Lang.T(StringKeys.InboxRefresh)} {_currentFolder.GetDisplayName()}");
+                }
                 if (_btnCopySummary != null) _topBarToolTip.SetToolTip(_btnCopySummary, Lang.T(StringKeys.InboxTipCopySummary));
                 if (_btnExport != null) _topBarToolTip.SetToolTip(_btnExport, Lang.T(StringKeys.InboxTipExport));
                 if (_btnOpenInBrowser != null) _topBarToolTip.SetToolTip(_btnOpenInBrowser, Lang.T(StringKeys.InboxTipOpenInBrowser));
                 if (_btnArchive != null) _topBarToolTip.SetToolTip(_btnArchive, Lang.T(StringKeys.InboxTipArchive));
-                if (_btnDelete != null) _topBarToolTip.SetToolTip(_btnDelete, Lang.T(StringKeys.InboxTipDelete));
+                if (_btnDelete != null)
+                {
+                    _topBarToolTip.SetToolTip(_btnDelete, _currentFolder == MailFolderType.Trash 
+                        ? Lang.T(StringKeys.InboxDeletePermanentlyTip) 
+                        : Lang.T(StringKeys.InboxDeleteMoveTip));
+                }
                 if (_btnReply != null) _topBarToolTip.SetToolTip(_btnReply, Lang.T(StringKeys.InboxTipReply));
                 if (_btnMoveToInbox != null) _topBarToolTip.SetToolTip(_btnMoveToInbox, Lang.T(StringKeys.InboxTipMoveToInbox));
             }
@@ -876,24 +891,24 @@ namespace KerkenezMail.UI.Tabs
             _btnRefresh.Enabled = true;
             _progressBar.Visible = false;
             _btnRefresh.Text = (folder == MailFolderType.Inbox)
-                ? "🔄 Refresh Inbox"
-                : $"🔄 Refresh {folder.GetDisplayName()}";
+                ? "🔄 " + Lang.T(StringKeys.InboxRefresh)
+                : $"🔄 {Lang.T(StringKeys.InboxRefresh)} {folder.GetDisplayName()}";
 
-            _topBarToolTip.SetToolTip(_btnRefresh, $"Refresh {folder.GetDisplayName()}: Fetch messages for this folder from configured accounts");
+            _topBarToolTip.SetToolTip(_btnRefresh, $"{Lang.T(StringKeys.InboxRefresh)} {folder.GetDisplayName()}");
 
             if (folder == MailFolderType.Trash)
             {
-                _topBarToolTip.SetToolTip(_btnDelete, "Delete Permanently: Permanently remove selected email(s)");
+                _topBarToolTip.SetToolTip(_btnDelete, Lang.T(StringKeys.InboxDeletePermanentlyTip));
                 _btnArchive.Enabled = false;
             }
             else if (folder == MailFolderType.Archive)
             {
-                _topBarToolTip.SetToolTip(_btnDelete, "Delete: Move selected email(s) to Trash folder");
+                _topBarToolTip.SetToolTip(_btnDelete, Lang.T(StringKeys.InboxDeleteMoveTip));
                 _btnArchive.Enabled = false;
             }
             else
             {
-                _topBarToolTip.SetToolTip(_btnDelete, "Delete: Move selected email(s) to Trash folder");
+                _topBarToolTip.SetToolTip(_btnDelete, Lang.T(StringKeys.InboxDeleteMoveTip));
                 _btnArchive.Enabled = true;
             }
 
@@ -910,23 +925,23 @@ namespace KerkenezMail.UI.Tabs
             string status;
             if (_configService.Settings.IsBatterySaverActive)
             {
-                status = "Battery Saver (No AI)";
+                status = Lang.T(StringKeys.StatusBatterySaverNoAi);
             }
             else if (_configService.Settings.IsAiDisabled)
             {
-                status = "AI Disabled";
+                status = Lang.T(StringKeys.StatusAiDisabled);
             }
             else
             {
                 string backendType = _configService.Settings.AiBackend;
                 status = string.Equals(backendType, "LlamaCpp", StringComparison.OrdinalIgnoreCase) 
-                    ? (_configService.Settings.InstantVramUnload ? "VRAM Free" : "Model Loaded in VRAM") 
-                    : (string.Equals(backendType, "Ollama", StringComparison.OrdinalIgnoreCase) ? "Ollama Active" : "Cloud Active");
+                    ? (_configService.Settings.InstantVramUnload ? Lang.T(StringKeys.StatusVramFree) : Lang.T(StringKeys.StatusModelLoaded)) 
+                    : (string.Equals(backendType, "Ollama", StringComparison.OrdinalIgnoreCase) ? Lang.T(StringKeys.StatusOllamaActive) : Lang.T(StringKeys.StatusCloudActive));
             }
 
             string metric = folder == MailFolderType.Inbox
-                ? $"Ready • {_emails.Count} emails in inbox ({unreadCount} unread)"
-                : $"Ready • {_emails.Count} emails in {folder.GetDisplayName()}";
+                ? Lang.Format(StringKeys.StatusReadyEmails, _emails.Count, unreadCount)
+                : Lang.Format(StringKeys.StatusReadyFolder, _emails.Count, folder.GetDisplayName());
             StatusUpdated?.Invoke(metric, status);
 
             if (_lvEmails.Items.Count > 0)
@@ -983,7 +998,7 @@ namespace KerkenezMail.UI.Tabs
             {
                 _logger.Report("\r\n" + new string('═', 60));
                 _logger.Report("[!] No email accounts configured. Please add an account in the Accounts tab.");
-                StatusUpdated?.Invoke("No accounts configured", "Ready");
+                StatusUpdated?.Invoke(Lang.T(StringKeys.StatusNoAccounts), Lang.T(StringKeys.StatusReady));
                 _isBatchSyncing = false;
                 _btnRefresh.Enabled = true;
                 _progressBar.Visible = false;
@@ -995,7 +1010,7 @@ namespace KerkenezMail.UI.Tabs
 
             if (_currentFolder == folderToFetch)
             {
-                StatusUpdated?.Invoke($"Syncing {folderName}...", "Active");
+                StatusUpdated?.Invoke(Lang.Format(StringKeys.StatusSyncingFolder, folderName), "Active");
             }
             _logger.Report("\r\n" + new string('═', 60));
             _logger.Report($"[*] Fast-syncing all accounts for [{folderName}] with AI backend [{backendName}]...");
@@ -1101,26 +1116,26 @@ namespace KerkenezMail.UI.Tabs
                         if (settings.InstantVramUnload)
                         {
                             _llamaManager.Stop(_logger);
-                            StatusUpdated?.Invoke(Lang.T(StringKeys.StatusSyncComplete), "VRAM Free");
+                            StatusUpdated?.Invoke(Lang.T(StringKeys.StatusSyncComplete), Lang.T(StringKeys.StatusVramFree));
                         }
                         else
                         {
-                            StatusUpdated?.Invoke(Lang.T(StringKeys.StatusSyncComplete), "Model Loaded in VRAM");
+                            StatusUpdated?.Invoke(Lang.T(StringKeys.StatusSyncComplete), Lang.T(StringKeys.StatusModelLoaded));
                         }
                     }
                     else if (settings.IsBatterySaverActive)
                     {
-                        StatusUpdated?.Invoke(Lang.T(StringKeys.StatusSyncComplete), "Battery Saver (No AI)");
+                        StatusUpdated?.Invoke(Lang.T(StringKeys.StatusSyncComplete), Lang.T(StringKeys.StatusBatterySaverNoAi));
                     }
                     else if (settings.IsAiDisabled)
                     {
-                        StatusUpdated?.Invoke(Lang.T(StringKeys.StatusSyncComplete), "AI Disabled");
+                        StatusUpdated?.Invoke(Lang.T(StringKeys.StatusSyncComplete), Lang.T(StringKeys.StatusAiDisabled));
                     }
                     else
                     {
                         string backendMetric = string.Equals(settings.AiBackend, "Ollama", StringComparison.OrdinalIgnoreCase) 
-                            ? "Ollama Active" 
-                            : "Cloud Active";
+                            ? Lang.T(StringKeys.StatusOllamaActive) 
+                            : Lang.T(StringKeys.StatusCloudActive);
                         StatusUpdated?.Invoke(Lang.T(StringKeys.StatusSyncComplete), backendMetric);
                     }
                 }
@@ -2281,7 +2296,7 @@ namespace KerkenezMail.UI.Tabs
             if (_lvEmails.SelectedItems.Count > 0 && _lvEmails.SelectedItems[0].Tag is EmailItem email && !string.IsNullOrWhiteSpace(email.Summary))
             {
                 Clipboard.SetText($"[{email.AccountName}] {email.Subject}\r\nFrom: {email.Sender}\r\n\r\nSummary:\r\n{email.Summary}");
-                MessageBox.Show("Summary copied to clipboard!", "Copied", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show(Lang.T(StringKeys.InboxSummaryCopiedToast), Lang.T(StringKeys.CommonSuccess), MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             else if (_emails.Any(x => !string.IsNullOrWhiteSpace(x.Summary)))
             {
@@ -2299,11 +2314,11 @@ namespace KerkenezMail.UI.Tabs
                     sb.AppendLine();
                 }
                 Clipboard.SetText(sb.ToString());
-                MessageBox.Show("All summaries copied to clipboard in Markdown format!", "Copied", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show(Lang.T(StringKeys.InboxAllSummariesCopiedToast), Lang.T(StringKeys.CommonSuccess), MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             else
             {
-                MessageBox.Show("No summary available to copy.", "Info", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show(Lang.T(StringKeys.InboxNoSummaryToCopy), Lang.T(StringKeys.CommonWarning), MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
         }
 
@@ -2311,7 +2326,7 @@ namespace KerkenezMail.UI.Tabs
         {
             if (!_emails.Any())
             {
-                MessageBox.Show("No emails available to export.", "Info", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show(Lang.T(StringKeys.InboxNoEmailsToExport), Lang.T(StringKeys.CommonWarning), MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
 
@@ -2353,11 +2368,11 @@ namespace KerkenezMail.UI.Tabs
                     }
 
                     File.WriteAllText(sfd.FileName, sb.ToString(), Encoding.UTF8);
-                    MessageBox.Show($"Successfully exported to {Path.GetFileName(sfd.FileName)}!", "Export Succeeded", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    MessageBox.Show(Lang.Format(StringKeys.InboxExportSuccessToast, Path.GetFileName(sfd.FileName)), Lang.T(StringKeys.InboxExportSuccessTitle), MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
                 catch (Exception ex)
                 {
-                    MessageBox.Show($"Failed to export file: {ex.Message}", "Export Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    MessageBox.Show(Lang.Format(StringKeys.InboxExportErrorToast, ex.Message), Lang.T(StringKeys.InboxExportErrorTitle), MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
             }
         }
@@ -2438,7 +2453,7 @@ namespace KerkenezMail.UI.Tabs
             catch (Exception ex)
             {
                 _logger?.Report($"[!] Failed to open email in browser: {ex.Message}");
-                MessageBox.Show($"Failed to open email in browser:\n{ex.Message}", "Browser Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(Lang.Format(StringKeys.InboxBrowserErrorToast, ex.Message), Lang.T(StringKeys.InboxBrowserErrorTitle), MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
         }
 
@@ -3043,7 +3058,7 @@ namespace KerkenezMail.UI.Tabs
             string sizeSuffix = !string.IsNullOrEmpty(totalFormatted) ? $" ({totalFormatted})" : "";
             float scale = this.DeviceDpi / 96f;
 
-            _lblAttachmentsTitle.Text = $"📎 {email.Attachments.Count} attachment{(email.Attachments.Count > 1 ? "s" : "")}{sizeSuffix}:";
+            _lblAttachmentsTitle.Text = $"📎 {Lang.T(StringKeys.InboxAttachmentsTitle)} {email.Attachments.Count}{sizeSuffix}:";
             _lblAttachmentsTitle.Margin = new Padding(0, (int)(4 * scale), (int)(8 * scale), 0);
             _pnlAttachments.Controls.Add(_lblAttachmentsTitle);
 
@@ -3073,7 +3088,7 @@ namespace KerkenezMail.UI.Tabs
             {
                 var btnSaveAll = new Button
                 {
-                    Text = "⬇ Save All",
+                    Text = "⬇ " + Lang.T(StringKeys.InboxBtnDownloadAttachments),
                     AutoSize = true,
                     Height = (int)(25 * scale),
                     FlatStyle = FlatStyle.Flat,
@@ -3103,7 +3118,7 @@ namespace KerkenezMail.UI.Tabs
 
             if (account == null)
             {
-                MessageBox.Show($"Could not locate configured email account for '{email.AccountName}' ({email.AccountEmail}).", "Download Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(Lang.Format(StringKeys.InboxAccountNotFound, email.AccountName, email.AccountEmail), Lang.T(StringKeys.InboxDownloadError), MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
@@ -3132,8 +3147,8 @@ namespace KerkenezMail.UI.Tabs
 
                 if (success)
                 {
-                    StatusUpdated?.Invoke($"Downloaded '{att.FileName}'", "Ready");
-                    var res = MessageBox.Show($"Successfully downloaded '{att.FileName}'!\r\n\r\nSaved to: {destPath}\r\n\r\nWould you like to open the containing folder?", "Download Complete", MessageBoxButtons.YesNo, MessageBoxIcon.Information);
+                    StatusUpdated?.Invoke(Lang.Format(StringKeys.InboxDownloadedSingleStatus, att.FileName), Lang.T(StringKeys.StatusReady));
+                    var res = MessageBox.Show(Lang.Format(StringKeys.InboxDownloadedSingleToast, att.FileName, destPath), Lang.T(StringKeys.InboxDownloadComplete), MessageBoxButtons.YesNo, MessageBoxIcon.Information);
                     if (res == DialogResult.Yes)
                     {
                         try
@@ -3150,14 +3165,14 @@ namespace KerkenezMail.UI.Tabs
                 }
                 else
                 {
-                    StatusUpdated?.Invoke("Download failed", "Ready");
-                    MessageBox.Show(msg, "Download Failed", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    StatusUpdated?.Invoke(Lang.T(StringKeys.InboxDownloadFailedStatus), Lang.T(StringKeys.StatusReady));
+                    MessageBox.Show(msg, Lang.T(StringKeys.InboxDownloadFailed), MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
             }
             catch (Exception ex)
             {
-                StatusUpdated?.Invoke("Download error", "Ready");
-                MessageBox.Show($"Error saving attachment: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                StatusUpdated?.Invoke(Lang.T(StringKeys.InboxDownloadFailedStatus), Lang.T(StringKeys.StatusReady));
+                MessageBox.Show(Lang.Format(StringKeys.InboxDownloadError, ex.Message), Lang.T(StringKeys.CommonError), MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -3172,13 +3187,13 @@ namespace KerkenezMail.UI.Tabs
 
             if (account == null)
             {
-                MessageBox.Show($"Could not locate configured email account for '{email.AccountName}' ({email.AccountEmail}).", "Download Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(Lang.Format(StringKeys.InboxAccountNotFound, email.AccountName, email.AccountEmail), Lang.T(StringKeys.InboxDownloadError), MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
             using var fbd = new FolderBrowserDialog
             {
-                Description = "Select folder to save all attachments",
+                Description = Lang.T(StringKeys.SettingsDownloadPathSelectDesc),
                 UseDescriptionForTitle = true,
                 SelectedPath = _configService.Settings.GetEffectiveAttachmentDownloadPath()
             };
@@ -3217,8 +3232,8 @@ namespace KerkenezMail.UI.Tabs
                     if (success) successCount++;
                 }
 
-                StatusUpdated?.Invoke($"Saved {successCount}/{total} attachments", "Ready");
-                var res = MessageBox.Show($"Saved {successCount} of {total} attachments to:\r\n{destFolder}\r\n\r\nWould you like to open the folder?", "Download Complete", MessageBoxButtons.YesNo, MessageBoxIcon.Information);
+                StatusUpdated?.Invoke(Lang.Format(StringKeys.InboxSavedAttachmentsStatus, successCount, total), Lang.T(StringKeys.StatusReady));
+                var res = MessageBox.Show(Lang.Format(StringKeys.InboxSavedAttachmentsToast, successCount, total, destFolder), Lang.T(StringKeys.InboxDownloadComplete), MessageBoxButtons.YesNo, MessageBoxIcon.Information);
                 if (res == DialogResult.Yes)
                 {
                     try
@@ -3234,7 +3249,7 @@ namespace KerkenezMail.UI.Tabs
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Error downloading attachments: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(Lang.Format(StringKeys.InboxDownloadError, ex.Message), Lang.T(StringKeys.CommonError), MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             finally
             {
