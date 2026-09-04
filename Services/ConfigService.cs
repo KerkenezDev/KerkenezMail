@@ -89,10 +89,11 @@ namespace KerkenezMail.Services
                     if (loaded != null)
                     {
                         string originalVersion = loaded.AppVersion;
+                        bool hadVersionInJson = !string.IsNullOrWhiteSpace(originalVersion) && json.Contains("\"AppVersion\"", StringComparison.OrdinalIgnoreCase);
                         Settings = HealAndNormalizeSettings(loaded);
 
-                        // If version was updated or healed, re-save config to disk
-                        if (!string.Equals(originalVersion?.TrimStart('v', 'V'), Settings.AppVersion.TrimStart('v', 'V'), StringComparison.OrdinalIgnoreCase))
+                        // If version was missing, updated, or healed, re-save config to disk
+                        if (!hadVersionInJson || !string.Equals(originalVersion?.TrimStart('v', 'V'), Settings.AppVersion.TrimStart('v', 'V'), StringComparison.OrdinalIgnoreCase))
                         {
                             SaveConfig(Settings);
                         }
