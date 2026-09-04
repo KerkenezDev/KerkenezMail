@@ -81,12 +81,11 @@ namespace KerkenezMail.UI
             };
 
             LanguageManager.Instance.LanguageChanged += (s, e) => ApplyLocalization();
+            ApplyLocalization();
         }
 
         private void InitializeComponent()
         {
-            ApplyLocalization();
-            
             // Set window icon for Title Bar and Windows Taskbar
             try
             {
@@ -378,13 +377,14 @@ namespace KerkenezMail.UI
                 return;
             }
 
-            _lblStatus.Text = status;
+            if (_lblStatus != null) _lblStatus.Text = status;
             int enabledCount = _configService.GetAccounts().Count(a => a.IsEnabled);
-            _lblMetrics.Text = Lang.Format(StringKeys.StatusAccountsCount, enabledCount, vramStatus);
+            if (_lblMetrics != null) _lblMetrics.Text = Lang.Format(StringKeys.StatusAccountsCount, enabledCount, vramStatus);
         }
 
         private void UpdateMetrics()
         {
+            if (_lblMetrics == null) return;
             int enabledCount = _configService.GetAccounts().Count(a => a.IsEnabled);
             string status;
             if (_configService.Settings.IsBatterySaverActive)
@@ -521,6 +521,7 @@ namespace KerkenezMail.UI
         public void ApplyLocalization()
         {
             this.Text = Lang.T(StringKeys.AppTitle);
+            _sidebar?.Invalidate();
             UpdateMetrics();
         }
 

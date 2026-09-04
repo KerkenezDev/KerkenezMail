@@ -1843,6 +1843,7 @@ namespace KerkenezMail.UI.Tabs
         {
             try
             {
+                if (_lblScalePreview == null || _numWindowWidthScale == null || _numWindowHeightScale == null) return;
                 var screen = Screen.FromControl(this) ?? Screen.PrimaryScreen;
                 var wa = screen?.WorkingArea ?? (Screen.PrimaryScreen != null ? Screen.PrimaryScreen.WorkingArea : new Rectangle(0, 0, 1920, 1080));
                 double wScale = (double)_numWindowWidthScale.Value / 100.0;
