@@ -12,7 +12,7 @@ namespace KerkenezMail.Models
         public List<string> AccountIds { get; set; } = new List<string>();
 
         // Application Version ("1.0.0", "1.1.0", etc.)
-        public string AppVersion { get; set; } = "1.0.0";
+        public string AppVersion { get; set; } = "";
 
         // Language / Localization Setting ("en", "tr", etc.)
         public string Language { get; set; } = "en";
