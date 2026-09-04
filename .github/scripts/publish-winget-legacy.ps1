@@ -1,17 +1,17 @@
 param(
-    [string]$Tag = "v1.0.0",
+    [string]$Tag = "v0.5.0",
     [string]$Token
 )
 
 $ErrorActionPreference = "Stop"
 
 $version = $Tag.TrimStart('v')
-$manifestDir = "manifests/k/KerkenezDev/Mail/$version"
+$manifestDir = "manifests/i/ismlEraslan/EmailSummarizer/$version"
 New-Item -ItemType Directory -Path $manifestDir -Force | Out-Null
 
 $downloadUrl = "https://github.com/KerkenezDev/KerkenezMail/releases/download/$Tag/KerkenezMail.zip"
 Write-Host "Resolving release asset from: $downloadUrl"
-$zipFile = "$env:TEMP\KerkenezMail-$version.zip"
+$zipFile = "$env:TEMP\EmailSummarizer-$version.zip"
 
 # Use local publish zip if already built in workspace, otherwise download release asset
 if (Test-Path "publish/KerkenezMail.zip") {
@@ -28,7 +28,7 @@ Write-Host "Calculated SHA256: $sha256"
 
 $versionYaml = @"
 # yaml-language-server: `$schema=https://aka.ms/winget-manifest.version.1.6.0.schema.json
-PackageIdentifier: KerkenezDev.Mail
+PackageIdentifier: ismlEraslan.EmailSummarizer
 PackageVersion: $version
 DefaultLocale: en-US
 ManifestType: version
@@ -37,15 +37,15 @@ ManifestVersion: 1.6.0
 
 $installerYaml = @"
 # yaml-language-server: `$schema=https://aka.ms/winget-manifest.installer.1.6.0.schema.json
-PackageIdentifier: KerkenezDev.Mail
+PackageIdentifier: ismlEraslan.EmailSummarizer
 PackageVersion: $version
 InstallerType: zip
 NestedInstallerType: portable
 NestedInstallerFiles:
   - RelativeFilePath: KerkenezMail.exe
-    PortableCommandAlias: KerkenezMail
+    PortableCommandAlias: EmailSummarizer
 Commands:
-  - KerkenezMail
+  - EmailSummarizer
 ReleaseDate: $(Get-Date -Format "yyyy-MM-dd")
 Dependencies:
   PackageDependencies:
@@ -60,21 +60,21 @@ ManifestVersion: 1.6.0
 
 $localeYaml = @"
 # yaml-language-server: `$schema=https://aka.ms/winget-manifest.defaultLocale.1.6.0.schema.json
-PackageIdentifier: KerkenezDev.Mail
+PackageIdentifier: ismlEraslan.EmailSummarizer
 PackageVersion: $version
 PackageLocale: en-US
-Publisher: KerkenezDev
-PublisherUrl: https://github.com/KerkenezDev
+Publisher: ismlEraslan
+PublisherUrl: https://github.com/ismlEraslan
 PublisherSupportUrl: https://github.com/KerkenezDev/KerkenezMail/issues
-PackageName: Kerkenez Mail
+PackageName: Email Summarizer
 PackageUrl: https://github.com/KerkenezDev/KerkenezMail
 License: MIT
 LicenseUrl: https://github.com/KerkenezDev/KerkenezMail/blob/main/LICENSE
-Copyright: Copyright (c) 2026 KerkenezDev
-ShortDescription: Local AI-powered IMAP email assistant with llama.cpp, priority triage, and system tray daemon.
+Copyright: Copyright (c) 2026 ismlEraslan / KerkenezDev
+ShortDescription: Email Summarizer has transitioned to Kerkenez Mail. This release migrates your local data.
 Description: |-
-  Kerkenez Mail is a native Win32/Windows desktop application for managing and summarizing emails from multiple IMAP accounts using local AI (llama.cpp) or cloud providers with DPAPI encryption.
-Moniker: kerkenezmail
+  Email Summarizer has evolved into Kerkenez Mail! This transition update automatically migrates your local configuration, preferences, and encrypted accounts to the new Kerkenez suite standard. Please install future updates via: winget install KerkenezDev.Mail
+Moniker: emailsummarizer
 Tags:
   - email
   - imap
@@ -83,21 +83,20 @@ Tags:
   - llama-cpp
   - win32
   - kerkenez
-  - mail
 ReleaseNotesUrl: https://github.com/KerkenezDev/KerkenezMail/releases/tag/$Tag
 ManifestType: defaultLocale
 ManifestVersion: 1.6.0
 "@
 
-Set-Content -Path "$manifestDir/KerkenezDev.Mail.yaml" -Value $versionYaml -Encoding utf8
-Set-Content -Path "$manifestDir/KerkenezDev.Mail.installer.yaml" -Value $installerYaml -Encoding utf8
-Set-Content -Path "$manifestDir/KerkenezDev.Mail.locale.en-US.yaml" -Value $localeYaml -Encoding utf8
+Set-Content -Path "$manifestDir/ismlEraslan.EmailSummarizer.yaml" -Value $versionYaml -Encoding utf8
+Set-Content -Path "$manifestDir/ismlEraslan.EmailSummarizer.installer.yaml" -Value $installerYaml -Encoding utf8
+Set-Content -Path "$manifestDir/ismlEraslan.EmailSummarizer.locale.en-US.yaml" -Value $localeYaml -Encoding utf8
 
-Write-Host "Validating manifests with winget..."
+Write-Host "Validating legacy manifests with winget..."
 winget validate --manifest $manifestDir
 
 if ($Token) {
-    Write-Host "Submitting manifests to microsoft/winget-pkgs under KerkenezDev.Mail..."
+    Write-Host "Submitting legacy manifests to microsoft/winget-pkgs under ismlEraslan.EmailSummarizer..."
     wingetcreate submit $manifestDir --token $Token
 } else {
     Write-Host "No GitHub Token provided; manifests validated and ready for submission."
