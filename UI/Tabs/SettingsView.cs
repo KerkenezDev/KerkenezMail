@@ -1377,8 +1377,18 @@ namespace KerkenezMail.UI.Tabs
             };
             _btnReset.Click += OnResetDefaultsClick;
 
+            var lblVersionInfo = new Label
+            {
+                Text = $"v{UninstallRegistrationService.CurrentVersion}",
+                Font = new Font("Segoe UI", 8.5F, FontStyle.Regular),
+                ForeColor = Color.FromArgb(128, 128, 128),
+                AutoSize = true,
+                Margin = new Padding(12, 8, 0, 0)
+            };
+
             pnlButtons.Controls.Add(_btnSave);
             pnlButtons.Controls.Add(_btnReset);
+            pnlButtons.Controls.Add(lblVersionInfo);
 
             _mainFlow.Controls.Add(pnlLlmCard);
             _mainFlow.Controls.Add(pnlBatteryCard);
