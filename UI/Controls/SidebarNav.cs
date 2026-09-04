@@ -9,7 +9,7 @@ namespace KerkenezMail.UI.Controls
 {
     public class SidebarNav : Panel
     {
-        public const int ExpandedWidth = 195;
+        public const int ExpandedWidth = 155;
         public const int CollapsedWidth = 60;
 
         public event EventHandler<int>? TabChanged;
@@ -246,17 +246,16 @@ namespace KerkenezMail.UI.Controls
 
         private Rectangle GetToggleButtonBounds(float scale)
         {
-            bool isWide = this.Width >= (int)(130 * scale);
-            if (!isWide)
+            int sz = (int)(28 * scale);
+            int headerH = (int)(56 * scale);
+            bool isWide = !_isCollapsed && this.Width >= (int)(110 * scale);
+            if (isWide)
             {
-                int btnW = (int)(32 * scale);
-                int btnH = (int)(28 * scale);
-                return new Rectangle((this.Width - btnW) / 2, (int)(18 * scale), btnW, btnH);
+                return new Rectangle(this.Width - sz - (int)(10 * scale), (headerH - sz) / 2, sz, sz);
             }
             else
             {
-                int btnSize = (int)(24 * scale);
-                return new Rectangle(this.Width - (int)(30 * scale), (int)(18 * scale), btnSize, btnSize);
+                return new Rectangle((this.Width - sz) / 2, (headerH - sz) / 2, sz, sz);
             }
         }
 
@@ -271,7 +270,7 @@ namespace KerkenezMail.UI.Controls
 
         public Rectangle GetSubFolderBounds(int k, float scale)
         {
-            int headerH = (int)(72 * scale);
+            int headerH = (int)(56 * scale);
             int itemH = (int)(46 * scale);
             int subH = (int)(32 * scale);
             int subSpacing = (int)(2 * scale);
@@ -283,9 +282,9 @@ namespace KerkenezMail.UI.Controls
 
         public Rectangle GetItemBounds(int index, float scale)
         {
-            int headerH = (int)(72 * scale);
+            int headerH = (int)(56 * scale);
             int itemH = (int)(46 * scale);
-            bool isWide = this.Width >= (int)(130 * scale);
+            bool isWide = !_isCollapsed && this.Width >= (int)(110 * scale);
             int subH = (_isInboxExpanded && isWide) ? (SubFolders.Length * (int)(34 * scale) + (int)(2 * scale)) : 0;
 
             int itemY = (index == 0)
@@ -358,7 +357,7 @@ namespace KerkenezMail.UI.Controls
         {
             base.OnMouseMove(e);
             float scale = CurrentScale;
-            bool isWide = this.Width >= (int)(130 * scale);
+            bool isWide = !_isCollapsed && this.Width >= (int)(110 * scale);
 
             bool prevToggleHover = _isToggleHovered;
             bool prevChevronHover = _isChevronHovered;
@@ -487,7 +486,7 @@ namespace KerkenezMail.UI.Controls
         {
             base.OnMouseDown(e);
             float scale = CurrentScale;
-            bool isWide = this.Width >= (int)(130 * scale);
+            bool isWide = !_isCollapsed && this.Width >= (int)(110 * scale);
 
             if (e.Button == MouseButtons.Left)
             {
@@ -557,9 +556,9 @@ namespace KerkenezMail.UI.Controls
             g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
 
             float scale = CurrentScale;
-            int headerH = (int)(72 * scale);
+            int headerH = (int)(56 * scale);
             int itemH = (int)(46 * scale);
-            bool isWide = this.Width >= (int)(130 * scale);
+            bool isWide = !_isCollapsed && this.Width >= (int)(110 * scale);
 
             // Background
             using (var bgBrush = new SolidBrush(_bgColor))
@@ -573,84 +572,39 @@ namespace KerkenezMail.UI.Controls
                 g.DrawLine(borderPen, this.Width - 1, 0, this.Width - 1, this.Height);
             }
 
-            // Header Section
+            // Top Header: App Branding / Hamburger Toggle
             var toggleRect = GetToggleButtonBounds(scale);
 
+            if (_isToggleHovered)
+            {
+                using var hoverBrush = new SolidBrush(_btnHoverBgColor);
+                FillRoundedRectangle(g, hoverBrush, toggleRect, 4);
+            }
+
+            using (var icoFont = new Font(GetIconFontFamily(), 11F, FontStyle.Regular))
+            using (var textBrush = new SolidBrush(_isToggleHovered ? _activeTextColor : _textColor))
+            {
+                var sfCenter = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
+                g.DrawString("\uE700", icoFont, textBrush, toggleRect, sfCenter);
+            }
+
+            // App Title & Subtitle if Expanded
             if (isWide)
             {
-                // App Brand Title & Subtitle
-                using (var titleFont = new Font("Segoe UI", 10.75F, FontStyle.Bold))
-                using (var subFont = new Font("Segoe UI", 8.25F, FontStyle.Regular))
-                using (var titleBrush = new SolidBrush(Color.FromArgb(20, 20, 20)))
-                using (var subBrush = new SolidBrush(Color.FromArgb(110, 110, 110)))
+                int textMaxWidth = toggleRect.Left - (int)(18 * scale);
+                if (textMaxWidth > 20)
                 {
-                    var textFormat = new StringFormat
-                    {
-                        Trimming = StringTrimming.EllipsisCharacter,
-                        FormatFlags = StringFormatFlags.NoWrap
-                    };
+                    using var titleFont = new Font("Segoe UI", 10.5F, FontStyle.Bold);
+                    using var subFont = new Font("Segoe UI", 8F, FontStyle.Regular);
+                    using var titleBrush = new SolidBrush(Color.FromArgb(25, 25, 25));
+                    using var subBrush = new SolidBrush(Color.FromArgb(115, 120, 130));
 
-                    int titleMaxWidth = toggleRect.Left - (int)(14 * scale);
-                    if (titleMaxWidth > 20)
-                    {
-                        var titleRect = new RectangleF(12 * scale, 14 * scale, titleMaxWidth, 22 * scale);
-                        var subRect = new RectangleF(12 * scale, 38 * scale, titleMaxWidth, 18 * scale);
-                        g.DrawString("Kerkenez Mail", titleFont, titleBrush, titleRect, textFormat);
-                        g.DrawString("Win32 AI Assistant", subFont, subBrush, subRect, textFormat);
-                    }
-                }
+                    var sfTitle = new StringFormat { Trimming = StringTrimming.EllipsisCharacter, FormatFlags = StringFormatFlags.NoWrap };
+                    var titleRect = new Rectangle((int)(14 * scale), (int)(10 * scale), textMaxWidth, (int)(20 * scale));
+                    var subRect = new Rectangle((int)(14 * scale), (int)(31 * scale), textMaxWidth, (int)(16 * scale));
 
-                // Collapse Toggle Button ("«")
-                if (_isToggleHovered)
-                {
-                    using var btnHoverBrush = new SolidBrush(_btnHoverBgColor);
-                    using var btnBorderPen = new Pen(_borderColor);
-                    FillRoundedRectangle(g, btnHoverBrush, toggleRect, 4);
-                    DrawRoundedRectangle(g, btnBorderPen, toggleRect, 4);
-                }
-
-                using (var btnFont = new Font("Segoe UI", 10.5F, FontStyle.Bold))
-                using (var btnBrush = new SolidBrush(_isToggleHovered ? _activeTextColor : Color.FromArgb(100, 105, 115)))
-                {
-                    var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
-                    g.DrawString("«", btnFont, btnBrush, toggleRect, sf);
-                }
-
-                // Header separator line
-                using (var sepPen = new Pen(_borderColor, 1))
-                {
-                    g.DrawLine(sepPen, 12 * scale, headerH - 8, this.Width - (12 * scale), headerH - 8);
-                }
-            }
-            else
-            {
-                // Collapsed Mode Toggle Button ("»")
-                if (_isToggleHovered)
-                {
-                    using var btnHoverBrush = new SolidBrush(_btnHoverBgColor);
-                    using var btnBorderPen = new Pen(_borderColor);
-                    FillRoundedRectangle(g, btnHoverBrush, toggleRect, 4);
-                    DrawRoundedRectangle(g, btnBorderPen, toggleRect, 4);
-                }
-                else
-                {
-                    using var btnBgBrush = new SolidBrush(Color.FromArgb(248, 249, 250));
-                    using var btnBorderPen = new Pen(_borderColor);
-                    FillRoundedRectangle(g, btnBgBrush, toggleRect, 4);
-                    DrawRoundedRectangle(g, btnBorderPen, toggleRect, 4);
-                }
-
-                using (var btnFont = new Font("Segoe UI", 10.5F, FontStyle.Bold))
-                using (var btnBrush = new SolidBrush(_isToggleHovered ? _activeTextColor : Color.FromArgb(80, 85, 95)))
-                {
-                    var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
-                    g.DrawString("»", btnFont, btnBrush, toggleRect, sf);
-                }
-
-                // Header separator line
-                using (var sepPen = new Pen(_borderColor, 1))
-                {
-                    g.DrawLine(sepPen, 8 * scale, headerH - 8, this.Width - (8 * scale), headerH - 8);
+                    g.DrawString("Kerkenez", titleFont, titleBrush, titleRect, sfTitle);
+                    g.DrawString("Mail", subFont, subBrush, subRect, sfTitle);
                 }
             }
 
@@ -722,7 +676,7 @@ namespace KerkenezMail.UI.Controls
         private void DrawLiveImapButton(Graphics g, float scale, bool isWide)
         {
             var liveRect = GetLiveImapBounds(scale);
-            int headerH = (int)(72 * scale);
+            int headerH = (int)(56 * scale);
             int itemH = (int)(46 * scale);
 
             // Subtle divider line above the Live IMAP button section
