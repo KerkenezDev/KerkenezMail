@@ -240,6 +240,12 @@ namespace KerkenezMail.Services
                     return true;
                 }
 
+                if (string.IsNullOrWhiteSpace(modelPath))
+                {
+                    logger?.Report("[!] No GGUF model path configured. Please select a model in Settings.");
+                    return false;
+                }
+
                 if (!File.Exists(modelPath))
                 {
                     logger?.Report($"[!] Model file not found at: {modelPath}");

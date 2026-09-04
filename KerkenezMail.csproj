@@ -9,9 +9,9 @@
     <ApplicationIcon>app.ico</ApplicationIcon>
     
     <!-- Assembly Metadata -->
-    <Title>Kerkenez Mail (Win32)</Title>
+    <Title>Kerkenez Mail</Title>
     <Product>Kerkenez Mail</Product>
-    <Description>Local AI-Powered IMAP Email Summarizer with llama.cpp</Description>
+    <Description>Local first mailing client with optional AI support</Description>
     <Version>1.0.0</Version>
     <FileVersion>1.0.0.0</FileVersion>
     <AssemblyVersion>1.0.0.0</AssemblyVersion>

@@ -1,4 +1,7 @@
 using System;
+using System.Diagnostics;
+using System.IO;
+using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
@@ -60,6 +63,25 @@ namespace KerkenezMail.Services
             if (settings.IsAiDisabled)
             {
                 return string.Empty;
+            }
+
+            bool isLlama = string.Equals(settings.AiBackend, "LlamaCpp", StringComparison.OrdinalIgnoreCase);
+            if (isLlama)
+            {
+                if (string.IsNullOrWhiteSpace(settings.LlamaModelPath))
+                {
+                    email.Priority = 2;
+                    return "No GGUF model selected. Go to Settings > AI Backend to select a model.";
+                }
+
+                if (!File.Exists(settings.LlamaModelPath))
+                {
+                    email.Priority = 2;
+                    string fileName = Path.GetFileName(settings.LlamaModelPath);
+                    return string.IsNullOrWhiteSpace(fileName)
+                        ? "Model file not found. Please verify the GGUF model path in Settings."
+                        : $"Model file not found ({fileName}). Please verify the GGUF model path in Settings.";
+                }
             }
 
             string emailContentForLlm = PrepareEmailBodyForSummary(email.CleanBody, settings.MaxSummaryEmailChars);
@@ -177,19 +199,55 @@ namespace KerkenezMail.Services
                         }
 
                         string cleanError = ParseErrorMessage(errorText, response.StatusCode);
-                        return $"(LLM Error {response.StatusCode}: {cleanError})";
+                        email.Priority = 2;
+                        return isLlama 
+                            ? $"llama-server returned an error: {cleanError}"
+                            : $"AI service error: {cleanError}";
                     }
                 }
                 catch (HttpRequestException ex)
                 {
-                    // If connection refused during initial server launch warmup, wait and retry
-                    if (attempt < maxRetries - 1 && (ex.Message.Contains("actively refused") || ex.Message.Contains("No connection could be made")))
-                    {
-                        await Task.Delay(1500, ct);
-                        continue;
-                    }
+                    bool isConnectionRefused = ex.Message.Contains("actively refused", StringComparison.OrdinalIgnoreCase) || 
+                                               ex.Message.Contains("No connection could be made", StringComparison.OrdinalIgnoreCase);
 
-                    return $"(Could not reach LLM endpoint at {endpointUrl}. Ensure the AI service is running or check your network/API key: {ex.Message})";
+                    if (isLlama)
+                    {
+                        // Check if llama-server process is actually running
+                        bool isProcessRunning = false;
+                        try
+                        {
+                            isProcessRunning = Process.GetProcessesByName("llama-server").Any(p => !p.HasExited);
+                        }
+                        catch { }
+
+                        if (!isProcessRunning)
+                        {
+                            email.Priority = 2;
+                            return "llama-server is not running or failed to start. Check Live Logs for details.";
+                        }
+
+                        // Process is running and warming up - wait and retry
+                        if (attempt < maxRetries - 1 && isConnectionRefused)
+                        {
+                            await Task.Delay(1500, ct);
+                            continue;
+                        }
+
+                        email.Priority = 2;
+                        return "llama-server is not responding. Check Live Logs for details.";
+                    }
+                    else
+                    {
+                        if (attempt < maxRetries - 1 && isConnectionRefused)
+                        {
+                            await Task.Delay(1500, ct);
+                            continue;
+                        }
+
+                        email.Priority = 2;
+                        string backendTitle = string.Equals(settings.AiBackend, "Ollama", StringComparison.OrdinalIgnoreCase) ? "Ollama" : "Cloud AI";
+                        return $"Could not connect to {backendTitle}. Ensure the service is running and accessible.";
+                    }
                 }
                 catch (OperationCanceledException)
                 {
@@ -197,11 +255,16 @@ namespace KerkenezMail.Services
                 }
                 catch (Exception ex)
                 {
-                    return $"(Error generating summary: {ex.Message})";
+                    email.Priority = 2;
+                    return isLlama 
+                        ? $"llama-server error: {ex.Message}"
+                        : $"Could not generate summary: {ex.Message}";
                 }
             }
 
-            return "(Failed to get summary: Model did not become ready in time)";
+            return isLlama
+                ? "llama-server took too long to become ready. Check Live Logs for details."
+                : "AI service took too long to respond. Please try again.";
         }
 
         public static (string Summary, int Priority) ParseLlmSummaryAndPriority(string rawOutput)
@@ -389,18 +452,29 @@ namespace KerkenezMail.Services
                         {
                             return msgProp.GetString() ?? errorProp.ToString();
                         }
+                        if (errorProp.ValueKind == JsonValueKind.String)
+                        {
+                            return errorProp.GetString() ?? errorProp.ToString();
+                        }
                         return errorProp.ToString();
                     }
                 }
             }
             catch { }
 
-            if (!string.IsNullOrWhiteSpace(json) && json.Length < 200)
+            if (!string.IsNullOrWhiteSpace(json) && json.Length < 160 && !json.Contains("{") && !json.Contains("<html", StringComparison.OrdinalIgnoreCase))
             {
                 return json.Trim();
             }
 
-            return statusCode.ToString();
+            return statusCode switch
+            {
+                System.Net.HttpStatusCode.Unauthorized => "Invalid API key or unauthorized access.",
+                System.Net.HttpStatusCode.NotFound => "Endpoint or model not found.",
+                System.Net.HttpStatusCode.TooManyRequests => "Rate limit exceeded. Please wait a moment before trying again.",
+                System.Net.HttpStatusCode.ServiceUnavailable => "Service is temporarily unavailable.",
+                _ => $"Request failed with status {(int)statusCode} ({statusCode})."
+            };
         }
     }
 }
