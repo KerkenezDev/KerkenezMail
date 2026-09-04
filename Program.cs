@@ -45,6 +45,9 @@ namespace KerkenezMail
                 return;
             }
 
+            // Execute Universal Migration Engine (silent check & fix for legacy file paths and registry keys)
+            MigrationService.ExecuteMigrationIfNeeded();
+
             // Always ensure application registration in HKCU Uninstall key is created/updated (e.g. if app moved)
             UninstallRegistrationService.RegisterOrUpdate();
 
