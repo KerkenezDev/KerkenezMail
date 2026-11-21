@@ -94,6 +94,8 @@ namespace KerkenezMail.Languages
         public const string InboxBtnReply = "Inbox.BtnReply";
         public const string InboxBtnForward = "Inbox.BtnForward";
         public const string InboxBtnDownloadAttachments = "Inbox.BtnDownloadAttachments";
+        public const string InboxBtnAskMore = "Inbox.BtnAskMore";
+        public const string InboxTipAskMore = "Inbox.TipAskMore";
         public const string InboxLoadingStatus = "Inbox.LoadingStatus";
         public const string InboxSummarizingStatus = "Inbox.SummarizingStatus";
         public const string InboxLiveActiveBadge = "Inbox.LiveActiveBadge";
@@ -119,6 +121,31 @@ namespace KerkenezMail.Languages
         public const string InboxDownloadedSingleStatus = "Inbox.DownloadedSingleStatus";
         public const string InboxDownloadFailedStatus = "Inbox.DownloadFailedStatus";
         public const string InboxDownloadFailed = "Inbox.DownloadFailed";
+
+        // ==========================================
+        // 3B. Ask More Email Q&A Popup
+        // ==========================================
+        public const string AskMoreTitle = "AskMore.Title";
+        public const string AskMorePromptLabel = "AskMore.PromptLabel";
+        public const string AskMoreInputPlaceholder = "AskMore.InputPlaceholder";
+        public const string AskMoreBtnAsk = "AskMore.BtnAsk";
+        public const string AskMoreBtnCancel = "AskMore.BtnCancel";
+        public const string AskMoreAnswerHeader = "AskMore.AnswerHeader";
+        public const string AskMoreAnswerPlaceholder = "AskMore.AnswerPlaceholder";
+        public const string AskMoreThinking = "AskMore.Thinking";
+        public const string AskMoreStartingModel = "AskMore.StartingModel";
+        public const string AskMoreWaitingQueue = "AskMore.WaitingQueue";
+        public const string AskMoreBtnCopy = "AskMore.BtnCopy";
+        public const string AskMoreCopied = "AskMore.Copied";
+        public const string AskMoreAiDisabled = "AskMore.AiDisabled";
+        public const string AskMoreBtnMoreQuestions = "AskMore.BtnMoreQuestions";
+        public const string AskMoreGenerating = "AskMore.Generating";
+        public const string AskMoreBtnStop = "AskMore.BtnStop";
+        public const string AskMoreTipStop = "AskMore.TipStop";
+        public const string AskMoreTipRetry = "AskMore.TipRetry";
+        public const string AskMoreTipCopy = "AskMore.TipCopy";
+        public const string AskMoreChatPlaceholder = "AskMore.ChatPlaceholder";
+        public const string AskMoreStopped = "AskMore.Stopped";
 
         // ==========================================
         // 4. Send Mail / Compose
@@ -309,6 +336,8 @@ namespace KerkenezMail.Languages
         public const string SettingsStartWithWindows = "Settings.StartWithWindows";
         public const string SettingsRestartDaemon = "Settings.RestartDaemon";
         public const string SettingsSecPrompt = "Settings.SecPrompt";
+        public const string SettingsSecAskMorePrompt = "Settings.SecAskMorePrompt";
+        public const string SettingsAskMorePromptDesc = "Settings.AskMorePromptDesc";
         public const string SettingsBtnSave = "Settings.BtnSave";
         public const string SettingsBtnReset = "Settings.BtnReset";
         public const string SettingsBtnTestLlm = "Settings.BtnTestLlm";

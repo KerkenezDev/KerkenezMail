@@ -83,7 +83,7 @@ namespace KerkenezMail.UI.Tabs
         private Label _lblInboxHeader = null!;
         private Label _lblAccount = null!;
         private Label _lblSummaryTitle = null!;
-        private Label _lblSummaryHint = null!;
+        private Button _btnAskMore = null!;
         private ProgressBar _progressBar = null!;
         private SplitContainer _mainSplit = null!;
         private SplitContainer _middleSplit = null!;
@@ -104,6 +104,10 @@ namespace KerkenezMail.UI.Tabs
         private string? _lastHoverLinkUrl;
         private System.Windows.Forms.Timer? _linkHoverTimer;
         private readonly SemaphoreSlim _summaryQueueSemaphore = new SemaphoreSlim(1, 1);
+
+        // Ephemeral in-memory Ask More sessions (lazily initialized on first click; cleared on mail refresh or exit)
+        private Dictionary<string, AskMoreSession>? _askMoreSessions;
+        private Dictionary<string, AskMoreForm>? _openAskMoreForms;
 
         public event Action<string, string>? StatusUpdated;
         public event EventHandler<EmailItem>? ReplyRequested;
@@ -561,7 +565,7 @@ namespace KerkenezMail.UI.Tabs
             emailViewerPanel.Controls.Add(metaHeader);
             _middleSplit.Panel1.Controls.Add(emailViewerPanel);
 
-            // --- Middle-Bottom: AI Executive Summary ---
+            // --- Middle-Bottom: AI Summary ---
             var summaryCard = new Panel
             {
                 Dock = DockStyle.Fill,
@@ -578,8 +582,8 @@ namespace KerkenezMail.UI.Tabs
             var summaryHeader = new Panel
             {
                 Dock = DockStyle.Top,
-                Height = 26,
-                Padding = new Padding(0, 0, 0, 4)
+                Height = (int)(30 * scale),
+                Padding = new Padding(0, 0, 0, (int)(4 * scale))
             };
 
             _lblSummaryTitle = new Label
@@ -587,21 +591,30 @@ namespace KerkenezMail.UI.Tabs
                 Text = "✨ " + Lang.T(StringKeys.InboxAiExecutiveSummary),
                 Dock = DockStyle.Left,
                 AutoSize = true,
+                TextAlign = ContentAlignment.MiddleLeft,
+                Padding = new Padding(0, (int)(3 * scale), 0, 0),
                 Font = new Font("Segoe UI", 10F, FontStyle.Bold),
                 ForeColor = Color.FromArgb(0, 102, 204)
             };
 
-            _lblSummaryHint = new Label
+            _btnAskMore = new Button
             {
-                Text = Lang.T(StringKeys.InboxAiGeneratedVram),
+                Text = "💬 " + Lang.T(StringKeys.InboxBtnAskMore),
+                UseMnemonic = false,
                 Dock = DockStyle.Right,
                 AutoSize = true,
-                Font = new Font("Segoe UI", 8.5F),
-                ForeColor = Color.FromArgb(120, 120, 120)
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                Padding = new Padding((int)(8 * scale), (int)(1 * scale), (int)(8 * scale), (int)(1 * scale)),
+                FlatStyle = FlatStyle.System,
+                Font = new Font("Segoe UI", 8.5F, FontStyle.Bold),
+                Cursor = Cursors.Hand,
+                Enabled = false
             };
+            _btnAskMore.Click += OnAskMoreClick;
+            _topBarToolTip.SetToolTip(_btnAskMore, Lang.T(StringKeys.InboxTipAskMore));
 
             summaryHeader.Controls.Add(_lblSummaryTitle);
-            summaryHeader.Controls.Add(_lblSummaryHint);
+            summaryHeader.Controls.Add(_btnAskMore);
 
             _txtSummary = new TextBox
             {
@@ -724,7 +737,7 @@ namespace KerkenezMail.UI.Tabs
             if (_txtSearch != null) _txtSearch.PlaceholderText = Lang.T(StringKeys.InboxSearchPlaceholder);
             if (_lblAccount != null) _lblAccount.Text = Lang.T(StringKeys.InboxAccountLabel);
             if (_lblSummaryTitle != null) _lblSummaryTitle.Text = "✨ " + Lang.T(StringKeys.InboxAiExecutiveSummary);
-            if (_lblSummaryHint != null) _lblSummaryHint.Text = Lang.T(StringKeys.InboxAiGeneratedVram);
+            if (_btnAskMore != null) _btnAskMore.Text = "💬 " + Lang.T(StringKeys.InboxBtnAskMore);
             if (_txtSummary != null) _txtSummary.PlaceholderText = Lang.T(StringKeys.InboxAiSummaryPlaceholder);
             if (_lblAttachmentsTitle != null) _lblAttachmentsTitle.Text = "📎 " + Lang.T(StringKeys.InboxAttachmentsTitle);
 
@@ -748,6 +761,7 @@ namespace KerkenezMail.UI.Tabs
                 }
                 if (_btnReply != null) _topBarToolTip.SetToolTip(_btnReply, Lang.T(StringKeys.InboxTipReply));
                 if (_btnMoveToInbox != null) _topBarToolTip.SetToolTip(_btnMoveToInbox, Lang.T(StringKeys.InboxTipMoveToInbox));
+                if (_btnAskMore != null) _topBarToolTip.SetToolTip(_btnAskMore, Lang.T(StringKeys.InboxTipAskMore));
             }
 
             SetupListViewColumns();
@@ -798,6 +812,12 @@ namespace KerkenezMail.UI.Tabs
             if (_middleSplit == null) return;
 
             bool isAiDisabled = _configService.Settings.IsAiDisabled;
+            if (_btnAskMore != null)
+            {
+                _btnAskMore.Visible = !isAiDisabled;
+                _btnAskMore.Enabled = email != null && !isAiDisabled;
+            }
+
             if (!isAiDisabled)
             {
                 // In AI mode, the summary pane is always visible
@@ -1004,6 +1024,8 @@ namespace KerkenezMail.UI.Tabs
             {
                 _folderStorage[folderToFetch].Clear();
             }
+
+            ClearAskMoreSessionsForFolder(folderToFetch);
 
             if (_currentFolder == folderToFetch)
             {
@@ -1526,6 +1548,7 @@ namespace KerkenezMail.UI.Tabs
             _lblEmailMeta.Text = $"{Lang.T(StringKeys.InboxDetailFrom)} -   •   {Lang.T(StringKeys.InboxDetailDate)} -   •   {Lang.T(StringKeys.InboxDetailAccount)} -";
             _btnReply.Visible = false;
             _btnMoveToInbox.Visible = false;
+            if (_btnAskMore != null) _btnAskMore.Enabled = false;
             if (_sliderSubject != null)
             {
                 _sliderSubject.Visible = false;
@@ -1615,6 +1638,7 @@ namespace KerkenezMail.UI.Tabs
                 _lblEmailMeta.Text = "From: -   •   Date: -   •   Account: -";
                 _btnReply.Visible = false;
                 _btnMoveToInbox.Visible = false;
+                if (_btnAskMore != null) _btnAskMore.Enabled = false;
             }
         }
 
@@ -2426,6 +2450,83 @@ namespace KerkenezMail.UI.Tabs
             }
         }
 
+        private void ClearAskMoreSessionsForFolder(MailFolderType folder)
+        {
+            if (_askMoreSessions == null || _askMoreSessions.Count == 0) return;
+
+            var keysToRemove = _askMoreSessions
+                .Where(kv => kv.Value.Folder == folder)
+                .Select(kv => kv.Key)
+                .ToList();
+
+            foreach (var key in keysToRemove)
+            {
+                _askMoreSessions.Remove(key);
+                if (_openAskMoreForms != null && _openAskMoreForms.TryGetValue(key, out var openForm))
+                {
+                    _openAskMoreForms.Remove(key);
+                    if (!openForm.IsDisposed)
+                    {
+                        try { openForm.Close(); } catch { }
+                    }
+                }
+            }
+        }
+
+        private void OnAskMoreClick(object? sender, EventArgs e)
+        {
+            var email = GetCurrentPreviewEmail();
+            if (email == null || _configService.Settings.IsAiDisabled) return;
+
+            string key = AskMoreSession.BuildKey(email);
+            if (_openAskMoreForms != null && _openAskMoreForms.TryGetValue(key, out var existing) && !existing.IsDisposed)
+            {
+                if (existing.WindowState == FormWindowState.Minimized)
+                {
+                    existing.WindowState = FormWindowState.Normal;
+                }
+                existing.BringToFront();
+                existing.Focus();
+                return;
+            }
+
+            _askMoreSessions ??= new Dictionary<string, AskMoreSession>(StringComparer.OrdinalIgnoreCase);
+            _openAskMoreForms ??= new Dictionary<string, AskMoreForm>(StringComparer.OrdinalIgnoreCase);
+
+            if (!_askMoreSessions.TryGetValue(key, out var session))
+            {
+                session = new AskMoreSession
+                {
+                    EmailKey = key,
+                    Folder = email.Folder
+                };
+                _askMoreSessions[key] = session;
+            }
+
+            var popup = new AskMoreForm(
+                email,
+                session,
+                _configService,
+                _llamaManager,
+                _llmService,
+                _summaryQueueSemaphore,
+                () => _isBatchSyncing,
+                _logger,
+                (status, vram) => StatusUpdated?.Invoke(status, vram),
+                this.FindForm());
+
+            _openAskMoreForms[key] = popup;
+            popup.FormClosed += (s, args) =>
+            {
+                if (_openAskMoreForms != null && _openAskMoreForms.TryGetValue(key, out var tracked) && ReferenceEquals(tracked, popup))
+                {
+                    _openAskMoreForms.Remove(key);
+                }
+            };
+
+            popup.Show(this.FindForm());
+        }
+
         private void OnCopySummaryClick(object? sender, EventArgs e)
         {
             if (_lvEmails.SelectedItems.Count > 0 && _lvEmails.SelectedItems[0].Tag is EmailItem email && !string.IsNullOrWhiteSpace(email.Summary))
@@ -2692,6 +2793,8 @@ namespace KerkenezMail.UI.Tabs
                 _linkHoverTimer = null;
                 _inboxCellToolTip?.Dispose();
                 _topBarToolTip?.Dispose();
+                _askMoreSessions?.Clear();
+                _openAskMoreForms?.Clear();
             }
             base.Dispose(disposing);
         }
@@ -3094,60 +3197,8 @@ namespace KerkenezMail.UI.Tabs
             _inboxCellToolTip.Show(formattedTip, _rtbEmailBody, tipX, tipY, 10000);
         }
 
-        private static string FormatUrlForToolTip(string url, int screenWidth)
-        {
-            if (string.IsNullOrWhiteSpace(url)) return string.Empty;
-
-            // Dynamically calculate max characters per line proportional to screen width (45 to 80 chars)
-            int maxLineLength = Math.Clamp((int)(screenWidth * 0.042), 45, 80);
-            if (url.Length <= maxLineLength)
-            {
-                return "🔗 " + url;
-            }
-
-            var lines = new List<string>();
-            string remaining = url;
-
-            while (remaining.Length > maxLineLength)
-            {
-                int minSplit = Math.Max(18, maxLineLength - 25);
-                int breakIdx = -1;
-
-                char[] delimiters = new[] { '&', '?', '/', '#', '=', ';' };
-                foreach (char d in delimiters)
-                {
-                    int idx = remaining.LastIndexOf(d, maxLineLength, maxLineLength - minSplit);
-                    if (idx > minSplit)
-                    {
-                        if (d == '&' || d == '?')
-                        {
-                            breakIdx = idx; // Break before '&' or '?' so it starts next line
-                        }
-                        else
-                        {
-                            breakIdx = idx + 1; // Include '/' or '=' in current line
-                        }
-                        break;
-                    }
-                }
-
-                if (breakIdx <= 0)
-                {
-                    breakIdx = maxLineLength;
-                }
-
-                string part = remaining.Substring(0, breakIdx).TrimEnd();
-                lines.Add(lines.Count == 0 ? "🔗 " + part : "   " + part);
-                remaining = remaining.Substring(breakIdx).TrimStart();
-            }
-
-            if (remaining.Length > 0)
-            {
-                lines.Add(lines.Count == 0 ? "🔗 " + remaining : "   " + remaining);
-            }
-
-            return string.Join(Environment.NewLine, lines);
-        }
+        private static string FormatUrlForToolTip(string url, int screenWidth) =>
+            MarkdownRtfRenderer.FormatUrlForToolTip(url, screenWidth);
 
         private void ResetLinkToolTip()
         {

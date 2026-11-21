@@ -171,6 +171,10 @@ namespace KerkenezMail.Services
             {
                 s.SystemPrompt = AppSettings.CreateDefault().SystemPrompt;
             }
+            if (string.IsNullOrWhiteSpace(s.AskMoreSystemPrompt))
+            {
+                s.AskMoreSystemPrompt = AppSettings.CreateDefault().AskMoreSystemPrompt;
+            }
             if (s.AccountIds == null) s.AccountIds = new List<string>();
 
             // 7. Heal AppVersion

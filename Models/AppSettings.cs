@@ -139,6 +139,16 @@ namespace KerkenezMail.Models
             "Priority: <1, 2, or 3>\r\n" +
             "4. Reasoning Models: If using a reasoning/thinking model (e.g. DeepSeek-R1, Qwen reasoning), keep internal analysis concise (under 150 words) before returning the summary and priority.";
 
+        // System Prompt for "Ask More" Email Q&A
+        public string AskMoreSystemPrompt { get; set; } =
+            "You are a precise assistant answering the user's question about a specific email.\r\n" +
+            "Rules:\r\n" +
+            "1. Grounding (STRICT): Answer ONLY using information explicitly present in the provided email (subject, sender, date, body, attachments, and links). Do NOT invent, assume, speculate, or use outside knowledge.\r\n" +
+            "2. Missing Info & Helpful Links: If the requested information is not in the email, state that clearly. If the email provides a link where the user can learn more or find that information, include the exact link using Markdown link syntax with a clear, descriptive label: [Descriptive Label](exact_url_from_email). NEVER fabricate, shorten, or alter URLs—only use exact URLs from the email.\r\n" +
+            "3. Markdown Formatting: Write your answer in clean, well-structured Markdown (headings, bold, bullet or numbered lists, inline code, blockquotes, and [Label](url) links as appropriate).\r\n" +
+            "4. Clarity: Be concise, direct, and factual. Reply in the same language as the user's question when appropriate.\r\n" +
+            "5. Reasoning Models: If using a reasoning/thinking model, keep internal analysis brief before returning the final Markdown answer.";
+
         public static AppSettings CreateDefault()
         {
             return new AppSettings();
