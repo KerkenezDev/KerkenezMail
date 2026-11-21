@@ -65,7 +65,7 @@ namespace KerkenezMail.Languages
             Set(StringKeys.InboxListHeaderUnread,        "{0} ({1} e-posta, {2} okunmamış)");
             Set(StringKeys.InboxSubjectPrefix,           "Konu:");
             Set(StringKeys.InboxNoEmailSelected,         "(E-posta seçilmedi)");
-            Set(StringKeys.InboxAiExecutiveSummary,      "Yapay Zeka Yönetici Özeti");
+            Set(StringKeys.InboxAiExecutiveSummary,      "Yapay Zeka Özeti");
             Set(StringKeys.InboxAiGeneratedVram,         "(VRAM'deki yerel LLM tarafından üretildi)");
             Set(StringKeys.InboxAiSummaryPlaceholder,    "Yapay zeka özeti burada görünecek...");
             Set(StringKeys.InboxAttachmentsTitle,        "Ekler:");
@@ -99,6 +99,8 @@ namespace KerkenezMail.Languages
             Set(StringKeys.InboxBtnReply,                "Yanıtla");
             Set(StringKeys.InboxBtnForward,              "İlet");
             Set(StringKeys.InboxBtnDownloadAttachments,  "Ekleri İndir");
+            Set(StringKeys.InboxBtnAskMore,              "Daha Fazla Sor");
+            Set(StringKeys.InboxTipAskMore,              "Daha Fazla Sor: Bu e-posta hakkında yapay zekaya sorular sorun");
             Set(StringKeys.InboxLoadingStatus,           "E-postalar alınıyor...");
             Set(StringKeys.InboxSummarizingStatus,       "Yapay zeka ile özetleniyor...");
             Set(StringKeys.InboxLiveActiveBadge,         "Canlı IMAP: Bağlı");
@@ -124,6 +126,29 @@ namespace KerkenezMail.Languages
             Set(StringKeys.InboxDownloadedSingleStatus,  "'{0}' indirildi");
             Set(StringKeys.InboxDownloadFailedStatus,    "İndirme başarısız");
             Set(StringKeys.InboxDownloadFailed,          "İndirme Başarısız");
+
+            // --- 3B. Ask More Email Q&A Popup ---
+            Set(StringKeys.AskMoreTitle,                 "Daha Fazla Sor");
+            Set(StringKeys.AskMorePromptLabel,           "Bu e-posta hakkında ne sormak istersiniz?");
+            Set(StringKeys.AskMoreInputPlaceholder,      "Bu e-posta hakkında bir soru sorun... (Göndermek için Enter, yeni satır için Shift+Enter)");
+            Set(StringKeys.AskMoreBtnAsk,                "Sor");
+            Set(StringKeys.AskMoreBtnCancel,             "İptal");
+            Set(StringKeys.AskMoreAnswerHeader,          "Yapay Zeka Yanıtı");
+            Set(StringKeys.AskMoreAnswerPlaceholder,     "Bu e-postaya dayalı bir yanıt almak için yukarıdan bir soru sorun.");
+            Set(StringKeys.AskMoreThinking,              "E-posta inceleniyor ve yanıt oluşturuluyor...");
+            Set(StringKeys.AskMoreStartingModel,         "Yerel LLM sunucusu başlatılıyor...");
+            Set(StringKeys.AskMoreWaitingQueue,          "Mevcut yapay zeka işleminin bitmesi bekleniyor...");
+            Set(StringKeys.AskMoreBtnCopy,               "Kopyala");
+            Set(StringKeys.AskMoreCopied,                "Kopyalandı!");
+            Set(StringKeys.AskMoreAiDisabled,            "Yapay zeka şu anda devre dışı (Yapay Zekasız mod veya Pil Tasarrufu aktif). Daha Fazla Sor özelliğini kullanmak için Ayarlar'dan bir yapay zeka arka ucu etkinleştirin.");
+            Set(StringKeys.AskMoreBtnMoreQuestions,      "Başka sorularınız mı var?");
+            Set(StringKeys.AskMoreGenerating,            "Oluşturuluyor");
+            Set(StringKeys.AskMoreBtnStop,               "Durdur");
+            Set(StringKeys.AskMoreTipStop,               "Oluşturmayı durdurmak için tıklayın");
+            Set(StringKeys.AskMoreTipRetry,              "Yeniden dene");
+            Set(StringKeys.AskMoreTipCopy,               "Yanıtı kopyala");
+            Set(StringKeys.AskMoreChatPlaceholder,       "Bu e-posta hakkında devam sorusu sorun... (Göndermek için Enter, yeni satır için Shift+Enter)");
+            Set(StringKeys.AskMoreStopped,               "Oluşturma durduruldu.");
 
             // --- 4. Send Mail / Compose ---
             Set(StringKeys.SendTitle,                    "Yeni E-posta Yaz");
@@ -308,6 +333,8 @@ namespace KerkenezMail.Languages
             Set(StringKeys.SettingsStartWithWindows,     "Kullanıcı oturum açtığında sistem tepsisi hizmetini başlat");
             Set(StringKeys.SettingsRestartDaemon,        "Tepsi Hizmetini Yeniden Başlat / Başlat");
             Set(StringKeys.SettingsSecPrompt,            "✍️  Yapay Zeka Sistem İstemi Şablonu");
+            Set(StringKeys.SettingsSecAskMorePrompt,     "💬  Yapay Zeka \"Daha Fazla Sor\" Sistem İstemi Şablonu");
+            Set(StringKeys.SettingsAskMorePromptDesc,    "Daha Fazla Sor penceresinde bir e-posta hakkında soru sorarken kullanılan sistem istemi (yalnızca e-postaya dayalı yanıtlar için minimum sıcaklıkta çalışır).");
             Set(StringKeys.SettingsBtnSave,              "Ayarları Kaydet");
             Set(StringKeys.SettingsBtnReset,             "Varsayılanlara Sıfırla");
             Set(StringKeys.SettingsBtnTestLlm,           "LLM Bağlantısını Sına");

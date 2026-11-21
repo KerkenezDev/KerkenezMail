@@ -101,6 +101,7 @@ namespace KerkenezMail.UI.Tabs
 
         // Prompt
         private TextBox _txtPrompt = null!;
+        private TextBox _txtAskMorePrompt = null!;
 
         // Buttons
         private Button _btnSave = null!;
@@ -162,6 +163,8 @@ namespace KerkenezMail.UI.Tabs
         private Label _lblSecTray = null!;
         private Label _lblInterval = null!;
         private Label _lblSecPrompt = null!;
+        private Label _lblSecAskMorePrompt = null!;
+        private Label _lblAskMorePromptDesc = null!;
 
         private FlowLayoutPanel _mainFlow = null!;
 
@@ -1340,6 +1343,36 @@ namespace KerkenezMail.UI.Tabs
             pnlPromptCard.Controls.Add(_lblSecPrompt);
             pnlPromptCard.Controls.Add(_txtPrompt);
 
+            // ==================== 4B. Ask More Prompt Template Section ====================
+            var pnlAskMorePromptCard = CreateCardPanel(ContentW);
+
+            _lblSecAskMorePrompt = CreateSectionHeader(Lang.T(StringKeys.SettingsSecAskMorePrompt));
+
+            _lblAskMorePromptDesc = new Label
+            {
+                Text = Lang.T(StringKeys.SettingsAskMorePromptDesc),
+                AutoSize = false,
+                Width = ContentW - 32,
+                Height = 32,
+                Font = new Font("Segoe UI", 8.25F),
+                ForeColor = Color.FromArgb(100, 100, 100),
+                Margin = new Padding(0, 0, 0, 6)
+            };
+
+            _txtAskMorePrompt = new TextBox
+            {
+                Width = ContentW - 28,
+                Height = 120,
+                Multiline = true,
+                ScrollBars = ScrollBars.Vertical,
+                Font = new Font("Segoe UI", 9F),
+                Margin = new Padding(0)
+            };
+
+            pnlAskMorePromptCard.Controls.Add(_lblSecAskMorePrompt);
+            pnlAskMorePromptCard.Controls.Add(_lblAskMorePromptDesc);
+            pnlAskMorePromptCard.Controls.Add(_txtAskMorePrompt);
+
             // ==================== 5. Bottom Action Buttons ====================
             var pnlButtons = new FlowLayoutPanel
             {
@@ -1398,6 +1431,7 @@ namespace KerkenezMail.UI.Tabs
             _mainFlow.Controls.Add(pnlUiCard);
             _mainFlow.Controls.Add(pnlTrayCard);
             _mainFlow.Controls.Add(pnlPromptCard);
+            _mainFlow.Controls.Add(pnlAskMorePromptCard);
             _mainFlow.Controls.Add(pnlButtons);
 
             scrollPanel.Controls.Add(_mainFlow);
@@ -1655,6 +1689,7 @@ namespace KerkenezMail.UI.Tabs
             }
 
             _txtPrompt.Text = s.SystemPrompt;
+            _txtAskMorePrompt.Text = s.AskMoreSystemPrompt;
         }
 
         private void PopulateLanguageDropdown()
@@ -1787,6 +1822,8 @@ namespace KerkenezMail.UI.Tabs
 
             // 5. Prompt & Bottom Buttons
             if (_lblSecPrompt != null) _lblSecPrompt.Text = Lang.T(StringKeys.SettingsSecPrompt);
+            if (_lblSecAskMorePrompt != null) _lblSecAskMorePrompt.Text = Lang.T(StringKeys.SettingsSecAskMorePrompt);
+            if (_lblAskMorePromptDesc != null) _lblAskMorePromptDesc.Text = Lang.T(StringKeys.SettingsAskMorePromptDesc);
             if (_btnSave != null) _btnSave.Text = "💾 " + Lang.T(StringKeys.SettingsBtnSave);
             if (_btnReset != null) _btnReset.Text = "↺ " + Lang.T(StringKeys.SettingsBtnReset);
         }
@@ -2177,6 +2214,7 @@ namespace KerkenezMail.UI.Tabs
             s.StartWithWindows = _chkStartWithWindows.Checked;
 
             s.SystemPrompt = _txtPrompt.Text;
+            s.AskMoreSystemPrompt = _txtAskMorePrompt.Text;
 
             // Language setting
             if (_cboLanguage.SelectedItem is LanguageComboItem selLang)

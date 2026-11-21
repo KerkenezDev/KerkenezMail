@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -9,10 +10,18 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using KerkenezMail.Languages;
 using KerkenezMail.Models;
 
 namespace KerkenezMail.Services
 {
+    public sealed class AskMoreStreamResult
+    {
+        public bool Success { get; init; }
+        public string Content { get; init; } = string.Empty;
+        public bool WasStopped { get; init; }
+    }
+
     public class LlmSummarizerService
     {
         private static readonly HttpClient HttpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(120) };
@@ -55,6 +64,135 @@ namespace KerkenezMail.Services
             return string.Empty;
         }
 
+        private static bool ValidateLlamaModelPath(AppSettings settings, out string errorMessage)
+        {
+            errorMessage = string.Empty;
+            if (!string.Equals(settings.AiBackend, "LlamaCpp", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            if (string.IsNullOrWhiteSpace(settings.LlamaModelPath))
+            {
+                errorMessage = "No GGUF model selected. Go to Settings > AI Backend to select a model.";
+                return false;
+            }
+
+            if (!File.Exists(settings.LlamaModelPath))
+            {
+                string fileName = Path.GetFileName(settings.LlamaModelPath);
+                errorMessage = string.IsNullOrWhiteSpace(fileName)
+                    ? "Model file not found. Please verify the GGUF model path in Settings."
+                    : $"Model file not found ({fileName}). Please verify the GGUF model path in Settings.";
+                return false;
+            }
+
+            return true;
+        }
+
+        public static string BuildEmailLinksContext(EmailItem email)
+        {
+            if (email == null) return string.Empty;
+
+            var entries = new List<(string Label, string Url, int Quality, int Order)>();
+            var indexByUrl = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
+            void TryAddLink(string? rawLabel, string? rawUrl)
+            {
+                if (string.IsNullOrWhiteSpace(rawUrl)) return;
+                string url = rawUrl.Trim();
+                if (url.StartsWith("www.", StringComparison.OrdinalIgnoreCase))
+                {
+                    url = "https://" + url;
+                }
+
+                if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) ||
+                    (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps && uri.Scheme != Uri.UriSchemeMailto))
+                {
+                    return;
+                }
+
+                string cleanLabel = Regex.Replace((rawLabel ?? string.Empty).Trim(), @"\s+", " ");
+                int quality;
+                if (string.IsNullOrWhiteSpace(cleanLabel) ||
+                    string.Equals(cleanLabel, "[Remote Content]", StringComparison.OrdinalIgnoreCase))
+                {
+                    quality = 0;
+                    cleanLabel = string.IsNullOrWhiteSpace(uri.Host) ? url : uri.Host;
+                }
+                else if (cleanLabel.StartsWith("[Remote Content:", StringComparison.OrdinalIgnoreCase) ||
+                         cleanLabel.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+                         cleanLabel.StartsWith("https://", StringComparison.OrdinalIgnoreCase) ||
+                         cleanLabel.StartsWith("www.", StringComparison.OrdinalIgnoreCase))
+                {
+                    quality = 1;
+                }
+                else
+                {
+                    quality = 2;
+                }
+
+                cleanLabel = cleanLabel.Replace("[", "(").Replace("]", ")");
+                if (cleanLabel.Length > 100)
+                {
+                    cleanLabel = cleanLabel.Substring(0, 97).TrimEnd() + "...";
+                }
+
+                if (indexByUrl.TryGetValue(url, out int existingIdx))
+                {
+                    if (quality > entries[existingIdx].Quality)
+                    {
+                        entries[existingIdx] = (cleanLabel, url, quality, entries[existingIdx].Order);
+                    }
+                    return;
+                }
+
+                indexByUrl[url] = entries.Count;
+                entries.Add((cleanLabel, url, quality, entries.Count));
+            }
+
+            if (email.ExtractedLinks != null)
+            {
+                foreach (var link in email.ExtractedLinks)
+                {
+                    TryAddLink(link.Text, link.Url);
+                }
+            }
+
+            string bodySource = !string.IsNullOrWhiteSpace(email.DisplayBody) ? email.DisplayBody : email.CleanBody;
+            if (!string.IsNullOrWhiteSpace(bodySource))
+            {
+                var urlMatches = Regex.Matches(bodySource, @"https?://[^\s<>""'{}|\^\[\]`]+", RegexOptions.IgnoreCase);
+                foreach (Match m in urlMatches)
+                {
+                    string trimmed = m.Value.TrimEnd('.', ',', ';', ':', '!', '?', ')');
+                    TryAddLink(null, trimmed);
+                }
+            }
+
+            if (entries.Count == 0) return string.Empty;
+
+            var ordered = entries
+                .OrderByDescending(e => e.Quality)
+                .ThenBy(e => e.Order)
+                .Take(50);
+
+            var sb = new StringBuilder();
+            const int maxContextChars = 4000;
+            foreach (var entry in ordered)
+            {
+                string line = $"- [{entry.Label}]({entry.Url})";
+                if (sb.Length > 0 && sb.Length + line.Length + 2 > maxContextChars)
+                {
+                    break;
+                }
+                if (sb.Length > 0) sb.AppendLine();
+                sb.Append(line);
+            }
+
+            return sb.ToString();
+        }
+
         public async Task<string> SummarizeEmailAsync(
             EmailItem email,
             AppSettings settings,
@@ -65,23 +203,10 @@ namespace KerkenezMail.Services
                 return string.Empty;
             }
 
-            bool isLlama = string.Equals(settings.AiBackend, "LlamaCpp", StringComparison.OrdinalIgnoreCase);
-            if (isLlama)
+            if (!ValidateLlamaModelPath(settings, out string modelError))
             {
-                if (string.IsNullOrWhiteSpace(settings.LlamaModelPath))
-                {
-                    email.Priority = 2;
-                    return "No GGUF model selected. Go to Settings > AI Backend to select a model.";
-                }
-
-                if (!File.Exists(settings.LlamaModelPath))
-                {
-                    email.Priority = 2;
-                    string fileName = Path.GetFileName(settings.LlamaModelPath);
-                    return string.IsNullOrWhiteSpace(fileName)
-                        ? "Model file not found. Please verify the GGUF model path in Settings."
-                        : $"Model file not found ({fileName}). Please verify the GGUF model path in Settings.";
-                }
+                email.Priority = 2;
+                return modelError;
             }
 
             string emailContentForLlm = PrepareEmailBodyForSummary(email.CleanBody, settings.MaxSummaryEmailChars);
@@ -96,10 +221,6 @@ namespace KerkenezMail.Services
                               $"Output strictly in this format:\r\n" +
                               $"Summary: <1-3 sentence brief>\r\n" +
                               $"Priority: <1, 2, or 3>";
-
-            string endpointUrl = settings.GetEffectiveEndpointUrl();
-            string modelName = settings.GetEffectiveModelName();
-            string? apiKey = settings.GetEffectiveApiKey();
 
             string systemPrompt = settings.SystemPrompt;
             if (!systemPrompt.Contains("Priority", StringComparison.OrdinalIgnoreCase))
@@ -117,17 +238,214 @@ namespace KerkenezMail.Services
             // Strict user preference: respect configured token limit without forced overrides
             int tokenBudget = settings.MaxTokens > 0 ? settings.MaxTokens : 350;
 
+            var (success, rawOrError) = await SendChatCompletionAsync(
+                settings,
+                systemPrompt,
+                userContent,
+                settings.Temperature,
+                tokenBudget,
+                "(Summarization cancelled)",
+                "(No summary content found in LLM response)",
+                ct);
+
+            if (!success)
+            {
+                email.Priority = 2;
+                return rawOrError;
+            }
+
+            var (cleanSummary, parsedPriority) = ParseLlmSummaryAndPriority(rawOrError);
+            email.Priority = parsedPriority;
+            return cleanSummary;
+        }
+
+        private static string BuildEmailPromptBlock(EmailItem email, AppSettings settings)
+        {
+            string bodySource = !string.IsNullOrWhiteSpace(email.DisplayBody) ? email.DisplayBody : email.CleanBody;
+            string emailContentForLlm = PrepareEmailBodyForSummary(bodySource, settings.MaxSummaryEmailChars);
+            string linksContext = BuildEmailLinksContext(email);
+
+            var sb = new StringBuilder();
+            sb.AppendLine("Email Details:");
+            sb.AppendLine($"Subject: {email.Subject}");
+            sb.AppendLine($"From: {email.Sender}");
+            sb.AppendLine($"Date: {email.DateString}");
+            sb.AppendLine($"Account: {email.AccountName}");
+
+            if (email.HasAttachments)
+            {
+                string attList = string.Join(", ", email.Attachments.Select(a => $"{a.FileName} ({a.FormattedSize})"));
+                sb.AppendLine($"Attachments: {attList}");
+            }
+
+            sb.AppendLine();
+            sb.AppendLine("Email Content:");
+            sb.AppendLine(emailContentForLlm);
+            sb.AppendLine();
+            sb.AppendLine("Links in this email:");
+            sb.Append(string.IsNullOrWhiteSpace(linksContext) ? "(None)" : linksContext);
+            return sb.ToString();
+        }
+
+        public async Task<string> AskAboutEmailAsync(
+            EmailItem email,
+            string userQuestion,
+            AppSettings settings,
+            CancellationToken ct = default)
+        {
+            if (string.IsNullOrWhiteSpace(userQuestion))
+            {
+                return string.Empty;
+            }
+
+            var result = await AskAboutEmailChatStreamAsync(
+                email,
+                new[] { new AskMoreTurn { Question = userQuestion } },
+                settings,
+                onVisibleTextUpdated: null,
+                ct);
+
+            return result.Content;
+        }
+
+        public async Task<AskMoreStreamResult> AskAboutEmailChatStreamAsync(
+            EmailItem email,
+            IReadOnlyList<AskMoreTurn> turns,
+            AppSettings settings,
+            Action<string>? onVisibleTextUpdated = null,
+            CancellationToken ct = default)
+        {
+            if (settings.IsAiDisabled)
+            {
+                return new AskMoreStreamResult { Success = false, Content = Lang.T(StringKeys.AskMoreAiDisabled) };
+            }
+
+            if (turns == null || turns.Count == 0 || string.IsNullOrWhiteSpace(turns[turns.Count - 1].Question))
+            {
+                return new AskMoreStreamResult { Success = false, Content = string.Empty };
+            }
+
+            if (!ValidateLlamaModelPath(settings, out string modelError))
+            {
+                return new AskMoreStreamResult { Success = false, Content = modelError };
+            }
+
+            string systemPrompt = !string.IsNullOrWhiteSpace(settings.AskMoreSystemPrompt)
+                ? settings.AskMoreSystemPrompt
+                : AppSettings.CreateDefault().AskMoreSystemPrompt;
+
+            var messages = new List<object>
+            {
+                new { role = "system", content = systemPrompt }
+            };
+
+            string emailBlock = BuildEmailPromptBlock(email, settings);
+
+            for (int i = 0; i < turns.Count; i++)
+            {
+                var turn = turns[i];
+                string q = (turn.Question ?? string.Empty).Trim();
+                if (string.IsNullOrWhiteSpace(q)) continue;
+
+                string userContent = i == 0
+                    ? $"{emailBlock}\r\n\r\nUser Question:\r\n{q}"
+                    : q;
+                messages.Add(new { role = "user", content = userContent });
+
+                bool isFinalTurn = (i == turns.Count - 1);
+                if (!isFinalTurn && !turn.IsError && !string.IsNullOrWhiteSpace(turn.Answer))
+                {
+                    messages.Add(new { role = "assistant", content = turn.Answer });
+                }
+            }
+
+            // Keep temperature minimal (0.0) so answers stay strictly grounded in the email
+            const double minimalTemp = 0.0;
+            int tokenBudget = Math.Max(settings.MaxTokens > 0 ? settings.MaxTokens : 350, 1024);
+
+            return await SendStreamingChatCompletionAsync(
+                settings,
+                messages.ToArray(),
+                minimalTemp,
+                tokenBudget,
+                onVisibleTextUpdated,
+                ct);
+        }
+
+        private async Task<(bool Success, string ContentOrError)> SendChatCompletionAsync(
+            AppSettings settings,
+            string systemPrompt,
+            string userContent,
+            double temperature,
+            int maxTokens,
+            string cancelledMessage,
+            string missingContentMessage,
+            CancellationToken ct)
+        {
+            var messages = new object[]
+            {
+                new { role = "system", content = systemPrompt },
+                new { role = "user", content = userContent }
+            };
+
+            var res = await SendChatCompletionCoreAsync(
+                settings,
+                messages,
+                temperature,
+                maxTokens,
+                stream: false,
+                cancelledMessage,
+                async (response, token) =>
+                {
+                    string responseJson = await response.Content.ReadAsStringAsync(token);
+                    return ParseNonStreamingResponse(responseJson, missingContentMessage);
+                },
+                ct);
+
+            return (res.Success, res.Content);
+        }
+
+        private async Task<AskMoreStreamResult> SendStreamingChatCompletionAsync(
+            AppSettings settings,
+            object[] messages,
+            double temperature,
+            int maxTokens,
+            Action<string>? onVisibleTextUpdated,
+            CancellationToken ct)
+        {
+            return await SendChatCompletionCoreAsync(
+                settings,
+                messages,
+                temperature,
+                maxTokens,
+                stream: true,
+                "(Request cancelled)",
+                async (response, token) => await ReadStreamingOrJsonResponseAsync(response, onVisibleTextUpdated, token),
+                ct);
+        }
+
+        private async Task<AskMoreStreamResult> SendChatCompletionCoreAsync(
+            AppSettings settings,
+            object[] messages,
+            double temperature,
+            int maxTokens,
+            bool stream,
+            string cancelledMessage,
+            Func<HttpResponseMessage, CancellationToken, Task<AskMoreStreamResult>> handleSuccessResponse,
+            CancellationToken ct)
+        {
+            bool isLlama = string.Equals(settings.AiBackend, "LlamaCpp", StringComparison.OrdinalIgnoreCase);
+            string endpointUrl = settings.GetEffectiveEndpointUrl();
+            string modelName = settings.GetEffectiveModelName();
+            string? apiKey = settings.GetEffectiveApiKey();
+
             var requestBody = new
             {
                 model = modelName,
-                messages = new[]
-                {
-                    new { role = "system", content = systemPrompt },
-                    new { role = "user", content = userContent }
-                },
-                temperature = settings.Temperature,
-                max_tokens = tokenBudget,
-                stream = false
+                messages,
+                temperature,
+                max_tokens = maxTokens,
+                stream
             };
 
             string jsonPayload = JsonSerializer.Serialize(requestBody);
@@ -135,7 +453,10 @@ namespace KerkenezMail.Services
             const int maxRetries = 20; // Up to ~30-40s wait for large models to finish VRAM allocation
             for (int attempt = 0; attempt < maxRetries; attempt++)
             {
-                if (ct.IsCancellationRequested) return "(Summarization cancelled)";
+                if (ct.IsCancellationRequested)
+                {
+                    return new AskMoreStreamResult { Success = false, Content = cancelledMessage, WasStopped = true };
+                }
 
                 try
                 {
@@ -147,46 +468,17 @@ namespace KerkenezMail.Services
                         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey.Trim());
                     }
 
-                    var response = await HttpClient.SendAsync(request, ct);
-                    
+                    var completionOpt = stream ? HttpCompletionOption.ResponseHeadersRead : HttpCompletionOption.ResponseContentRead;
+                    using var response = await HttpClient.SendAsync(request, completionOpt, ct);
+
                     if (response.IsSuccessStatusCode)
                     {
-                        string responseJson = await response.Content.ReadAsStringAsync(ct);
-                        using var doc = JsonDocument.Parse(responseJson);
-
-                        if (doc.RootElement.TryGetProperty("choices", out var choices) && choices.GetArrayLength() > 0)
-                        {
-                            var firstChoice = choices[0];
-                            if (firstChoice.TryGetProperty("message", out var msg))
-                            {
-                                string contentText = msg.TryGetProperty("content", out var cp) && cp.ValueKind == JsonValueKind.String ? cp.GetString() ?? "" : "";
-                                string reasoningText = msg.TryGetProperty("reasoning_content", out var rp) && rp.ValueKind == JsonValueKind.String ? rp.GetString() ?? "" : "";
-                                if (string.IsNullOrWhiteSpace(reasoningText) && msg.TryGetProperty("reasoning", out var rp2) && rp2.ValueKind == JsonValueKind.String)
-                                {
-                                    reasoningText = rp2.GetString() ?? "";
-                                }
-
-                                string rawOutput = !string.IsNullOrWhiteSpace(contentText) ? contentText.Trim() : reasoningText.Trim();
-
-                                if (string.IsNullOrWhiteSpace(rawOutput))
-                                {
-                                    email.Priority = 2;
-                                    return "(Empty response from LLM)";
-                                }
-
-                                var (cleanSummary, parsedPriority) = ParseLlmSummaryAndPriority(rawOutput);
-                                email.Priority = parsedPriority;
-                                return cleanSummary;
-                            }
-                        }
-
-                        email.Priority = 2;
-                        return "(No summary content found in LLM response)";
+                        return await handleSuccessResponse(response, ct);
                     }
                     else
                     {
                         string errorText = await response.Content.ReadAsStringAsync(ct);
-                        
+
                         // If model is still loading into VRAM / RAM (HTTP 503 or "loading model"), pause and retry!
                         bool isModelLoading = (int)response.StatusCode == 503 ||
                                               errorText.Contains("loading model", StringComparison.OrdinalIgnoreCase) ||
@@ -199,20 +491,19 @@ namespace KerkenezMail.Services
                         }
 
                         string cleanError = ParseErrorMessage(errorText, response.StatusCode);
-                        email.Priority = 2;
-                        return isLlama 
+                        string msg = isLlama
                             ? $"llama-server returned an error: {cleanError}"
                             : $"AI service error: {cleanError}";
+                        return new AskMoreStreamResult { Success = false, Content = msg };
                     }
                 }
                 catch (HttpRequestException ex)
                 {
-                    bool isConnectionRefused = ex.Message.Contains("actively refused", StringComparison.OrdinalIgnoreCase) || 
+                    bool isConnectionRefused = ex.Message.Contains("actively refused", StringComparison.OrdinalIgnoreCase) ||
                                                ex.Message.Contains("No connection could be made", StringComparison.OrdinalIgnoreCase);
 
                     if (isLlama)
                     {
-                        // Check if llama-server process is actually running
                         bool isProcessRunning = false;
                         try
                         {
@@ -222,19 +513,16 @@ namespace KerkenezMail.Services
 
                         if (!isProcessRunning)
                         {
-                            email.Priority = 2;
-                            return "llama-server is not running or failed to start. Check Live Logs for details.";
+                            return new AskMoreStreamResult { Success = false, Content = "llama-server is not running or failed to start. Check Live Logs for details." };
                         }
 
-                        // Process is running and warming up - wait and retry
                         if (attempt < maxRetries - 1 && isConnectionRefused)
                         {
                             await Task.Delay(1500, ct);
                             continue;
                         }
 
-                        email.Priority = 2;
-                        return "llama-server is not responding. Check Live Logs for details.";
+                        return new AskMoreStreamResult { Success = false, Content = "llama-server is not responding. Check Live Logs for details." };
                     }
                     else
                     {
@@ -244,33 +532,283 @@ namespace KerkenezMail.Services
                             continue;
                         }
 
-                        email.Priority = 2;
                         string backendTitle = string.Equals(settings.AiBackend, "Ollama", StringComparison.OrdinalIgnoreCase) ? "Ollama" : "Cloud AI";
-                        return $"Could not connect to {backendTitle}. Ensure the service is running and accessible.";
+                        return new AskMoreStreamResult { Success = false, Content = $"Could not connect to {backendTitle}. Ensure the service is running and accessible." };
                     }
                 }
                 catch (OperationCanceledException)
                 {
-                    return "(Summarization cancelled)";
+                    return new AskMoreStreamResult { Success = false, Content = cancelledMessage, WasStopped = true };
                 }
                 catch (Exception ex)
                 {
-                    email.Priority = 2;
-                    return isLlama 
+                    string msg = isLlama
                         ? $"llama-server error: {ex.Message}"
-                        : $"Could not generate summary: {ex.Message}";
+                        : $"Could not generate response: {ex.Message}";
+                    return new AskMoreStreamResult { Success = false, Content = msg };
                 }
             }
 
-            return isLlama
+            string timeoutMsg = isLlama
                 ? "llama-server took too long to become ready. Check Live Logs for details."
                 : "AI service took too long to respond. Please try again.";
+            return new AskMoreStreamResult { Success = false, Content = timeoutMsg };
         }
 
-        public static (string Summary, int Priority) ParseLlmSummaryAndPriority(string rawOutput)
+        private static AskMoreStreamResult ParseNonStreamingResponse(string responseJson, string missingContentMessage)
+        {
+            using var doc = JsonDocument.Parse(responseJson);
+            if (doc.RootElement.TryGetProperty("choices", out var choices) && choices.GetArrayLength() > 0)
+            {
+                var firstChoice = choices[0];
+                if (firstChoice.TryGetProperty("message", out var msg))
+                {
+                    string contentText = msg.TryGetProperty("content", out var cp) && cp.ValueKind == JsonValueKind.String ? cp.GetString() ?? "" : "";
+                    string reasoningText = msg.TryGetProperty("reasoning_content", out var rp) && rp.ValueKind == JsonValueKind.String ? rp.GetString() ?? "" : "";
+                    if (string.IsNullOrWhiteSpace(reasoningText) && msg.TryGetProperty("reasoning", out var rp2) && rp2.ValueKind == JsonValueKind.String)
+                    {
+                        reasoningText = rp2.GetString() ?? "";
+                    }
+
+                    string rawOutput = !string.IsNullOrWhiteSpace(contentText) ? contentText.Trim() : reasoningText.Trim();
+                    if (string.IsNullOrWhiteSpace(rawOutput))
+                    {
+                        return new AskMoreStreamResult { Success = false, Content = "(Empty response from LLM)" };
+                    }
+
+                    return new AskMoreStreamResult { Success = true, Content = rawOutput };
+                }
+            }
+
+            return new AskMoreStreamResult { Success = false, Content = missingContentMessage };
+        }
+
+        private static async Task<AskMoreStreamResult> ReadStreamingOrJsonResponseAsync(
+            HttpResponseMessage response,
+            Action<string>? onVisibleTextUpdated,
+            CancellationToken ct)
+        {
+            string? mediaType = response.Content.Headers.ContentType?.MediaType;
+            if (string.Equals(mediaType, "application/json", StringComparison.OrdinalIgnoreCase))
+            {
+                string responseJson = await response.Content.ReadAsStringAsync(ct);
+                var parsed = ParseNonStreamingResponse(responseJson, "(No answer content found in LLM response)");
+                if (!parsed.Success) return parsed;
+
+                string cleaned = StripThinkingTags(parsed.Content, keepSummaryMarkerFallback: false);
+                if (string.IsNullOrWhiteSpace(cleaned))
+                {
+                    return new AskMoreStreamResult { Success = false, Content = "(Empty response from LLM)" };
+                }
+
+                onVisibleTextUpdated?.Invoke(cleaned);
+                return new AskMoreStreamResult { Success = true, Content = cleaned };
+            }
+
+            var contentSb = new StringBuilder();
+            var reasoningSb = new StringBuilder();
+            string lastEmitted = string.Empty;
+
+            using var cancelReg = ct.Register(() =>
+            {
+                try { response.Dispose(); } catch { }
+            });
+
+            try
+            {
+                using var stream = await response.Content.ReadAsStreamAsync(ct);
+                using var reader = new StreamReader(stream, Encoding.UTF8);
+
+                while (!ct.IsCancellationRequested)
+                {
+                    string? line = await reader.ReadLineAsync(ct);
+                    if (line == null) break;
+
+                    if (string.IsNullOrWhiteSpace(line) || line.StartsWith(":", StringComparison.Ordinal))
+                    {
+                        continue;
+                    }
+
+                    if (!line.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
+                    {
+                        // Handle servers that return plain JSON without application/json Content-Type
+                        if (contentSb.Length == 0 && reasoningSb.Length == 0 && line.TrimStart().StartsWith("{", StringComparison.Ordinal))
+                        {
+                            string fullJson = line + await reader.ReadToEndAsync(ct);
+                            var parsed = ParseNonStreamingResponse(fullJson, "(No answer content found in LLM response)");
+                            if (!parsed.Success) return parsed;
+
+                            string cleaned = StripThinkingTags(parsed.Content, keepSummaryMarkerFallback: false);
+                            if (string.IsNullOrWhiteSpace(cleaned))
+                            {
+                                return new AskMoreStreamResult { Success = false, Content = "(Empty response from LLM)" };
+                            }
+
+                            onVisibleTextUpdated?.Invoke(cleaned);
+                            return new AskMoreStreamResult { Success = true, Content = cleaned };
+                        }
+                        continue;
+                    }
+
+                    string data = line.Substring(5).Trim();
+                    if (string.Equals(data, "[DONE]", StringComparison.OrdinalIgnoreCase))
+                    {
+                        break;
+                    }
+
+                    try
+                    {
+                        using var doc = JsonDocument.Parse(data);
+                        if (!doc.RootElement.TryGetProperty("choices", out var choices) || choices.GetArrayLength() == 0)
+                        {
+                            continue;
+                        }
+
+                        var firstChoice = choices[0];
+                        string deltaContent = string.Empty;
+                        string deltaReasoning = string.Empty;
+
+                        if (firstChoice.TryGetProperty("delta", out var delta))
+                        {
+                            if (delta.TryGetProperty("content", out var cp) && cp.ValueKind == JsonValueKind.String)
+                            {
+                                deltaContent = cp.GetString() ?? string.Empty;
+                            }
+                            if (delta.TryGetProperty("reasoning_content", out var rp) && rp.ValueKind == JsonValueKind.String)
+                            {
+                                deltaReasoning = rp.GetString() ?? string.Empty;
+                            }
+                            else if (delta.TryGetProperty("reasoning", out var rp2) && rp2.ValueKind == JsonValueKind.String)
+                            {
+                                deltaReasoning = rp2.GetString() ?? string.Empty;
+                            }
+                        }
+                        else if (firstChoice.TryGetProperty("message", out var msg))
+                        {
+                            if (msg.TryGetProperty("content", out var cp) && cp.ValueKind == JsonValueKind.String)
+                            {
+                                deltaContent = cp.GetString() ?? string.Empty;
+                            }
+                            if (msg.TryGetProperty("reasoning_content", out var rp) && rp.ValueKind == JsonValueKind.String)
+                            {
+                                deltaReasoning = rp.GetString() ?? string.Empty;
+                            }
+                        }
+
+                        if (!string.IsNullOrEmpty(deltaReasoning))
+                        {
+                            reasoningSb.Append(deltaReasoning);
+                        }
+
+                        if (!string.IsNullOrEmpty(deltaContent))
+                        {
+                            contentSb.Append(deltaContent);
+                            string visible = ExtractStreamingVisibleText(contentSb.ToString());
+                            if (!string.IsNullOrEmpty(visible) && !string.Equals(visible, lastEmitted, StringComparison.Ordinal))
+                            {
+                                lastEmitted = visible;
+                                onVisibleTextUpdated?.Invoke(visible);
+                            }
+                        }
+                    }
+                    catch
+                    {
+                        // Ignore malformed partial SSE frames
+                    }
+                }
+            }
+            catch (Exception) when (ct.IsCancellationRequested)
+            {
+                string partial = ExtractStreamingVisibleText(contentSb.ToString()).Trim();
+                return new AskMoreStreamResult
+                {
+                    Success = !string.IsNullOrWhiteSpace(partial),
+                    Content = partial,
+                    WasStopped = true
+                };
+            }
+
+            if (ct.IsCancellationRequested)
+            {
+                string partial = ExtractStreamingVisibleText(contentSb.ToString()).Trim();
+                return new AskMoreStreamResult
+                {
+                    Success = !string.IsNullOrWhiteSpace(partial),
+                    Content = partial,
+                    WasStopped = true
+                };
+            }
+
+            string rawFinal = contentSb.Length > 0 ? contentSb.ToString() : reasoningSb.ToString();
+            string finalClean = StripThinkingTags(rawFinal, keepSummaryMarkerFallback: false);
+            if (string.IsNullOrWhiteSpace(finalClean))
+            {
+                return new AskMoreStreamResult { Success = false, Content = "(Empty response from LLM)" };
+            }
+
+            return new AskMoreStreamResult { Success = true, Content = finalClean, WasStopped = false };
+        }
+
+        public static string ExtractStreamingVisibleText(string rawContent)
+        {
+            if (string.IsNullOrEmpty(rawContent)) return string.Empty;
+
+            string text = rawContent;
+
+            // Strip closed thinking/reasoning tags
+            text = Regex.Replace(
+                text,
+                @"<(?:think|thought|reasoning|reflection)>.*?</(?:think|thought|reasoning|reflection)>",
+                "",
+                RegexOptions.IgnoreCase | RegexOptions.Singleline);
+
+            text = Regex.Replace(
+                text,
+                @"\[(?:THINK|THOUGHT|REASONING)\].*?\[\/(?:THINK|THOUGHT|REASONING)\]",
+                "",
+                RegexOptions.IgnoreCase | RegexOptions.Singleline);
+
+            text = Regex.Replace(
+                text,
+                @"^.*?</(?:think|thought|reasoning|reflection)>\s*",
+                "",
+                RegexOptions.IgnoreCase | RegexOptions.Singleline);
+
+            string trimmed = text.TrimStart();
+            if (string.IsNullOrEmpty(trimmed)) return string.Empty;
+
+            // Suppress unclosed reasoning blocks while streaming
+            if (trimmed.StartsWith("<think", StringComparison.OrdinalIgnoreCase) ||
+                trimmed.StartsWith("<thought", StringComparison.OrdinalIgnoreCase) ||
+                trimmed.StartsWith("<reasoning", StringComparison.OrdinalIgnoreCase) ||
+                trimmed.StartsWith("<reflection", StringComparison.OrdinalIgnoreCase) ||
+                trimmed.StartsWith("[THINK", StringComparison.OrdinalIgnoreCase) ||
+                trimmed.StartsWith("[THOUGHT", StringComparison.OrdinalIgnoreCase) ||
+                trimmed.StartsWith("[REASONING", StringComparison.OrdinalIgnoreCase))
+            {
+                return string.Empty;
+            }
+
+            // Also suppress partial prefix of an opening tag on the very first token(s)
+            if (trimmed.Length < 12)
+            {
+                string[] openingTags = { "<think>", "<thought>", "<reasoning>", "<reflection>", "[THINK]", "[THOUGHT]", "[REASONING]" };
+                foreach (var tag in openingTags)
+                {
+                    if (tag.StartsWith(trimmed, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return string.Empty;
+                    }
+                }
+            }
+
+            return trimmed;
+        }
+
+        public static string StripThinkingTags(string rawOutput, bool keepSummaryMarkerFallback = false)
         {
             if (string.IsNullOrWhiteSpace(rawOutput))
-                return ("(Empty response from LLM)", 2);
+                return string.Empty;
 
             string text = rawOutput.Trim();
 
@@ -282,7 +820,7 @@ namespace KerkenezMail.Services
                 RegexOptions.IgnoreCase | RegexOptions.Singleline
             ).Trim();
 
-            // 2. Remove bracketed thinking tags: [THINK]...[/THINK], [THOUGHT]...[/THOUGHT]
+            // 2. Remove bracketed thinking tags: [THINK]...[/THINK], [THOUGHT]...[/THOUGHT], [REASONING]...[/REASONING]
             text = Regex.Replace(
                 text,
                 @"\[(?:THINK|THOUGHT|REASONING)\].*?\[\/(?:THINK|THOUGHT|REASONING)\]",
@@ -298,31 +836,45 @@ namespace KerkenezMail.Services
                 RegexOptions.IgnoreCase | RegexOptions.Singleline
             ).Trim();
 
-            // 4. If text still starts with an unclosed <think> tag, strip up to </think> or up to Priority/Summary keywords
-            if (text.StartsWith("<think>", StringComparison.OrdinalIgnoreCase) || 
+            // 4. If text still starts with an unclosed <think> tag, strip opening tag (or scan to Priority/Summary markers if requested)
+            if (text.StartsWith("<think>", StringComparison.OrdinalIgnoreCase) ||
                 text.StartsWith("<thought>", StringComparison.OrdinalIgnoreCase) ||
-                text.StartsWith("<reasoning>", StringComparison.OrdinalIgnoreCase))
+                text.StartsWith("<reasoning>", StringComparison.OrdinalIgnoreCase) ||
+                text.StartsWith("<reflection>", StringComparison.OrdinalIgnoreCase))
             {
-                var markerMatch = Regex.Match(
-                    text,
-                    @"(?:Priority|Rank|Summary|Executive Summary)\s*[:=\-]",
-                    RegexOptions.IgnoreCase
-                );
-
-                if (markerMatch.Success)
+                if (keepSummaryMarkerFallback)
                 {
-                    text = text.Substring(markerMatch.Index).Trim();
-                }
-                else
-                {
-                    text = Regex.Replace(
+                    var markerMatch = Regex.Match(
                         text,
-                        @"^<(?:think|thought|reasoning|reflection)>\s*",
-                        "",
+                        @"(?:Priority|Rank|Summary|Executive Summary)\s*[:=\-]",
                         RegexOptions.IgnoreCase
-                    ).Trim();
+                    );
+
+                    if (markerMatch.Success)
+                    {
+                        return text.Substring(markerMatch.Index).Trim();
+                    }
                 }
+
+                text = Regex.Replace(
+                    text,
+                    @"^<(?:think|thought|reasoning|reflection)>\s*",
+                    "",
+                    RegexOptions.IgnoreCase
+                ).Trim();
             }
+
+            return text;
+        }
+
+        public static (string Summary, int Priority) ParseLlmSummaryAndPriority(string rawOutput)
+        {
+            if (string.IsNullOrWhiteSpace(rawOutput))
+                return ("(Empty response from LLM)", 2);
+
+            string text = StripThinkingTags(rawOutput, keepSummaryMarkerFallback: true);
+            if (string.IsNullOrWhiteSpace(text))
+                return ("(Empty response from LLM)", 2);
 
             int priority = 2; // Default to Normal (2)
 
